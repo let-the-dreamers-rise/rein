@@ -1,0 +1,21 @@
+{
+  "name": "rein",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A smart account an autonomous agent can operate but cannot drain -- on-chain policy, on-chain refusal codes, on-chain intent trail",
+  "scripts": {
+    "build": "hardhat compile",
+    "test": "hardhat test",
+    "preflight": "hardhat run scripts/preflight.js --network whitechainSepolia",
+    "deploy:whitechain": "hardhat run scripts/deploy.js --network whitechainSepolia",
+    "demo:whitechain": "hardhat run scripts/demo-injection.js --network whitechainSepolia",
+    "verify:whitechain": "hardhat verify --network whitechainSepolia"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "hardhat": "^2.22.17"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7"
+  }
+}
