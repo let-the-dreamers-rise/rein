@@ -24,4 +24,5 @@ library ReinCodes {
     uint8 internal constant APPROVAL_TOO_LARGE = 12;
     uint8 internal constant PAYEE_NOT_ALLOWED = 13;
     uint8 internal constant INTENT_REQUIRED = 14;
+    uint8 internal constant DELTA_APPROVAL_UNSUPPORTED = 15;
 }

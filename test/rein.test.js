@@ -19,6 +19,7 @@ const CODE = {
   APPROVAL_TOO_LARGE: 12,
   PAYEE_NOT_ALLOWED: 13,
   INTENT_REQUIRED: 14,
+  DELTA_APPROVAL_UNSUPPORTED: 15,
 };
 
 const HOUR = 3600;
@@ -60,6 +61,7 @@ async function deployed() {
       token.interface.getFunction("transfer").selector,
       token.interface.getFunction("approve").selector,
       token.interface.getFunction("transferFrom").selector,
+      token.interface.getFunction("increaseAllowance").selector,
     ],
     true
   );
@@ -274,6 +276,39 @@ describe("ReinAccount", function () {
         target: f.tokenAddr,
         data: f.approve(f.payee.address, USDT(51)),
       });
+    });
+
+    // Regression. The first version of this contract compared
+    // increaseAllowance's argument to maxApproval, but that argument is a delta:
+    // N permitted calls left N * maxApproval standing, and the README claimed an
+    // infinite approve was unreachable. It was reachable by repetition.
+    it("refuses increaseAllowance outright -- a ceiling cannot bound a delta", async function () {
+      const f = await loadFixture(deployed);
+      const inc = (sp, amt) => f.token.interface.encodeFunctionData("increaseAllowance", [sp, amt]);
+
+      await expectCode(f, CODE.DELTA_APPROVAL_UNSUPPORTED, {
+        target: f.tokenAddr,
+        data: inc(f.payee.address, USDT(1)),
+      });
+
+      // The drip that used to work: every call is individually under the
+      // ceiling, and together they blow through it.
+      for (let i = 0; i < 5; i++) {
+        await expectCode(f, CODE.DELTA_APPROVAL_UNSUPPORTED, {
+          target: f.tokenAddr,
+          data: inc(f.payee.address, USDT(50)),
+        });
+      }
+      expect(await f.token.allowance(f.accountAddr, f.payee.address)).to.equal(0n);
+    });
+
+    it("still allows approve(), whose argument is an absolute total", async function () {
+      const f = await loadFixture(deployed);
+      await expectCode(f, CODE.OK, {
+        target: f.tokenAddr,
+        data: f.approve(f.payee.address, USDT(50)),
+      });
+      expect(await f.token.allowance(f.accountAddr, f.payee.address)).to.equal(USDT(50));
     });
 
     it("refuses an approval to a spender that is not an allowed payee", async function () {

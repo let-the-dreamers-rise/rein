@@ -39,6 +39,15 @@ contract MockERC20 {
         return true;
     }
 
+    /// @dev Present so the test suite can exercise the delta-based allowance
+    ///      path. A ceiling cannot bound this method, which is why the account
+    ///      refuses it rather than pretending to cap it.
+    function increaseAllowance(address spender, uint256 addedValue) external returns (bool) {
+        allowance[msg.sender][spender] += addedValue;
+        emit Approval(msg.sender, spender, allowance[msg.sender][spender]);
+        return true;
+    }
+
     function transferFrom(address from, address to, uint256 amount) external returns (bool) {
         uint256 a = allowance[from][msg.sender];
         if (a != type(uint256).max) allowance[from][msg.sender] = a - amount;

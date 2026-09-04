@@ -343,11 +343,26 @@ contract ReinAccount {
         if (!tp.enabled) return (ReinCodes.TOKEN_NOT_ALLOWED, kind, amount);
         if (!payeeAllowed[agent][counterparty]) return (ReinCodes.PAYEE_NOT_ALLOWED, kind, amount);
 
-        if (kind == CalldataGuard.Kind.Approve || kind == CalldataGuard.Kind.IncreaseAllowance) {
+        if (kind == CalldataGuard.Kind.IncreaseAllowance) {
+            // Refused outright, and the reason is worth stating because the first
+            // version of this contract got it wrong: increaseAllowance's argument
+            // is a DELTA, not a total. Capping the delta caps nothing -- twenty
+            // permitted calls of `maxApproval` each leave an allowance of twenty
+            // times maxApproval standing. Bounding it properly would mean
+            // mirroring the token's allowance in storage, and that mirror silently
+            // goes stale the moment the spender spends or the owner approves from
+            // elsewhere. A ceiling computed from a stale mirror is worse than no
+            // ceiling, because it reads as protection. So the policy is: set the
+            // allowance to an exact figure with approve(), where the argument IS
+            // the total and the ceiling means what it says.
+            return (ReinCodes.DELTA_APPROVAL_UNSUPPORTED, kind, amount);
+        }
+
+        if (kind == CalldataGuard.Kind.Approve) {
             // An allowance is a promise to be drained later, so it is capped on
-            // its own axis rather than charged to the spend window. Setting
-            // maxApproval below type(uint256).max is what makes an infinite
-            // approve unreachable.
+            // its own axis rather than charged to the spend window. approve()
+            // sets an absolute value, so a ceiling below type(uint256).max does
+            // make an infinite approve unreachable -- for this selector.
             if (amount > tp.maxApproval) return (ReinCodes.APPROVAL_TOO_LARGE, kind, amount);
             return (ReinCodes.OK, kind, amount);
         }

@@ -31,7 +31,7 @@ the policy admits.
 | payee allowlist | who may receive tokens -- the agent cannot invent a recipient |
 | rolling spend window | native and per-token, cumulative across every call |
 | call rate | how many calls per window |
-| approval ceiling | an infinite approve is unreachable |
+| approval ceiling | `approve()` is capped at an absolute figure; `increaseAllowance()` is refused outright |
 | expiry | keys lapse on their own |
 | guardian breaker | a key that can stop the agent and can never spend |
 | intent trail | every call carries a hash of the instruction behind it |
@@ -106,7 +106,20 @@ none.
   false approval.
 - **Callback-style targets are not supported.** `nonReentrant` refuses re-entry,
   which also refuses legitimate callback patterns. A v2 problem.
-- **Not audited.** 34 tests pass. That is not an audit.
+- **Only four selectors carry semantics.** `transfer`, `approve`, `transferFrom`
+  and `increaseAllowance` are decoded; anything else on an allowlisted contract is
+  bounded by the target/selector allowlist and the native budget alone, with no
+  token ceiling. A token exposing `permit`, `transferAndCall` or a similar
+  value-moving method is outside what the policy understands. "Policy over
+  semantics" above means *these* semantics, not all of them.
+- **`increaseAllowance` is refused, not capped.** Its argument is a delta, so a
+  ceiling on it bounds nothing -- twenty permitted calls leave twenty times the
+  ceiling standing. An earlier version of this contract capped the delta and this
+  README claimed an infinite approve was unreachable; it was reachable by
+  repetition. Bounding it honestly would require mirroring the token's allowance
+  in storage, and that mirror goes stale as soon as the spender spends. Use
+  `approve()` with an exact total instead.
+- **Not audited.** 36 tests pass. That is not an audit.
 
 ## Layout
 
@@ -116,7 +129,7 @@ contracts/ReinCodes.sol         one table of refusal reasons, shared by simulate
 contracts/ReinFactory.sol       CREATE2, so an address can be funded before it exists
 contracts/lib/CalldataGuard.sol decodes the ERC-20 calls that actually move value
 scripts/demo-injection.js       the demo above, runs locally or on Whitechain
-test/rein.test.js               34 tests
+test/rein.test.js               36 tests
 ```
 
 ## Running it

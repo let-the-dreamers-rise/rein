@@ -15,6 +15,7 @@ const NAMES = [
   "APPROVAL_TOO_LARGE",
   "PAYEE_NOT_ALLOWED",
   "INTENT_REQUIRED",
+  "DELTA_APPROVAL_UNSUPPORTED",
 ];
 
 const EXPLAIN = {
@@ -32,6 +33,8 @@ const EXPLAIN = {
   APPROVAL_TOO_LARGE: "an allowance above the ceiling the owner set",
   PAYEE_NOT_ALLOWED: "that recipient is not on the agent's payee list",
   INTENT_REQUIRED: "the call carries no record of the instruction behind it",
+  DELTA_APPROVAL_UNSUPPORTED:
+    "increaseAllowance raises an allowance by a delta, which no ceiling can bound -- use approve() with an exact total",
 };
 
 const name = (code) => NAMES[Number(code)] ?? `UNKNOWN(${code})`;
