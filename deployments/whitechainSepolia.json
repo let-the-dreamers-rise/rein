@@ -1,0 +1,10 @@
+{
+  "network": "whitechainSepolia",
+  "chainId": 1874,
+  "deployer": "0x99631418B5b783cf8c2cDF05f5caB1803d7bDc48",
+  "factory": "0x30F0bAB7ed9064f07c1aa7B3BFBC6d8ea25fA316",
+  "account": "0x33f2B6ae5F03642726b22Fef18ae44EAdf278521",
+  "salt": "0x89b71f5441471079bc93d84005355e669639a0a7ef729d097f99bd6597da6dbc",
+  "deployTx": "0x215e96ccee3c980b02c029fac8958352ff4327ec000e6a8e374c51398779a246",
+  "deployedAt": "2026-09-04T20:02:27.477Z"
+}

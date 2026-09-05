@@ -1,0 +1,17 @@
+{
+  "account": "0x33f2B6ae5F03642726b22Fef18ae44EAdf278521",
+  "token": "0x62E45D4B1eb672DD27111Bec24C71e833C95d66C",
+  "agent": "0xdc74a3D76f761734ab8dc7085E549bD9e5D0D5d1",
+  "allowed": {
+    "hash": "0x4804895518b38ac2f2ed5f12902941e764fdaf7648f896ae47ba9170145271fa",
+    "block": 7010825,
+    "code": 0
+  },
+  "refused": {
+    "hash": "0xe41fcc7f83d45d9cda5e55605cd95ef45f5211d0fa9580367bffaa855f8ca291",
+    "block": 7010831,
+    "code": 13,
+    "status": 0
+  },
+  "attackerBalance": "0"
+}

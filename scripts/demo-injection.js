@@ -84,6 +84,11 @@ async function main() {
   rule("setup");
   console.log(`  network   ${network.name} (chain ${(await ethers.provider.getNetwork()).chainId})`);
 
+  // Whitechain's RPC caps eth_getLogs at a 10,000-block range, and at one-second
+  // blocks that is under three hours of chain. Remember where this run started so
+  // the intent trail below asks for a range that exists rather than all of history.
+  const startBlock = await ethers.provider.getBlockNumber();
+
   const account = await ethers.deployContract("ReinAccount", [owner.address]);
   await account.waitForDeployment();
   const token = await ethers.deployContract("MockERC20", ["Demo USD", "USDT", 6]);
@@ -213,7 +218,7 @@ async function main() {
   });
 
   rule("what the owner has afterwards");
-  const events = await account.queryFilter(account.filters.IntentExecuted());
+  const events = await account.queryFilter(account.filters.IntentExecuted(), startBlock, "latest");
   console.log("  Every action the agent completed, and the instruction behind it:\n");
   for (const e of events) {
     console.log(`    block ${e.blockNumber}  intent ${e.args.intentHash.slice(0, 18)}...  ${e.args.selector}`);
