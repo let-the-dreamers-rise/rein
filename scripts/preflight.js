@@ -2,7 +2,11 @@
 // one failed rather than dying inside a provider call.
 const { ethers, network } = require("hardhat");
 
-const EXPECTED_CHAIN_ID = 1874n;
+// Each configured live network and the chain id it must answer with.
+const EXPECTED = {
+  whitechainSepolia: { chainId: 1874n, label: "Whitechain Sepolia", faucet: "the Whitechain testnet faucet" },
+  baseSepolia: { chainId: 84532n, label: "Base Sepolia", faucet: "a Base Sepolia faucet (Coinbase, Alchemy)" },
+};
 
 async function main() {
   let failures = 0;
@@ -13,11 +17,13 @@ async function main() {
 
   console.log(`\nPreflight -- network "${network.name}"\n`);
 
+  const expected = EXPECTED[network.name];
   const net = await ethers.provider.getNetwork();
+  const chainOk = !expected || net.chainId === expected.chainId;
   check(
-    network.name !== "whitechainSepolia" || net.chainId === EXPECTED_CHAIN_ID,
+    chainOk,
     "chain id",
-    `${net.chainId}${net.chainId === EXPECTED_CHAIN_ID ? " (Whitechain Sepolia)" : ""}`
+    `${net.chainId}${chainOk && expected ? ` (${expected.label})` : ""}`
   );
 
   const head = await ethers.provider.getBlockNumber();
@@ -37,7 +43,7 @@ async function main() {
     check(
       bal > ethers.parseEther("0.05"),
       "balance",
-      `${ethers.formatEther(bal)} WBT${bal > ethers.parseEther("0.05") ? "" : " -- fund from the Whitechain testnet faucet"}`
+      `${ethers.formatEther(bal)} native${bal > ethers.parseEther("0.05") ? "" : ` -- fund from ${expected ? expected.faucet : "a faucet"}`}`
     );
   }
 

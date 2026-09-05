@@ -1,7 +1,7 @@
 // The demo: give an agent a wallet, then talk the agent into emptying it.
 //
 // Runs unmodified on the in-process network (`npx hardhat run scripts/demo-injection.js`)
-// and on Whitechain Sepolia (`npm run demo:whitechain`).
+// and on any configured live chain (`npm run demo:whitechain`, `npm run demo:base`).
 const { ethers, network } = require("hardhat");
 const { name, explain } = require("./codes");
 
@@ -36,7 +36,7 @@ async function actors() {
   const agent = derive("agent");
   const need = ethers.parseEther("0.02");
   if ((await ethers.provider.getBalance(agent.address)) < need) {
-    console.log(`  funding the agent key with ${ethers.formatEther(need)} WBT for gas...`);
+    console.log(`  funding the agent key with ${ethers.formatEther(need)} of native gas...`);
     await (await owner.sendTransaction({ to: agent.address, value: need })).wait();
   }
   return {

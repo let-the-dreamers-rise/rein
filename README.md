@@ -2,9 +2,11 @@
 
 A smart account an autonomous agent can operate and cannot drain.
 
-**Live on Whitechain Sepolia (chain 1874).** Demo page with the on-chain run
-and a 90-second video: [rein-nine.vercel.app](https://rein-nine.vercel.app).
-Verified source on the explorer:
+**Live on a public EVM testnet.** Chain-agnostic Solidity (`evmVersion: paris`,
+no PUSH0), so the same bytecode deploys wherever the agent's money is. The first
+deployment is Whitechain Sepolia (chain 1874); Base Sepolia is one command away
+(see Chains). Demo page with the on-chain run and a 90-second video:
+[rein-nine.vercel.app](https://rein-nine.vercel.app). Verified source on the explorer:
 [factory](https://explorer.testnet.whitechain.io/address/0x30F0bAB7ed9064f07c1aa7B3BFBC6d8ea25fA316#code),
 [demo account](https://explorer.testnet.whitechain.io/address/0x69a504e6beA9C76f3C19196c2D3FD02244674621#code),
 [the one payment the agent was allowed to make](https://explorer.testnet.whitechain.io/tx/0x334a4f63647b7830e3af83f85722f406c93c1be08a79fe62c2b8a4ede97dafdf).
@@ -159,7 +161,7 @@ contracts/ReinAccount.sol       the account: policy storage, evaluation, executi
 contracts/ReinCodes.sol         one table of refusal reasons, shared by simulate and execute
 contracts/ReinFactory.sol       CREATE2, so an address can be funded before it exists
 contracts/lib/CalldataGuard.sol decodes the ERC-20 calls that actually move value
-scripts/demo-injection.js       the demo above, runs locally or on Whitechain
+scripts/demo-injection.js       the demo above, runs locally or on any configured chain
 test/rein.test.js               36 tests
 web/index.html                  the demo page and video, deployed at rein-nine.vercel.app
 ```
@@ -171,30 +173,29 @@ npm install
 npm test
 ```
 
-## Deploying to Whitechain Sepolia
+## Chains
 
-Whitechain Sepolia is Whitechain's testnet, chain id **1874**. It is named for
-the L1 it settles on; deploying to Ethereum Sepolia would put nothing on
-Whitechain.
+Rein is not tied to a chain. The policy is plain Solidity compiled for the
+`paris` EVM, so it deploys unchanged on any EVM chain, and an agent's account
+should live wherever its money already is: Base if it is paid over x402, an
+exchange L2 if it is funded from an exchange.
+
+Two networks are configured. Whitechain Sepolia (chain 1874) is where the
+demo above ran; Base Sepolia (chain 84532) needs only testnet ETH on the
+deployer key.
 
 ```bash
-cp .env.example .env      # then add a throwaway PRIVATE_KEY funded from the faucet
-npm run preflight         # checks chain id, rpc, gas, signer, balance -- and says which failed
-npm run deploy:whitechain
-npm run demo:whitechain
+cp .env.example .env         # then add a throwaway PRIVATE_KEY with testnet gas
+npm run preflight            # Whitechain Sepolia: chain id, rpc, gas, signer, balance
+npm run deploy:whitechain && npm run demo:whitechain
+
+npm run preflight:base       # Base Sepolia, same checks
+npm run deploy:base && npm run demo:base
 ```
 
 The factory address is deterministic per owner and salt, so `addressOf()` gives
-you an account address to fund before the account exists -- which matters here,
-because funding it is a single WhiteBIT withdrawal rather than a bridge.
-
-## Why this chain
-
-Agents make many small calls. One-second blocks and a 5 gwei floor make that
-viable in a way it is not on an L1. And an agent has to be funded by a human:
-on Whitechain that is a withdrawal from an exchange with millions of users
-straight onto the L2, with no third-party bridge in the path. Every other chain
-makes the first step of the story the riskiest one.
+you an account address to fund before the account exists. That is the point on
+any chain: show a human where to send money before the agent can touch it.
 
 ## License
 

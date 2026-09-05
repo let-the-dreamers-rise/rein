@@ -91,7 +91,7 @@
 
 <!-- 1 Title -->
 <section class="slide alt" style="align-items:flex-start">
-  <div class="in" style="display:flex;gap:14px;margin-bottom:40px"><span class="badge badge-outline">AI agents x crypto infrastructure</span><span class="badge badge-accent">live on Whitechain Sepolia</span><span class="badge badge-primary">Alliance ALL19</span></div>
+  <div class="in" style="display:flex;gap:14px;margin-bottom:40px"><span class="badge badge-outline">AI agents x crypto infrastructure</span><span class="badge badge-accent">live on an EVM testnet, chain-agnostic</span><span class="badge badge-primary">Alliance ALL19</span></div>
   <h1 class="hero in">Rein</h1>
   <p class="h2 in" style="margin-top:28px;max-width:1400px;font-weight:600;color:var(--c-text)">A smart account an autonomous agent can operate and cannot drain.</p>
   <p class="body in" style="margin-top:26px;max-width:1300px">The limits live in the contract, not in the agent. Next: the policy is compiled from the agent's own behaviour.</p>
@@ -131,8 +131,8 @@
 <span class="q">  agent  ""</span>                                                        <span class="no">REFUSED  INTENT_REQUIRED</span>
 
   attacker balance   <span class="ok">0.0 USDT</span>      supplier balance   250.0 USDT</div>
-  <div class="foot"><span>unedited output of npm run demo:whitechain</span><span>explorer.testnet.whitechain.io, source verified</span></div>
-  <div class="notes">This is the real transcript from Whitechain Sepolia, not a mock. The agent believed the injection and genuinely tried each of these. Every refusal was returned by a free view call before any gas was spent, and the same code is what the transaction reverts with. Nothing downstream of the injection relied on the agent behaving well.</div>
+  <div class="foot"><span>unedited, on Whitechain Sepolia (EVM). Same bytecode deploys to Base</span><span>explorer.testnet.whitechain.io, source verified</span></div>
+  <div class="notes">This is the real transcript from an EVM testnet, Whitechain Sepolia, not a mock. The contract is chain-agnostic Solidity; Base Sepolia is one command with testnet ETH. The agent believed the injection and genuinely tried each of these. Every refusal was returned by a free view call before any gas was spent, and the same code is what the transaction reverts with. Nothing downstream of the injection relied on the agent behaving well.</div>
 </section>
 
 <!-- 4 Product today -->

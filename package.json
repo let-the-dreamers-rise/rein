@@ -9,7 +9,11 @@
     "preflight": "hardhat run scripts/preflight.js --network whitechainSepolia",
     "deploy:whitechain": "hardhat run scripts/deploy.js --network whitechainSepolia",
     "demo:whitechain": "hardhat run scripts/demo-injection.js --network whitechainSepolia",
-    "verify:whitechain": "hardhat verify --network whitechainSepolia"
+    "verify:whitechain": "hardhat verify --network whitechainSepolia",
+    "preflight:base": "hardhat run scripts/preflight.js --network baseSepolia",
+    "deploy:base": "hardhat run scripts/deploy.js --network baseSepolia",
+    "demo:base": "hardhat run scripts/demo-injection.js --network baseSepolia",
+    "verify:base": "hardhat verify --network baseSepolia"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",

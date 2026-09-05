@@ -1,13 +1,19 @@
 require("@nomicfoundation/hardhat-toolbox");
 require("dotenv").config();
 
-// Whitechain Sepolia is Whitechain's testnet. It is named for the L1 it settles
-// on (Ethereum Sepolia, 11155111) -- deploying to Ethereum Sepolia itself would
-// put nothing on Whitechain. Chain 1874 is the one that matters here.
+// Any EVM chain works; the bytecode targets the paris EVM so it deploys
+// unchanged. Two testnets are configured. Whitechain Sepolia is named for the
+// L1 it settles on (Ethereum Sepolia, 11155111); deploying to Ethereum Sepolia
+// itself would put nothing there. Chain 1874 is the one that matters for it.
 const WHITECHAIN_SEPOLIA = {
   chainId: 1874,
   rpc: "https://rpc.testnet.whitechain.io",
   explorer: "https://explorer.testnet.whitechain.io",
+};
+const BASE_SEPOLIA = {
+  chainId: 84532,
+  rpc: process.env.BASE_SEPOLIA_RPC || "https://sepolia.base.org",
+  explorer: "https://base-sepolia.blockscout.com",
 };
 
 // Read from the environment and never committed. Nothing in this repo should
@@ -32,9 +38,14 @@ module.exports = {
       // The chain's base fee never drops below 5 gwei.
       gasPrice: 6_000_000_000,
     },
+    baseSepolia: {
+      url: BASE_SEPOLIA.rpc,
+      chainId: BASE_SEPOLIA.chainId,
+      accounts,
+    },
   },
   etherscan: {
-    apiKey: { whitechainSepolia: "blockscout" },
+    apiKey: { whitechainSepolia: "blockscout", baseSepolia: "blockscout" },
     customChains: [
       {
         network: "whitechainSepolia",
@@ -42,6 +53,14 @@ module.exports = {
         urls: {
           apiURL: `${WHITECHAIN_SEPOLIA.explorer}/api`,
           browserURL: WHITECHAIN_SEPOLIA.explorer,
+        },
+      },
+      {
+        network: "baseSepolia",
+        chainId: BASE_SEPOLIA.chainId,
+        urls: {
+          apiURL: `${BASE_SEPOLIA.explorer}/api`,
+          browserURL: BASE_SEPOLIA.explorer,
         },
       },
     ],
