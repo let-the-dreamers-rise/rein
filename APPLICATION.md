@@ -6,11 +6,12 @@
 | --- | --- |
 | Project | Rein |
 | Applicant | Ashwin Goyal — individual, Bhopal, India (IST) |
-| Team size | 1 |
+| Team size | 1 today; a part-time smart-contract security engineer from M1, funded by this grant |
 | Repository | https://github.com/let-the-dreamers-rise/rein (MIT) |
 | Demo | https://rein-nine.vercel.app (page + 90s video) |
+| Deck | https://rein-nine.vercel.app/deck-whitechain/ (13 slides) |
 | Status | **deployed and verified on Whitechain Sepolia (1874)** |
-| Request | USD 32,000 over 16 weeks, 4 gates — first tranche USD 4,000, retroactive — plus the program's subsidized Hacken audit coverage |
+| Request | USD 100,000 over 24 weeks, 5 gates — first tranche USD 6,000, retroactive. USD 30,000 of that is third-party audit and bounty spend that never becomes my income; if the program's subsidized Hacken coverage applies, the ask is USD 76,000 |
 | Open source | Yes, MIT, all deliverables |
 
 ---
@@ -134,23 +135,35 @@ rather show you those than a clean first run.
 
 ## 6. Milestones
 
+Twenty-four weeks, five gates, USD 100,000. Every gate is something you can check
+yourself in an afternoon — a transaction, a merged PR, a published report, a team
+that is not me running in production. None of them is a status update.
+
 | # | Weeks | Deliverable | Gate | USD |
 | --- | --- | --- | --- | --- |
-| M0 | done | Deployed, verified, 36 tests, on-chain allowed/refused evidence, public MIT repo | You reproduce the two transactions above and clone-and-test in ten minutes | **4,000** (retroactive) |
-| M1 | 1–4 | ERC-7579 module form of the policy, tested with Rhinestone ModuleKit across Safe, Kernel and Nexus; the account-abstraction documentation Whitechain currently lacks, contributed to your docs | Module installs and enforces on all three account types on 1874; docs merged or published | 8,000 |
-| M2 | 5–9 | TypeScript SDK, and an agent adapter that calls `simulate()` before acting and surfaces refusals in plain words; policy console to write, revoke and watch the intent trail; reference integration with two other Builders Program teams | A third-party agent runs bounded on 1874 without me writing its code | 12,000 |
-| M3 | 10–16 | Security audit via **the program's subsidized Hacken coverage** rather than a cash line, all findings resolved publicly, public testnet bounty round, and mainnet deployment on day one | Audit report and remediation published; contracts live on mainnet at launch | 8,000 |
-| | | | **Total cash** | **32,000** |
+| M0 | done | Deployed, verified, 36 tests, on-chain allowed/refused evidence, public MIT repo | You reproduce the two transactions above and clone-and-test in ten minutes | **6,000** (retroactive) |
+| M1 | 1–4 | ERC-7579 module form of the policy, tested with Rhinestone ModuleKit across Safe, Kernel and Nexus; the account-abstraction documentation Whitechain currently lacks, contributed to your docs | Module installs and enforces on all three account types on 1874; docs merged or published | 14,000 |
+| M2 | 5–10 | TypeScript SDK; an agent adapter that calls `simulate()` before acting and surfaces refusals in plain words; policy console to write, revoke and watch the intent trail; reference integrations with two other Builders Program teams | A third-party agent runs bounded on 1874 without me writing its code | 20,000 |
+| M3 | 11–16 | Independent security audit, every finding resolved in public, plus a funded public testnet bounty round | Audit report and remediation published; bounty round closed with payouts listed | 34,000 |
+| M4 | 17–24 | Mainnet deployment on day one; a bundler and paymaster reference path so an agent account can be funded and operated in WBT; an indexer and public intent-trail explorer; 90 days of integration support | Contracts live on mainnet at launch; a team other than mine running in production | 26,000 |
+| | | | **Total** | **100,000** |
 
 Stop, pause, resize or reject at any gate; unspent authority is not owed to me.
 
-**On the audit.** A permission layer that has not been audited is a permission
-layer nobody should trust with a treasury, so M3 does not ship without one. I am
-not asking for cash to buy it: your program page offers subsidized Hacken audit
-coverage, and Hacken already audits WhiteBIT, so the sensible thing is to use
-what you already have rather than have you pay twice. If that coverage is not
-available for a project this size, tell me and I will re-scope M3 with an audit
-line instead of quietly shipping unaudited.
+**Where it goes.** Of the 100,000, **30,000 is pass-through and never becomes my
+income** — 24,000 for the independent audit in M3 and a 6,000 bounty pool paid to
+whoever breaks it. The other 70,000 is twenty-four weeks of full-time work for me
+plus a part-time smart-contract security engineer from M1 onward, which is the
+first hire I would make with or without you, because 36 tests is not an audit.
+Chain and hosting cost is a few hundred dollars and I am not itemising it.
+
+**On the audit, and how to pay less.** Your program page offers subsidized Hacken
+coverage, and Hacken already audits WhiteBIT. If that coverage applies to a
+project this size, strike the 24,000 audit line and **the ask is 76,000** — you
+should not pay for the same audit twice. I have still costed it as cash because a
+permission layer that ships unaudited is a permission layer nobody should trust
+with a treasury, and I am not willing to make M3 contingent on a discount nobody
+has promised me yet.
 
 ## 7. Why this helps the ecosystem rather than one app
 
