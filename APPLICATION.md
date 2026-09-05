@@ -8,6 +8,7 @@
 | Applicant | Ashwin Goyal — individual, Bhopal, India (IST) |
 | Team size | 1 |
 | Repository | https://github.com/let-the-dreamers-rise/rein (MIT) |
+| Demo | https://rein-nine.vercel.app (page + 90s video) |
 | Status | **deployed and verified on Whitechain Sepolia (1874)** |
 | Request | USD 32,000 over 16 weeks, 4 gates — first tranche USD 4,000, retroactive — plus the program's subsidized Hacken audit coverage |
 | Open source | Yes, MIT, all deliverables |
@@ -15,6 +16,9 @@
 ---
 
 ## 1. Verify it before you read anything else
+
+**Live demo page, with a 90-second silent video of the run:**
+https://rein-nine.vercel.app
 
 Everything below is already on your chain. Two links, thirty seconds:
 
