@@ -4,3 +4,5 @@ cache/
 .env
 typechain-types/
 deployments/*.local.json
+
+.vercel

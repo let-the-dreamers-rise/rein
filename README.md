@@ -2,6 +2,14 @@
 
 A smart account an autonomous agent can operate and cannot drain.
 
+**Live on Whitechain Sepolia (chain 1874).** Demo page with the on-chain run
+and a 90-second video: [rein-nine.vercel.app](https://rein-nine.vercel.app).
+Verified source on the explorer:
+[factory](https://explorer.testnet.whitechain.io/address/0x30F0bAB7ed9064f07c1aa7B3BFBC6d8ea25fA316#code),
+[demo account](https://explorer.testnet.whitechain.io/address/0x69a504e6beA9C76f3C19196c2D3FD02244674621#code),
+[the one payment the agent was allowed to make](https://explorer.testnet.whitechain.io/tx/0x334a4f63647b7830e3af83f85722f406c93c1be08a79fe62c2b8a4ede97dafdf).
+Everything after that payment in the demo below is a refusal.
+
 The limits are in the contract, not in the agent. An agent that has been
 completely taken over -- wrong instructions, poisoned tool output, rewritten
 system prompt -- still cannot produce a transaction the account is unwilling to
@@ -84,6 +92,29 @@ instruction and tries in earnest to empty the account six different ways:
 
 The agent was fully compromised and the loss was zero.
 
+## Where this goes next
+
+Today the owner writes the policy by hand, like every wallet policy engine
+(Coinbase Agentic Wallets, Privy, Turnkey, Safe roles). That is the weak point:
+hand-written policies are either loose enough to drain or tight enough to put a
+human back in the loop for every payment. The next version compiles the policy
+from the agent's own behaviour. **In development, not shipped.**
+
+- **Compile.** Ingest the agent's tool-call and payment traces from shadow mode;
+  induce which targets, functions, payees, amounts per window and sequences are
+  normal; emit a one-page readable policy plus the enforcement artifact. Rein's
+  account today, Coinbase / Privy / Turnkey policy JSON next.
+- **Measure.** Every compiled policy ships with two numbers and their
+  denominators: coverage (how often honest actions get blocked on held-out
+  traces) and catch rate (how many injected attacks are refused).
+- **Prove.** Every allow and refusal carries a receipt a counterparty can check
+  before accepting settlement. On stablecoins there is no chargeback, so the
+  control has to exist before the money leaves.
+
+The rule learner behind "compile" already exists and is measured elsewhere:
+[nyaya](https://github.com/let-the-dreamers-rise/nyaya) induces readable rules
+with abstention from a few hundred examples on a CPU in seconds.
+
 ## What this does not do
 
 The honest list, because a permission layer that oversells itself is worse than
@@ -130,6 +161,7 @@ contracts/ReinFactory.sol       CREATE2, so an address can be funded before it e
 contracts/lib/CalldataGuard.sol decodes the ERC-20 calls that actually move value
 scripts/demo-injection.js       the demo above, runs locally or on Whitechain
 test/rein.test.js               36 tests
+web/index.html                  the demo page and video, deployed at rein-nine.vercel.app
 ```
 
 ## Running it
