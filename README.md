@@ -2,15 +2,18 @@
 
 A smart account an autonomous agent can operate and cannot drain.
 
-**Live on a public EVM testnet.** Chain-agnostic Solidity (`evmVersion: paris`,
-no PUSH0), so the same bytecode deploys wherever the agent's money is. The first
-deployment is Whitechain Sepolia (chain 1874); Base Sepolia is one command away
-(see Chains). Demo page with the on-chain run and a 90-second video:
-[rein-nine.vercel.app](https://rein-nine.vercel.app). Verified source on the explorer:
-[factory](https://explorer.testnet.whitechain.io/address/0x30F0bAB7ed9064f07c1aa7B3BFBC6d8ea25fA316#code),
-[demo account](https://explorer.testnet.whitechain.io/address/0x69a504e6beA9C76f3C19196c2D3FD02244674621#code),
-[the one payment the agent was allowed to make](https://explorer.testnet.whitechain.io/tx/0x334a4f63647b7830e3af83f85722f406c93c1be08a79fe62c2b8a4ede97dafdf).
-Everything after that payment in the demo below is a refusal.
+**Live on two public EVM testnets, same bytecode, same result.** Chain-agnostic
+Solidity (`evmVersion: paris`, no PUSH0), so the account deploys wherever the
+agent's money already is. Demo page with the on-chain run and a 90-second
+video: [rein-nine.vercel.app](https://rein-nine.vercel.app).
+
+| | Base Sepolia (84532) | Whitechain Sepolia (1874) |
+|---|---|---|
+| Demo account, verified | [0x0dA3…0527](https://base-sepolia.blockscout.com/address/0x0dA3840BA3516e1aE2BB14aCc0eB920c2A660527#code) | [0x69a5…4621](https://explorer.testnet.whitechain.io/address/0x69a504e6beA9C76f3C19196c2D3FD02244674621#code) |
+| Factory, verified | [0xa1B4…3191](https://base-sepolia.blockscout.com/address/0xa1B47042e1E41ef0790262369B59427184ea3191#code) | [0x30F0…fA316](https://explorer.testnet.whitechain.io/address/0x30F0bAB7ed9064f07c1aa7B3BFBC6d8ea25fA316#code) |
+| The one payment allowed | [0xfc20…7b51](https://base-sepolia.blockscout.com/tx/0xfc20e4f29916527e1cd2e32c73cb07e989dac8c2efcea76dffacaa61fae27b51) | [0x334a…dafdf](https://explorer.testnet.whitechain.io/tx/0x334a4f63647b7830e3af83f85722f406c93c1be08a79fe62c2b8a4ede97dafdf) |
+
+Everything after that one payment, in the demo below, is a refusal.
 
 The limits are in the contract, not in the agent. An agent that has been
 completely taken over -- wrong instructions, poisoned tool output, rewritten
@@ -180,18 +183,30 @@ Rein is not tied to a chain. The policy is plain Solidity compiled for the
 should live wherever its money already is: Base if it is paid over x402, an
 exchange L2 if it is funded from an exchange.
 
-Two networks are configured. Whitechain Sepolia (chain 1874) is where the
-demo above ran; Base Sepolia (chain 84532) needs only testnet ETH on the
-deployer key.
+Three networks are configured, and the demo above has run unchanged on two of
+them: Base Sepolia (84532) and Whitechain Sepolia (1874). Ethereum Sepolia
+(11155111) is configured mainly because it is where testnet ETH arrives from
+faucets, and `bridge:base` moves it down to Base through Base's own portal.
 
 ```bash
 cp .env.example .env         # then add a throwaway PRIVATE_KEY with testnet gas
+
 npm run preflight            # Whitechain Sepolia: chain id, rpc, gas, signer, balance
 npm run deploy:whitechain && npm run demo:whitechain
 
+AMOUNT=0.045 npm run bridge:base   # Sepolia faucet ETH -> Base Sepolia, ~2 minutes
 npm run preflight:base       # Base Sepolia, same checks
 npm run deploy:base && npm run demo:base
 ```
+
+The whole Base run -- factory, account, token, six policy writes, the payment
+and seven refusals -- cost 0.00005 ETH.
+
+One practical note, since it cost an hour: a public RPC is load-balanced, so a
+transaction receipt is not proof the next `eth_call` will see the write. Both
+scripts now wait for their own writes to be visible rather than trusting the
+receipt, which is why the first Base attempt reported a policy it had just
+written as missing.
 
 The factory address is deterministic per owner and salt, so `addressOf()` gives
 you an account address to fund before the account exists. That is the point on

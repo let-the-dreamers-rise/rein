@@ -4,8 +4,11 @@ const { ethers, network } = require("hardhat");
 
 // Each configured live network and the chain id it must answer with.
 const EXPECTED = {
-  whitechainSepolia: { chainId: 1874n, label: "Whitechain Sepolia", faucet: "the Whitechain testnet faucet" },
-  baseSepolia: { chainId: 84532n, label: "Base Sepolia", faucet: "a Base Sepolia faucet (Coinbase, Alchemy)" },
+  // minBalance is what a deploy plus the demo actually costs on that chain, not
+  // a round number: Whitechain has a 5 gwei floor, Base Sepolia charges 0.006.
+  whitechainSepolia: { chainId: 1874n, label: "Whitechain Sepolia", minBalance: "0.05", faucet: "the Whitechain testnet faucet" },
+  baseSepolia: { chainId: 84532n, label: "Base Sepolia", minBalance: "0.005", faucet: "a Base Sepolia faucet (Coinbase, Alchemy), or bridge from Sepolia with npm run bridge:base" },
+  sepolia: { chainId: 11155111n, label: "Ethereum Sepolia", minBalance: "0.05", faucet: "a Sepolia faucet (Google Cloud, Alchemy)" },
 };
 
 async function main() {
@@ -39,11 +42,12 @@ async function main() {
   } else {
     const me = signers[0];
     const bal = await ethers.provider.getBalance(me.address);
+    const min = ethers.parseEther(expected ? expected.minBalance : "0.05");
     check(true, "signer", me.address);
     check(
-      bal > ethers.parseEther("0.05"),
+      bal >= min,
       "balance",
-      `${ethers.formatEther(bal)} native${bal > ethers.parseEther("0.05") ? "" : ` -- fund from ${expected ? expected.faucet : "a faucet"}`}`
+      `${ethers.formatEther(bal)} native${bal >= min ? "" : ` -- need ${ethers.formatEther(min)}, fund from ${expected ? expected.faucet : "a faucet"}`}`
     );
   }
 

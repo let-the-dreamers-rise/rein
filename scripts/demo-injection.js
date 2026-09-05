@@ -49,6 +49,23 @@ async function actors() {
   };
 }
 
+// A receipt is not proof the next read will see the write. Public RPCs are
+// load-balanced, so an eth_call can be answered by a node that has not yet
+// applied the block the write landed in -- which shows up as the policy the
+// owner just set appearing not to exist. Wait for the policy to be visible to
+// reads before the demo depends on it.
+async function policyVisible(account, agent, token, attempts = 30) {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      if ((await account.remainingToken(agent, token)) > 0n) return true;
+    } catch {
+      // A node behind the write may not have the account's code yet either.
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  return false;
+}
+
 // What a well-built agent does: ask whether the action is covered, and only
 // then act. The refusal arrives before any gas is spent.
 async function attempt(account, agent, label, { target, value = 0n, data = "0x", intent }) {
@@ -146,6 +163,13 @@ async function main() {
   console.log("  may approve      at most 500 USDT of allowance");
   console.log("  may not          send native value, or touch any other contract");
   console.log("  must             carry a hash of the instruction it is acting on");
+
+  if (!(await policyVisible(account, agent.address, tokenAddr))) {
+    throw new Error(
+      "The policy was written but is still not visible to reads. The RPC is lagging; " +
+        "retry, or point BASE_SEPOLIA_RPC / SEPOLIA_RPC at a dedicated endpoint."
+    );
+  }
 
   rule("the job it was hired for");
   await attempt(account, agent, "pay", {

@@ -13,6 +13,15 @@ async function main() {
   const factoryAddr = await factory.getAddress();
   console.log(`  ReinFactory   ${factoryAddr}`);
 
+  // A public RPC is load-balanced: the node that answers the next read may not
+  // have applied the deployment block yet, and a call to a contract it cannot
+  // see returns empty data rather than an error. Wait for the code to be there.
+  for (let i = 0; i < 30; i++) {
+    if ((await ethers.provider.getCode(factoryAddr)) !== "0x") break;
+    if (i === 29) throw new Error(`No code at ${factoryAddr} after 60s. The RPC is lagging; retry.`);
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+
   // One account for the deployer, at an address anyone could have computed in
   // advance -- which is the point: you can show a user where to send funds
   // before the account exists.

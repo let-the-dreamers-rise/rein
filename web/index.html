@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Rein</title>
-<meta name="description" content="A smart account an autonomous agent can operate and cannot drain. Chain-agnostic Solidity, live on a public EVM testnet.">
+<meta name="description" content="A smart account an autonomous agent can operate and cannot drain. Chain-agnostic Solidity, live on Base Sepolia and Whitechain Sepolia.">
 <style>
   :root{--bg:#0b0d10;--panel:#11151b;--line:#1f262f;--fg:#e6e9ee;--mute:#8b95a3;--ok:#5fd38d;--no:#ff8f6b;--acc:#7cc4ff;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;--sans:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
   *{box-sizing:border-box}
@@ -49,21 +49,21 @@
 <div class="wrap">
 
 <header>
-  <div class="live">live on a public EVM testnet. chain-agnostic, Base next</div>
+  <div class="live">live on two public EVM testnets: Base Sepolia and Whitechain Sepolia</div>
   <h1>Rein</h1>
   <p class="lede">A smart account an autonomous agent can operate and cannot drain.</p>
   <p class="sub">The limits are in the contract, not in the agent. An agent that has been completely taken over, wrong instructions, poisoned tool output, rewritten system prompt, still cannot produce a transaction the account is unwilling to make.</p>
   <div class="btns">
     <a class="btn primary" href="#demo">Watch it refuse</a>
     <a class="btn" href="https://github.com/let-the-dreamers-rise/rein">GitHub</a>
-    <a class="btn" href="https://explorer.testnet.whitechain.io/address/0x69a504e6beA9C76f3C19196c2D3FD02244674621">Account on the explorer</a>
+    <a class="btn" href="https://base-sepolia.blockscout.com/address/0x0dA3840BA3516e1aE2BB14aCc0eB920c2A660527#code">Account on Base Sepolia</a>
     <a class="btn" href="#video">90-second video</a>
   </div>
 </header>
 
 <section id="demo">
   <h2>The demo, as it ran on chain</h2>
-  <p class="hint">Unedited output of <code>npm run demo:whitechain</code> on Whitechain Sepolia, an EVM testnet. The same bytecode deploys to Base Sepolia with <code>npm run demo:base</code>. An agent is hired to pay suppliers, does its job, then reads an injected instruction and tries in earnest to empty the account six different ways. Every refusal is a free view call that returns the same code the transaction would revert with.</p>
+  <p class="hint">Unedited output of <code>npm run demo:whitechain</code>. The same bytecode ran the same way on Base Sepolia via <code>npm run demo:base</code> — one payment allowed, every attack refused, on both chains. An agent is hired to pay suppliers, does its job, then reads an injected instruction and tries in earnest to empty the account six different ways. Every refusal is a free view call that returns the same code the transaction would revert with.</p>
   <div class="term" id="term"><button type="button" class="replay" id="replay">replay</button></div>
 </section>
 
@@ -113,9 +113,13 @@
 
 <footer>
   Built by Ashwin Goyal. <a href="https://github.com/let-the-dreamers-rise/rein">Source</a>, MIT.
-  Factory <a href="https://explorer.testnet.whitechain.io/address/0x30F0bAB7ed9064f07c1aa7B3BFBC6d8ea25fA316">0x30F0…fA316</a>,
-  demo account <a href="https://explorer.testnet.whitechain.io/address/0x69a504e6beA9C76f3C19196c2D3FD02244674621">0x69a5…4621</a>,
-  first payment <a href="https://explorer.testnet.whitechain.io/tx/0x334a4f63647b7830e3af83f85722f406c93c1be08a79fe62c2b8a4ede97dafdf">0x334a…dafdf</a>.
+  Verified source, both chains.
+  Base Sepolia: <a href="https://base-sepolia.blockscout.com/address/0x0dA3840BA3516e1aE2BB14aCc0eB920c2A660527#code">account</a>,
+  <a href="https://base-sepolia.blockscout.com/address/0xa1B47042e1E41ef0790262369B59427184ea3191#code">factory</a>,
+  <a href="https://base-sepolia.blockscout.com/tx/0xfc20e4f29916527e1cd2e32c73cb07e989dac8c2efcea76dffacaa61fae27b51">the one allowed payment</a>.
+  Whitechain Sepolia: <a href="https://explorer.testnet.whitechain.io/address/0x69a504e6beA9C76f3C19196c2D3FD02244674621#code">account</a>,
+  <a href="https://explorer.testnet.whitechain.io/address/0x30F0bAB7ed9064f07c1aa7B3BFBC6d8ea25fA316#code">factory</a>,
+  <a href="https://explorer.testnet.whitechain.io/tx/0x334a4f63647b7830e3af83f85722f406c93c1be08a79fe62c2b8a4ede97dafdf">payment</a>.
 </footer>
 
 </div>

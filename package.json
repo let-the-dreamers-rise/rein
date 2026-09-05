@@ -13,7 +13,12 @@
     "preflight:base": "hardhat run scripts/preflight.js --network baseSepolia",
     "deploy:base": "hardhat run scripts/deploy.js --network baseSepolia",
     "demo:base": "hardhat run scripts/demo-injection.js --network baseSepolia",
-    "verify:base": "hardhat verify --network baseSepolia"
+    "verify:base": "hardhat verify --network baseSepolia",
+    "preflight:sepolia": "hardhat run scripts/preflight.js --network sepolia",
+    "bridge:base": "hardhat run scripts/bridge-to-base.js --network sepolia",
+    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia",
+    "demo:sepolia": "hardhat run scripts/demo-injection.js --network sepolia",
+    "verify:sepolia": "hardhat verify --network sepolia"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",

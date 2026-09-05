@@ -15,6 +15,13 @@ const BASE_SEPOLIA = {
   rpc: process.env.BASE_SEPOLIA_RPC || "https://sepolia.base.org",
   explorer: "https://base-sepolia.blockscout.com",
 };
+// Ethereum Sepolia itself: the L1 the two above settle on. Used to bridge
+// faucet ETH down to Base Sepolia and as a deployment target in its own right.
+const SEPOLIA = {
+  chainId: 11155111,
+  rpc: process.env.SEPOLIA_RPC || "https://ethereum-sepolia-rpc.publicnode.com",
+  explorer: "https://eth-sepolia.blockscout.com",
+};
 
 // Read from the environment and never committed. Nothing in this repo should
 // ever contain a key.
@@ -43,9 +50,14 @@ module.exports = {
       chainId: BASE_SEPOLIA.chainId,
       accounts,
     },
+    sepolia: {
+      url: SEPOLIA.rpc,
+      chainId: SEPOLIA.chainId,
+      accounts,
+    },
   },
   etherscan: {
-    apiKey: { whitechainSepolia: "blockscout", baseSepolia: "blockscout" },
+    apiKey: { whitechainSepolia: "blockscout", baseSepolia: "blockscout", sepolia: "blockscout" },
     customChains: [
       {
         network: "whitechainSepolia",
@@ -61,6 +73,14 @@ module.exports = {
         urls: {
           apiURL: `${BASE_SEPOLIA.explorer}/api`,
           browserURL: BASE_SEPOLIA.explorer,
+        },
+      },
+      {
+        network: "sepolia",
+        chainId: SEPOLIA.chainId,
+        urls: {
+          apiURL: `${SEPOLIA.explorer}/api`,
+          browserURL: SEPOLIA.explorer,
         },
       },
     ],
