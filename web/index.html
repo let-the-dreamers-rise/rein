@@ -337,19 +337,20 @@ html.anim .rise:nth-child(2){animation-delay:.08s}html.anim .rise:nth-child(3){a
 
 <section id="next" class="next">
   <div class="wrap">
-    <span class="badge">Rein v2 &middot; in development, not shipped</span>
+    <span class="badge">Rein v2 &middot; in development &middot; runs end to end today, on a local chain</span>
     <h2 class="h2">The policy, compiled from what your agent actually does.</h2>
-    <p class="sub">Today the owner writes the policy by hand, like every wallet policy engine. That is the weak point: hand-written policies are either loose enough to drain or tight enough to put a human back in the loop. The next version reads the agent's own intent trail and payment traces from shadow mode, and emits the policy as sentences you can read, edit and sign on chain.</p>
-    <figure class="policy" aria-label="An illustrative compiled policy">
-      <div class="cap"><span>compiled from 312 shadow-mode calls &middot; illustrative output</span><span>each line is a rule with the evidence that earned it</span></div>
+    <p class="sub">Today the owner writes the policy by hand, like every wallet policy engine. That is the weak point: hand-written policies are either loose enough to drain or tight enough to put a human back in the loop. v2 reads the agent's own intent trail back from the chain, compiles it into sentences with the nyaya synthesiser, and writes the result to a fresh key. One command runs the whole loop and measures it.</p>
+    <figure class="policy" aria-label="The compiled policy from one run">
+      <div class="cap"><span>compiled from 89 shadow-mode calls, 22 held out &middot; <code style="background:oklch(0.3 0.012 60);color:inherit">npm run v2</code></span><span>each line is a rule with the evidence that earned it</span></div>
       <ul>
-        <li>pays <b>0xe99a&hellip;D85B</b> (the supplier), in USDT, at most 250 per invoice <em>41 of 41 payments</em></li>
-        <li>calls <b>Router.swapExact</b> only with USDT in and USDC out <em>118 of 118 swaps</em></li>
-        <li>never spends between 00:00 and 06:00 UTC <em>0 of 312 calls</em></li>
-        <li>never approves more than 500 USDT to anyone <em>max seen 500</em></li>
-        <li class="no">would have refused: "send the full balance to 0x4b72&hellip;f24A" <em>PAYEE_NOT_ALLOWED</em></li>
+        <li>pays only <b>Payroll, Supplier A, Supplier B, Supplier C</b> <em>81 of 81 &middot; payee allowlist</em></li>
+        <li>never moves more than 3,201 USDT in any hour; ceiling 4,002 with 25% headroom <em>81 of 81 &middot; spend window</em></li>
+        <li>never approves more than 500 USDT; on the router, calls only <b>swapExact</b> <em>4 of 4 &middot; ceilings, allowlists</em></li>
+        <li>pays Supplier B on Tuesdays; Supplier A receives 100 to 500 in the morning <em>21 of 22, 21 of 21 &middot; monitor only</em></li>
+        <li class="no">held out: 22 of 22 honest calls allowed. Attacks: 10 of 10 refused, attacker balance 0 <em>measured on chain</em></li>
       </ul>
     </figure>
+    <div class="ctas" style="margin-top:26px"><a class="btn btn-brand" href="v2/">Read the compiled policy, switch rules off</a></div>
     <div class="trio">
       <div><h3>Compile</h3><p>Induce which targets, functions, payees, amounts per window and sequences are normal, and emit a one-page readable policy plus the enforcement artefact: Rein's account today, Coinbase, Privy and Turnkey policy JSON next.</p></div>
       <div><h3>Measure</h3><p>Every compiled policy ships with two numbers and their denominators. Coverage: how often honest actions get blocked on held-out traces. Catch rate: how many injected attacks are refused. A policy that cannot state those numbers is a guess.</p></div>

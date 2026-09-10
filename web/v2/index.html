@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rein v2 · The policy, compiled from what the agent did</title>
+<meta name="description" content="A Rein spending policy compiled from an agent's own on-chain intent trail by the nyaya synthesiser, measured on held-out calls and ten attacks. Switch a rule off and watch what gets through.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23ff6a1a'/%3E%3Cpath d='M9 23V9h8.5a4.5 4.5 0 0 1 1.6 8.7L23 23h-3.6l-3.5-4.8H12V23z' fill='%23141210'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{--bg:oklch(0.985 0 0);--surface:#fff;--sunken:oklch(0.955 0.004 60);--ink:oklch(0.21 0.012 60);--ink-2:oklch(0.40 0.012 60);--ink-3:oklch(0.55 0.010 60);--hair:oklch(0.89 0.006 60);--brand:oklch(0.70 0.20 45);--brand-strong:oklch(0.64 0.21 42);--brand-deep:oklch(0.50 0.16 40);--brand-tint:oklch(0.96 0.03 55);--ok:oklch(0.52 0.14 150);--ok-tint:oklch(0.95 0.04 150);--display:"Bricolage Grotesque","Helvetica Neue",Arial,sans-serif;--mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;--ease:cubic-bezier(.16,1,.3,1)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--display);font-size:17px;line-height:1.55;-webkit-font-smoothing:antialiased;font-optical-sizing:auto}
+a{color:var(--brand-deep)}
+:focus-visible{outline:3px solid var(--brand);outline-offset:3px;border-radius:2px}
+h1,h2,h3{text-wrap:balance;margin:0;font-weight:700;letter-spacing:-.02em;line-height:1.05}
+p{margin:0;text-wrap:pretty}
+figure{margin:0}
+.wrap{max-width:1180px;margin:0 auto;padding:0 clamp(20px,4vw,40px)}
+code{font-family:var(--mono);font-size:.88em;background:var(--sunken);padding:.1em .4em;border-radius:4px}
+.tape{height:14px;background:repeating-linear-gradient(-45deg,var(--brand) 0 18px,var(--ink) 18px 36px)}
+.nav{position:sticky;top:0;z-index:10;background:var(--bg);border-bottom:1px solid var(--hair)}
+.nav .wrap{display:flex;align-items:center;gap:28px;height:64px}
+.mark{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px;letter-spacing:-.02em;color:var(--ink);text-decoration:none}
+.mark svg{width:26px;height:26px}
+.mark span{font-weight:500;color:var(--ink-3);margin-left:4px}
+.nav .back{margin-left:auto;font-weight:500;font-size:15px;color:var(--ink-2);text-decoration:none}
+.hero{background:var(--brand);padding:clamp(48px,7vw,88px) 0}
+.hero h1{font-size:clamp(2.2rem,5vw,4.2rem);font-weight:800;line-height:1;letter-spacing:-.03em;max-width:16ch}
+.hero .lede{font-size:clamp(17px,1.5vw,20px);line-height:1.45;margin:22px 0 0;max-width:58ch;color:oklch(0.20 0.02 45)}
+.badge{display:inline-block;font-family:var(--mono);font-size:12.5px;color:var(--brand);background:var(--ink);padding:5px 10px;border-radius:6px;margin-bottom:22px;font-weight:500}
+section{padding:clamp(48px,7vw,88px) 0}
+section+section{border-top:1px solid var(--hair)}
+.h2{font-size:clamp(1.7rem,3.2vw,2.6rem);max-width:24ch}
+.sub{color:var(--ink-2);font-size:clamp(16px,1.2vw,18px);margin-top:16px;max-width:64ch}
+.numbers{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1px;background:var(--hair);border:1px solid var(--hair);border-radius:12px;overflow:hidden;margin-top:32px}
+.numbers>div{background:var(--surface);padding:24px 26px}
+.numbers .n{font-size:clamp(2.4rem,4vw,3.4rem);font-weight:800;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums}
+.numbers .n small{font-size:.45em;font-weight:600;color:var(--ink-3);letter-spacing:0;margin-left:6px}
+.numbers p{color:var(--ink-2);font-size:15px;margin-top:10px}
+.numbers .live{font-family:var(--mono);font-size:12.5px;margin-top:10px;color:var(--ok)}
+.numbers .live.off{color:var(--brand-deep)}
+.ledger{margin-top:32px;border:1px solid var(--hair);border-radius:12px;background:var(--surface);overflow:hidden}
+.ledger .head{display:grid;grid-template-columns:34px minmax(0,1fr) 120px 180px;gap:14px;padding:12px 18px;border-bottom:1px solid var(--hair);font-size:12px;color:var(--ink-3);font-weight:600}
+.rule{display:grid;grid-template-columns:34px minmax(0,1fr) 120px 180px;gap:14px;align-items:center;width:100%;text-align:left;padding:13px 18px;border:0;border-bottom:1px solid var(--hair);background:transparent;color:var(--ink);font:inherit;cursor:pointer}
+.rule:last-child{border-bottom:0}
+.rule:hover{background:var(--sunken)}
+.rule .box{width:16px;height:16px;border:1.5px solid var(--ink-3);border-radius:3px;position:relative}
+.rule[aria-pressed="true"] .box::after{content:"";position:absolute;inset:3px;background:var(--ink);border-radius:1px}
+.rule .text{font-size:16px}
+.rule .ev{font-family:var(--mono);font-size:12.5px;color:var(--ink-2);text-align:right;white-space:nowrap}
+.rule .by{font-family:var(--mono);font-size:12px;color:var(--brand-deep);white-space:nowrap}
+.rule.learned .by{color:var(--ink-3)}
+.rule.off{opacity:.45}.rule.off .text{text-decoration:line-through}
+@media(max-width:700px){.ledger .head{display:none}.rule{grid-template-columns:24px minmax(0,1fr)}.rule .ev,.rule .by{grid-column:2;text-align:left}}
+.calls{margin-top:32px;overflow-x:auto;border:1px solid var(--hair);border-radius:12px;background:var(--surface)}
+.calls table{width:100%;border-collapse:collapse;font-size:14.5px;min-width:720px}
+.calls th,.calls td{text-align:left;padding:11px 16px;border-bottom:1px solid var(--hair);vertical-align:top}
+.calls th{font-size:12px;color:var(--ink-3);font-weight:600}
+.calls tbody tr:last-child td{border-bottom:0}
+.calls td.code{font-family:var(--mono);font-size:12.5px;white-space:nowrap}
+.calls td.code.ok{color:var(--ok)}.calls td.code.no{color:var(--brand-deep)}
+.calls td.intent{color:var(--ink-2)}
+.calls td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.steps{list-style:none;margin:28px 0 0;padding:0;counter-reset:s}
+.steps li{display:grid;grid-template-columns:52px minmax(0,1fr);gap:16px;padding:20px 0;border-top:1px solid var(--hair);counter-increment:s}
+.steps li:last-child{border-bottom:1px solid var(--hair)}
+.steps li::before{content:counter(s);font-weight:800;font-size:34px;line-height:1;letter-spacing:-.04em;color:var(--brand-strong)}
+.steps h3{font-size:19px;margin-bottom:6px}
+.steps p{color:var(--ink-2);font-size:16px;max-width:60ch}
+.cmd{font-family:var(--mono);font-size:13.5px;background:var(--surface);border:1px solid var(--hair);border-radius:10px;padding:14px 18px;margin-top:24px;overflow-x:auto;white-space:pre}
+.limits{list-style:none;margin:24px 0 0;padding:0;max-width:66ch}
+.limits li{padding:14px 0 14px 26px;border-top:1px solid var(--hair);color:var(--ink-2);position:relative;font-size:16px}
+.limits li:last-child{border-bottom:1px solid var(--hair)}
+.limits li::before{content:"";position:absolute;left:0;top:23px;width:12px;height:2px;background:var(--brand-strong)}
+.limits b{color:var(--ink);font-weight:600}
+footer{padding:36px 0 64px;font-size:14.5px;color:var(--ink-2)}
+footer a{font-family:var(--mono);font-size:13px}
+</style>
+</head>
+<body>
+<nav class="nav" aria-label="Primary">
+  <div class="wrap">
+    <a class="mark" href="../" aria-label="Rein, home"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--brand)"/><path d="M9 23V9h8.5a4.5 4.5 0 0 1 1.6 8.7L23 23h-3.6l-3.5-4.8H12V23z" fill="var(--ink)"/></svg>Rein <span>v2</span></a>
+    <a class="back" href="../">Back to the account</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="badge">in development · every number below is from one run of <code style="background:oklch(0.3 0.02 45);color:var(--brand)">npm run v2</code></span>
+    <h1>The policy, compiled from what the agent actually did.</h1>
+    <p class="lede">An accounts-payable agent ran for six months under a wide policy. Its intent trail was read back from the chain, the first 80% went through the nyaya synthesiser, and the result was written to a fresh key. Below: the policy as sentences, the 20% it never saw replayed through it, and ten attacks. Switch a rule off and see what gets through.</p>
+  </div>
+</header>
+<div class="tape" role="presentation"></div>
+
+<section id="numbers">
+  <div class="wrap">
+    <h2 class="h2">Two numbers, with their denominators.</h2>
+    <p class="sub">A policy that cannot state these is a guess. Coverage is measured on calls the compiler never saw. The catch rate is measured on attacks the shadow run never contained. Both were computed on chain by <code>simulate()</code>, and every refusal was cross-checked against <code>execute()</code> reverting with the same code.</p>
+    <div class="numbers">
+      <div><div class="n" id="cov"></div><p>honest held-out calls allowed. Every refusal of an honest call is a cost the owner pays in a human being paged.</p><p class="live" id="cov-live"></p></div>
+      <div><div class="n" id="catch"></div><p>attacks refused before any gas was spent, with the reason in words.</p><p class="live" id="catch-live"></p></div>
+      <div><div class="n" id="split"></div><p>calls compiled from, calls held out. Six simulated months, seeded, so the run is the same every time.</p><p class="live" id="gen"></p></div>
+    </div>
+  </div>
+</section>
+
+<section id="policy">
+  <div class="wrap">
+    <h2 class="h2">Every rule, the evidence that earned it, and what enforces it.</h2>
+    <p class="sub"><b>Bounds</b> are what the agent never exceeded, with 25% headroom, and they map one-to-one onto the account's on-chain policy. <b>Learned</b> sentences are habits the synthesiser found that the contract cannot enforce today; they are what a guardian watches for. Click a bound to switch it off; the two numbers above are recomputed by a mirror of the contract's evaluation, in this page.</p>
+    <div class="ledger">
+      <div class="head"><span></span><span>what the agent does</span><span style="text-align:right">evidence</span><span>enforced by</span></div>
+      <div id="rules"></div>
+    </div>
+  </div>
+</section>
+
+<section id="attacks">
+  <div class="wrap">
+    <h2 class="h2">Ten attacks, and what the compiled policy said.</h2>
+    <p class="sub">Each is a call the agent, once hijacked, genuinely wants to make. The verdict column follows the switches above.</p>
+    <div class="calls"><table><thead><tr><th>attack</th><th>the call</th><th>instruction</th><th>verdict</th></tr></thead><tbody id="atk"></tbody></table></div>
+  </div>
+</section>
+
+<section id="heldout">
+  <div class="wrap">
+    <h2 class="h2">The held-out calls, replayed.</h2>
+    <p class="sub">The last 20% of the trail, in order, through the policy compiled from the first 80%.</p>
+    <div class="calls"><table><thead><tr><th>when</th><th>the call</th><th>instruction</th><th>verdict</th></tr></thead><tbody id="ho"></tbody></table></div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <h2 class="h2">How the run works, and how to run it.</h2>
+    <ol class="steps">
+      <li><div><h3>Shadow</h3><p>The agent pays three suppliers, funds payroll on the first, and tops up USDC through a router on the fifth, for 182 simulated days, under a policy wide enough to let it work. Every call lands on chain through the account with a hash of the instruction behind it.</p></div></li>
+      <li><div><h3>Export</h3><p>The intent trail is read back from the chain's <code>IntentExecuted</code> events, each transaction decoded, and the prompt log joined to it on the intent hash. Nothing in the compiler sees the agent's code.</p></div></li>
+      <li><div><h3>Compile</h3><p>Bounds come from what the agent never exceeded. Habits come from the nyaya synthesiser, the same search that learns game rules and phone-message rules, pointed at (context, payee) and (payee, amount). A rule survives only with at least four cases and 90% precision, re-scored against everything.</p></div></li>
+      <li><div><h3>Apply and measure</h3><p>The policy is written to a fresh agent key with owner-only calls. The held-out calls are replayed at their original spacing, then ten attacks. Coverage and catch rate come from the chain, not from the compiler's opinion of itself.</p></div></li>
+    </ol>
+    <div class="cmd">git clone https://github.com/let-the-dreamers-rise/rein &amp;&amp; cd rein &amp;&amp; npm install
+git clone https://github.com/let-the-dreamers-rise/nyaya ../nyaya   # the synthesiser, standard library only
+npm run v2</div>
+  </div>
+</section>
+
+<section id="limits">
+  <div class="wrap">
+    <h2 class="h2">What this run does not show.</h2>
+    <ul class="limits">
+      <li><b>The trail is simulated.</b> Seeded, regular, and friendlier than a real ledger. A real agent's six months will have exceptions the bounds would refuse, and coverage below 100% is the expected result there, not a defect.</li>
+      <li><b>Shadow mode is not zero policy.</b> Rein needs a payee list to run at all, so the owner listed everyone the agent might pay. The compiler still had to find the list, the ceilings and the habits on its own.</li>
+      <li><b>Learned habits are monitor-only.</b> Time of day and per-payee amounts are not in the contract today. Putting them there is the v2 contract work, and it is not done.</li>
+      <li><b>Headroom is a choice.</b> 25% above the observed hourly maximum. Less headroom, more refusals of honest calls; more headroom, a larger loss when the payee list is wrong. The number is a dial, and it is printed, not hidden.</li>
+      <li><b>Local chain.</b> This run is on the in-process Hardhat network. The account contract is the same bytecode that is verified on Base Sepolia and Whitechain Sepolia.</li>
+    </ul>
+  </div>
+</section>
+
+<div class="tape" role="presentation"></div>
+<footer><div class="wrap"><p>Rein, MIT. The compiler is <a href="https://github.com/let-the-dreamers-rise/rein/blob/main/v2/compile.py">v2/compile.py</a>; the run is <a href="https://github.com/let-the-dreamers-rise/rein/blob/main/scripts/v2/demo.js">scripts/v2/demo.js</a>; the synthesiser is <a href="https://github.com/let-the-dreamers-rise/nyaya">nyaya</a>.</p></div></footer>
+
+<script src="data.js"></script>
+<script>
+(function(){
+  var D=window.REIN_V2; if(!D){return}
+  var P=D.policy, OC=P.onchain;
+  var S=P.sentences.map(function(s,i){return Object.assign({on:true,i:i},s)});
+  var WINDOW=P.window_seconds;
+  var NAMES=["OK","NOT_AN_AGENT","AGENT_EXPIRED","BREAKER_TRIPPED","SELF_CALL","TARGET_NOT_ALLOWED","SELECTOR_NOT_ALLOWED","NATIVE_PER_CALL","NATIVE_PER_WINDOW","CALL_RATE","TOKEN_NOT_ALLOWED","TOKEN_PER_WINDOW","APPROVAL_TOO_LARGE","PAYEE_NOT_ALLOWED","INTENT_REQUIRED","DELTA_APPROVAL_UNSUPPORTED"];
+  function enabled(key){var s=S.find(function(x){return x.key===key});return !s||s.on}
+
+  // A mirror of ReinAccount._evaluate over decoded calls, with the same order
+  // of checks, so that with every switch on this page agrees with the chain.
+  function evaluate(calls){
+    var out=[], nat={start:0,calls:0}, tok={};
+    var payees=OC.payees;
+    calls.forEach(function(c){
+      var ts=c.ts, code=0;
+      var kind=c.kind||"other";
+      var t=c.target||(c.token);
+      if(t==="Account") code=4;
+      else if(enabled("intent")&&!c.intent) code=14;
+      else if(enabled("targets")&&OC.targets.indexOf(t)<0) code=5;
+      else if(enabled("selectors:"+t)&&(!OC.selectors[t]||OC.selectors[t].indexOf(c.selector||c.kind)<0)) code=6;
+      else if(enabled("native")&&(c.value||0)>0) code=7;
+      else{
+        var w=(ts-nat.start<WINDOW)?nat:{start:ts,calls:0};
+        if(enabled("rate")&&w.calls+1>OC.agent.maxCallsPerWindow) code=9;
+        else if(kind==="transfer"||kind==="approve"||kind==="transferFrom"||kind==="increaseAllowance"){
+          var tp=OC.tokens[c.token];
+          if(!tp) code=10;
+          else if((kind==="approve"||kind==="increaseAllowance"?enabled("spenders"):enabled("payees"))&&payees.indexOf(c.payee)<0) code=13;
+          else if(kind==="increaseAllowance") code=15;
+          else if(kind==="approve"){ if(enabled("approval:"+c.token)&&c.amount>tp.maxApproval) code=12; }
+          else{
+            var tw=tok[c.token]||{start:0,spent:0};
+            var cur=(ts-tw.start<WINDOW)?tw:{start:ts,spent:0};
+            if(enabled("window:"+c.token)&&(c.amount>tp.maxPerWindow||cur.spent+c.amount>tp.maxPerWindow)) code=11;
+            else{ cur.spent+=c.amount; tok[c.token]=cur; }
+          }
+        }
+        if(code===0){ w.calls+=1; nat=w; }
+      }
+      out.push(code);
+    });
+    return out;
+  }
+
+  var held=D.heldout, atk=D.attacks.cases;
+  var lastTs=held.length?held[held.length-1].ts:0;
+  var atkCalls=atk.map(function(a,i){return Object.assign({ts:lastTs+60*(i+1)},a)});
+
+  function describe(c){
+    if(c.kind==="transfer"||c.kind==="transferFrom") return "transfer "+fmt(c.amount)+" "+c.token+" to "+c.payee;
+    if(c.kind==="approve") return "approve "+c.payee+" for "+fmt(c.amount)+" "+c.token;
+    if(c.kind==="increaseAllowance") return "increaseAllowance "+c.payee+" by "+fmt(c.amount)+" "+c.token;
+    if(c.selector==="native") return "send "+c.value+" native to "+c.payee;
+    if(c.selector==="setPayees") return "Account.setPayees(agent, [Attacker])";
+    return (c.target||"")+"."+(c.selector||c.kind)+(c.amount?" "+fmt(c.amount)+" USDT":"");
+  }
+  function fmt(n){return n>=1e9?"unlimited":Number(n).toLocaleString("en-US",{maximumFractionDigits:2})}
+  function when(ts){var d=new Date(ts*1000);return d.toISOString().slice(0,16).replace("T"," ")}
+  function cell(code){return '<td class="code '+(code?"no":"ok")+'">'+(code?"REFUSED "+NAMES[code]:"ALLOWED")+"</td>"}
+
+  var rules=document.getElementById("rules");
+  S.forEach(function(s){
+    var b=document.createElement("button"); b.type="button"; b.className="rule "+s.kind; b.setAttribute("aria-pressed","true");
+    b.innerHTML='<span class="box" aria-hidden="true"></span><span class="text"></span><span class="ev"></span><span class="by"></span>';
+    b.querySelector(".text").textContent=s.text;
+    b.querySelector(".ev").textContent=s.evidence.right+" of "+s.evidence["fired on"];
+    b.querySelector(".by").textContent=s.enforced;
+    b.setAttribute("aria-label",s.text+", "+s.evidence.right+" of "+s.evidence["fired on"]+", enforced by "+s.enforced);
+    if(s.kind==="learned"){b.disabled=false}
+    b.addEventListener("click",function(){s.on=!s.on;render()});
+    s.el=b; rules.appendChild(b);
+  });
+
+  function render(){
+    S.forEach(function(s){s.el.classList.toggle("off",!s.on);s.el.setAttribute("aria-pressed",String(s.on))});
+    var hc=evaluate(held), ac=evaluate(atkCalls);
+    var allowed=hc.filter(function(c){return c===0}).length, caught=ac.filter(function(c){return c!==0}).length;
+    document.getElementById("cov").innerHTML=allowed+" <small>of "+held.length+"</small>";
+    document.getElementById("catch").innerHTML=caught+" <small>of "+atk.length+"</small>";
+    var allOn=S.every(function(s){return s.on});
+    var chainOk=allowed===D.coverage.allowed&&caught===D.attacks.caught;
+    var cl=document.getElementById("cov-live"), al=document.getElementById("catch-live");
+    cl.textContent=allOn?(chainOk?"matches the on-chain run":"page mirror disagrees with the chain: "+D.coverage.allowed):"with the switches above; chain run: "+D.coverage.allowed+" of "+D.coverage.total;
+    al.textContent=allOn?(chainOk?"matches the on-chain run":"page mirror disagrees with the chain: "+D.attacks.caught):"with the switches above; chain run: "+D.attacks.caught+" of "+D.attacks.total;
+    cl.classList.toggle("off",!allOn); al.classList.toggle("off",!allOn);
+    document.getElementById("atk").innerHTML=atkCalls.map(function(a,i){return "<tr><td>"+a.label+"</td><td>"+describe(a)+'</td><td class="intent">'+(a.intent?"“"+a.intent+"”":"(none)")+"</td>"+cell(ac[i])+"</tr>"}).join("");
+    document.getElementById("ho").innerHTML=held.map(function(h,i){return '<tr><td class="num">'+when(h.ts)+"</td><td>"+describe(h)+'</td><td class="intent">“'+h.intent+"”</td>"+cell(hc[i])+"</tr>"}).join("");
+  }
+  document.getElementById("split").innerHTML=P.split.train+" <small>+ "+P.split.heldout+"</small>";
+  document.getElementById("gen").textContent="run "+D.generatedAt.slice(0,10);
+  render();
+})();
+</script>
+</body>
+</html>

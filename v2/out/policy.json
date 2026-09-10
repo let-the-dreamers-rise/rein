@@ -1,0 +1,223 @@
+{
+ "split": {
+  "train": 89,
+  "heldout": 22,
+  "cut_index": 89
+ },
+ "window_seconds": 3600,
+ "headroom": 1.25,
+ "bounds": {
+  "calls": 89,
+  "targets": {
+   "USDT": 85,
+   "Router": 4
+  },
+  "selectors": {
+   "USDT": {
+    "transfer": 81,
+    "approve": 4
+   },
+   "Router": {
+    "swapExact": 4
+   }
+  },
+  "payees": {
+   "Supplier A": 29,
+   "Supplier B": 42,
+   "Supplier C": 5,
+   "Payroll": 5
+  },
+  "spenders": {
+   "Router": 4
+  },
+  "tokens": {
+   "USDT": {
+    "moves": 81,
+    "max_per_call": 3000.0,
+    "max_per_hour": 3201.0,
+    "ceiling_per_hour": 4002,
+    "approvals": 4,
+    "max_approval": 500.0
+   }
+  },
+  "calls_per_hour": 2,
+  "calls_cap": 3,
+  "native_max": 0.0,
+  "intents": 89
+ },
+ "onchain": {
+  "agent": {
+   "windowSeconds": 3600,
+   "maxCallsPerWindow": 3,
+   "maxNativePerCall": 0,
+   "maxNativePerWindow": 0,
+   "requireIntent": true,
+   "expiry": 0
+  },
+  "targets": [
+   "Router",
+   "USDT"
+  ],
+  "selectors": {
+   "USDT": [
+    "approve",
+    "transfer"
+   ],
+   "Router": [
+    "swapExact"
+   ]
+  },
+  "payees": [
+   "Payroll",
+   "Router",
+   "Supplier A",
+   "Supplier B",
+   "Supplier C"
+  ],
+  "tokens": {
+   "USDT": {
+    "windowSeconds": 3600,
+    "maxPerWindow": 4002,
+    "maxApproval": 500.0
+   }
+  }
+ },
+ "sentences": [
+  {
+   "text": "Calls only Router, USDT",
+   "kind": "bound",
+   "enforced": "target allowlist",
+   "evidence": {
+    "fired on": 89,
+    "right": 89
+   },
+   "key": "targets"
+  },
+  {
+   "text": "On Router, calls only swapExact",
+   "kind": "bound",
+   "enforced": "selector allowlist",
+   "evidence": {
+    "fired on": 4,
+    "right": 4
+   },
+   "key": "selectors:Router"
+  },
+  {
+   "text": "On USDT, calls only approve, transfer",
+   "kind": "bound",
+   "enforced": "selector allowlist",
+   "evidence": {
+    "fired on": 85,
+    "right": 85
+   },
+   "key": "selectors:USDT"
+  },
+  {
+   "text": "Pays only Payroll, Supplier A, Supplier B, Supplier C",
+   "kind": "bound",
+   "enforced": "payee allowlist",
+   "evidence": {
+    "fired on": 81,
+    "right": 81
+   },
+   "key": "payees"
+  },
+  {
+   "text": "Approves only Router",
+   "kind": "bound",
+   "enforced": "payee allowlist",
+   "evidence": {
+    "fired on": 4,
+    "right": 4
+   },
+   "key": "spenders"
+  },
+  {
+   "text": "Never moves more than 3,201 USDT in any hour; ceiling 4,002 with 25% headroom",
+   "kind": "bound",
+   "enforced": "rolling spend window",
+   "evidence": {
+    "fired on": 81,
+    "right": 81
+   },
+   "key": "window:USDT"
+  },
+  {
+   "text": "Never approves more than 500 USDT",
+   "kind": "bound",
+   "enforced": "approval ceiling",
+   "evidence": {
+    "fired on": 4,
+    "right": 4
+   },
+   "key": "approval:USDT"
+  },
+  {
+   "text": "Makes at most 2 calls in an hour; cap 3",
+   "kind": "bound",
+   "enforced": "call rate",
+   "evidence": {
+    "fired on": 89,
+    "right": 89
+   },
+   "key": "rate"
+  },
+  {
+   "text": "Never sends native value",
+   "kind": "bound",
+   "enforced": "native ceiling of zero",
+   "evidence": {
+    "fired on": 89,
+    "right": 89
+   },
+   "key": "native"
+  },
+  {
+   "text": "Every call carries the instruction behind it",
+   "kind": "bound",
+   "enforced": "intent required",
+   "evidence": {
+    "fired on": 89,
+    "right": 89
+   },
+   "key": "intent"
+  },
+  {
+   "text": "Pays Supplier B on Tuesdays",
+   "kind": "learned",
+   "enforced": "monitor only",
+   "evidence": {
+    "fired on": 22,
+    "right": 21
+   }
+  },
+  {
+   "text": "Pays Supplier A when the amount is 100 to 500",
+   "kind": "learned",
+   "enforced": "monitor only",
+   "evidence": {
+    "fired on": 21,
+    "right": 21
+   }
+  },
+  {
+   "text": "Supplier A receives 100 to 500 in the morning",
+   "kind": "learned",
+   "enforced": "monitor only",
+   "evidence": {
+    "fired on": 21,
+    "right": 21
+   }
+  },
+  {
+   "text": "Pays Supplier C when the amount is 500 to 2,000",
+   "kind": "learned",
+   "enforced": "monitor only",
+   "evidence": {
+    "fired on": 5,
+    "right": 5
+   }
+  }
+ ]
+}

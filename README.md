@@ -20,6 +20,39 @@ completely taken over -- wrong instructions, poisoned tool output, rewritten
 system prompt -- still cannot produce a transaction the account is unwilling to
 make.
 
+## Rein v2: the policy compiled from the agent's own behaviour
+
+One command runs the loop end to end on the in-process chain and measures it:
+
+```
+npm run v2        # needs python3 and a checkout of nyaya next to this repo (or NYAYA_PATH)
+```
+
+An accounts-payable agent runs for 182 simulated days under a wide policy;
+every call lands on chain with its intent hash. The intent trail is read back
+from `IntentExecuted`, decoded, and joined to the prompt log on the hash. The
+first 80% goes through [`v2/compile.py`](v2/compile.py): bounds (what the agent
+never exceeded, with 25% headroom) become the on-chain policy, and the
+[nyaya](https://github.com/let-the-dreamers-rise/nyaya) synthesiser finds the
+habits ("pays Supplier B on Tuesdays", 21 of 22), which are monitor-only
+because the contract cannot enforce time or per-payee amounts today. The policy
+is written to a fresh key; the held-out 20% is replayed through it, then ten
+attacks.
+
+| measured on chain | result |
+|---|---|
+| coverage: honest held-out calls allowed | 22 of 22 |
+| catch rate: attacks refused before gas | 10 of 10 |
+| attacker balance afterwards | 0 |
+
+Every refusal is cross-checked: `simulate()` and `execute()` must return the
+same code or the script exits non-zero. The compiled policy, the trail and the
+result are in [`v2/out/`](v2/out/); the page at
+[rein-nine.vercel.app/v2](https://rein-nine.vercel.app/v2/) shows every rule
+with its evidence and lets you switch one off to see which attack gets
+through. The trail is simulated and seeded; a real ledger will have exceptions
+the bounds refuse, and coverage below 100% is the expected result there.
+
 ## The problem
 
 Giving an agent a wallet is currently all-or-nothing. Either it holds a key, in

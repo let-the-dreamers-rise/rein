@@ -6,6 +6,7 @@
   "scripts": {
     "build": "hardhat compile",
     "test": "hardhat test",
+    "v2": "hardhat run scripts/v2/demo.js",
     "preflight": "hardhat run scripts/preflight.js --network whitechainSepolia",
     "deploy:whitechain": "hardhat run scripts/deploy.js --network whitechainSepolia",
     "demo:whitechain": "hardhat run scripts/demo-injection.js --network whitechainSepolia",

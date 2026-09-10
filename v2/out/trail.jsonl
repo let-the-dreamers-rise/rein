@@ -1,0 +1,111 @@
+{"ts":1789382221,"block":16,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":219,"value":0,"intent":"pay Supplier A invoice 4401"}
+{"ts":1789485121,"block":18,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":80,"value":0,"intent":"pay Supplier B invoice 4402"}
+{"ts":1789658701,"block":20,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":53,"value":0,"intent":"pay Supplier B invoice 4403"}
+{"ts":1789985461,"block":22,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":232,"value":0,"intent":"pay Supplier A invoice 4404"}
+{"ts":1790089921,"block":24,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":83,"value":0,"intent":"pay Supplier B invoice 4405"}
+{"ts":1790264101,"block":26,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":56,"value":0,"intent":"pay Supplier B invoice 4406"}
+{"ts":1790589721,"block":28,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":216,"value":0,"intent":"pay Supplier A invoice 4407"}
+{"ts":1790593921,"block":30,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier C","amount":1200,"value":0,"intent":"pay Supplier C monthly retainer"}
+{"ts":1790695801,"block":32,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":40,"value":0,"intent":"pay Supplier B invoice 4408"}
+{"ts":1790848621,"block":34,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Payroll","amount":3000,"value":0,"intent":"fund payroll for the month"}
+{"ts":1790857921,"block":36,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":60,"value":0,"intent":"reimburse Supplier A shipping, ref 4410"}
+{"ts":1790868841,"block":38,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":48,"value":0,"intent":"pay Supplier B invoice 4409"}
+{"ts":1791195361,"block":40,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":218,"value":0,"intent":"pay Supplier A invoice 4411"}
+{"ts":1791208801,"block":42,"target":"USDT","selector":"approve","kind":"approve","token":"USDT","payee":"Router","amount":500,"value":0,"intent":"approve the router for the monthly USDC top-up"}
+{"ts":1791209101,"block":44,"target":"Router","selector":"swapExact","kind":"other","token":null,"payee":null,"amount":500,"value":0,"intent":"swap 500 USDT to USDC for the monthly top-up"}
+{"ts":1791299641,"block":46,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":42,"value":0,"intent":"pay Supplier B invoice 4412"}
+{"ts":1791473581,"block":48,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":40,"value":0,"intent":"pay Supplier B invoice 4413"}
+{"ts":1791801541,"block":50,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":222,"value":0,"intent":"pay Supplier A invoice 4414"}
+{"ts":1791903721,"block":52,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":82,"value":0,"intent":"pay Supplier B invoice 4415"}
+{"ts":1792067341,"block":54,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":27,"value":0,"intent":"reimburse Supplier A shipping, ref 4417"}
+{"ts":1792078501,"block":56,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":76,"value":0,"intent":"pay Supplier B invoice 4416"}
+{"ts":1792406341,"block":58,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":223,"value":0,"intent":"pay Supplier A invoice 4418"}
+{"ts":1792508941,"block":60,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":85,"value":0,"intent":"pay Supplier B invoice 4419"}
+{"ts":1792682641,"block":62,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":74,"value":0,"intent":"pay Supplier B invoice 4420"}
+{"ts":1793010721,"block":64,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":255,"value":0,"intent":"pay Supplier A invoice 4421"}
+{"ts":1793114221,"block":66,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":48,"value":0,"intent":"pay Supplier B invoice 4422"}
+{"ts":1793187541,"block":68,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier C","amount":1200,"value":0,"intent":"pay Supplier C monthly retainer"}
+{"ts":1793288221,"block":70,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":75,"value":0,"intent":"pay Supplier B invoice 4423"}
+{"ts":1793526481,"block":72,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Payroll","amount":3000,"value":0,"intent":"fund payroll for the month"}
+{"ts":1793615881,"block":74,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":248,"value":0,"intent":"pay Supplier A invoice 4424"}
+{"ts":1793720221,"block":76,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":81,"value":0,"intent":"pay Supplier B invoice 4425"}
+{"ts":1793887201,"block":78,"target":"USDT","selector":"approve","kind":"approve","token":"USDT","payee":"Router","amount":500,"value":0,"intent":"approve the router for the monthly USDC top-up"}
+{"ts":1793887501,"block":80,"target":"Router","selector":"swapExact","kind":"other","token":null,"payee":null,"amount":500,"value":0,"intent":"swap 500 USDT to USDC for the monthly top-up"}
+{"ts":1793890801,"block":82,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":56,"value":0,"intent":"pay Supplier B invoice 4426"}
+{"ts":1794219181,"block":84,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":231,"value":0,"intent":"pay Supplier A invoice 4427"}
+{"ts":1794322921,"block":86,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":89,"value":0,"intent":"pay Supplier B invoice 4428"}
+{"ts":1794497521,"block":88,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":42,"value":0,"intent":"pay Supplier B invoice 4429"}
+{"ts":1794824221,"block":90,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":205,"value":0,"intent":"pay Supplier A invoice 4430"}
+{"ts":1794928441,"block":92,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":74,"value":0,"intent":"pay Supplier B invoice 4431"}
+{"ts":1795101601,"block":94,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":56,"value":0,"intent":"pay Supplier B invoice 4432"}
+{"ts":1795430161,"block":96,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":229,"value":0,"intent":"pay Supplier A invoice 4433"}
+{"ts":1795533541,"block":98,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":61,"value":0,"intent":"pay Supplier B invoice 4434"}
+{"ts":1795707481,"block":100,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":76,"value":0,"intent":"pay Supplier B invoice 4435"}
+{"ts":1795864621,"block":102,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier C","amount":1200,"value":0,"intent":"pay Supplier C monthly retainer"}
+{"ts":1796034481,"block":104,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":217,"value":0,"intent":"pay Supplier A invoice 4436"}
+{"ts":1796117761,"block":106,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Payroll","amount":3000,"value":0,"intent":"fund payroll for the month"}
+{"ts":1796137201,"block":108,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":47,"value":0,"intent":"pay Supplier B invoice 4437"}
+{"ts":1796310181,"block":110,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":84,"value":0,"intent":"pay Supplier B invoice 4438"}
+{"ts":1796479201,"block":112,"target":"USDT","selector":"approve","kind":"approve","token":"USDT","payee":"Router","amount":500,"value":0,"intent":"approve the router for the monthly USDC top-up"}
+{"ts":1796479501,"block":114,"target":"Router","selector":"swapExact","kind":"other","token":null,"payee":null,"amount":500,"value":0,"intent":"swap 500 USDT to USDC for the monthly top-up"}
+{"ts":1796639161,"block":116,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":252,"value":0,"intent":"pay Supplier A invoice 4439"}
+{"ts":1796742301,"block":118,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":61,"value":0,"intent":"pay Supplier B invoice 4440"}
+{"ts":1796818621,"block":120,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":28,"value":0,"intent":"reimburse Supplier A shipping, ref 4441"}
+{"ts":1796915881,"block":122,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":52,"value":0,"intent":"pay Supplier B invoice 4442"}
+{"ts":1797244381,"block":124,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":212,"value":0,"intent":"pay Supplier A invoice 4443"}
+{"ts":1797346921,"block":126,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":84,"value":0,"intent":"pay Supplier B invoice 4444"}
+{"ts":1797510781,"block":128,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":53,"value":0,"intent":"reimburse Supplier A shipping, ref 4446"}
+{"ts":1797520801,"block":130,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":41,"value":0,"intent":"pay Supplier B invoice 4445"}
+{"ts":1797847381,"block":132,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":236,"value":0,"intent":"pay Supplier A invoice 4447"}
+{"ts":1797951781,"block":134,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":44,"value":0,"intent":"pay Supplier B invoice 4448"}
+{"ts":1798124521,"block":136,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":58,"value":0,"intent":"pay Supplier B invoice 4449"}
+{"ts":1798453381,"block":138,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":226,"value":0,"intent":"pay Supplier A invoice 4450"}
+{"ts":1798457341,"block":140,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier C","amount":1200,"value":0,"intent":"pay Supplier C monthly retainer"}
+{"ts":1798556821,"block":142,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":61,"value":0,"intent":"pay Supplier B invoice 4451"}
+{"ts":1798730701,"block":144,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":84,"value":0,"intent":"pay Supplier B invoice 4452"}
+{"ts":1798795921,"block":146,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Payroll","amount":3000,"value":0,"intent":"fund payroll for the month"}
+{"ts":1799058421,"block":148,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":250,"value":0,"intent":"pay Supplier A invoice 4453"}
+{"ts":1799065141,"block":150,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":42,"value":0,"intent":"reimburse Supplier A shipping, ref 4454"}
+{"ts":1799157601,"block":152,"target":"USDT","selector":"approve","kind":"approve","token":"USDT","payee":"Router","amount":500,"value":0,"intent":"approve the router for the monthly USDC top-up"}
+{"ts":1799157901,"block":154,"target":"Router","selector":"swapExact","kind":"other","token":null,"payee":null,"amount":500,"value":0,"intent":"swap 500 USDT to USDC for the monthly top-up"}
+{"ts":1799162281,"block":156,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":48,"value":0,"intent":"pay Supplier B invoice 4455"}
+{"ts":1799335381,"block":158,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":40,"value":0,"intent":"pay Supplier B invoice 4456"}
+{"ts":1799663041,"block":160,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":239,"value":0,"intent":"pay Supplier A invoice 4457"}
+{"ts":1799767561,"block":162,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":70,"value":0,"intent":"pay Supplier B invoice 4458"}
+{"ts":1799940721,"block":164,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":69,"value":0,"intent":"pay Supplier B invoice 4459"}
+{"ts":1800015781,"block":166,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":42,"value":0,"intent":"reimburse Supplier A shipping, ref 4460"}
+{"ts":1800268381,"block":168,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":226,"value":0,"intent":"pay Supplier A invoice 4461"}
+{"ts":1800372961,"block":170,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":55,"value":0,"intent":"pay Supplier B invoice 4462"}
+{"ts":1800448321,"block":172,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":51,"value":0,"intent":"reimburse Supplier A shipping, ref 4463"}
+{"ts":1800544501,"block":174,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":47,"value":0,"intent":"pay Supplier B invoice 4464"}
+{"ts":1800871441,"block":176,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":236,"value":0,"intent":"pay Supplier A invoice 4465"}
+{"ts":1800976261,"block":178,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":61,"value":0,"intent":"pay Supplier B invoice 4466"}
+{"ts":1801135561,"block":180,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier C","amount":1200,"value":0,"intent":"pay Supplier C monthly retainer"}
+{"ts":1801139761,"block":182,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":39,"value":0,"intent":"reimburse Supplier A shipping, ref 4468"}
+{"ts":1801150741,"block":184,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":82,"value":0,"intent":"pay Supplier B invoice 4467"}
+{"ts":1801474501,"block":186,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Payroll","amount":3000,"value":0,"intent":"fund payroll for the month"}
+{"ts":1801477081,"block":188,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":201,"value":0,"intent":"pay Supplier A invoice 4469"}
+{"ts":1801581121,"block":190,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":90,"value":0,"intent":"pay Supplier B invoice 4470"}
+{"ts":1801753741,"block":192,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":74,"value":0,"intent":"pay Supplier B invoice 4471"}
+{"ts":1801836001,"block":194,"target":"USDT","selector":"approve","kind":"approve","token":"USDT","payee":"Router","amount":500,"value":0,"intent":"approve the router for the monthly USDC top-up"}
+{"ts":1801836301,"block":196,"target":"Router","selector":"swapExact","kind":"other","token":null,"payee":null,"amount":500,"value":0,"intent":"swap 500 USDT to USDC for the monthly top-up"}
+{"ts":1802081221,"block":198,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":236,"value":0,"intent":"pay Supplier A invoice 4472"}
+{"ts":1802185501,"block":200,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":46,"value":0,"intent":"pay Supplier B invoice 4473"}
+{"ts":1802359801,"block":202,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":42,"value":0,"intent":"pay Supplier B invoice 4474"}
+{"ts":1802686261,"block":204,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":232,"value":0,"intent":"pay Supplier A invoice 4475"}
+{"ts":1802790601,"block":206,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":56,"value":0,"intent":"pay Supplier B invoice 4476"}
+{"ts":1802963341,"block":208,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":45,"value":0,"intent":"pay Supplier B invoice 4477"}
+{"ts":1803291601,"block":210,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":231,"value":0,"intent":"pay Supplier A invoice 4478"}
+{"ts":1803395041,"block":212,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":73,"value":0,"intent":"pay Supplier B invoice 4479"}
+{"ts":1803568621,"block":214,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":73,"value":0,"intent":"pay Supplier B invoice 4480"}
+{"ts":1803812941,"block":216,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier C","amount":1200,"value":0,"intent":"pay Supplier C monthly retainer"}
+{"ts":1803893401,"block":218,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Payroll","amount":3000,"value":0,"intent":"fund payroll for the month"}
+{"ts":1803897181,"block":220,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":218,"value":0,"intent":"pay Supplier A invoice 4481"}
+{"ts":1804001941,"block":222,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":40,"value":0,"intent":"pay Supplier B invoice 4482"}
+{"ts":1804174141,"block":224,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":61,"value":0,"intent":"pay Supplier B invoice 4483"}
+{"ts":1804255201,"block":226,"target":"USDT","selector":"approve","kind":"approve","token":"USDT","payee":"Router","amount":500,"value":0,"intent":"approve the router for the monthly USDC top-up"}
+{"ts":1804255501,"block":228,"target":"Router","selector":"swapExact","kind":"other","token":null,"payee":null,"amount":500,"value":0,"intent":"swap 500 USDT to USDC for the monthly top-up"}
+{"ts":1804500961,"block":230,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":201,"value":0,"intent":"pay Supplier A invoice 4484"}
+{"ts":1804605781,"block":232,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":66,"value":0,"intent":"pay Supplier B invoice 4485"}
+{"ts":1804767901,"block":234,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier A","amount":35,"value":0,"intent":"reimburse Supplier A shipping, ref 4487"}
+{"ts":1804778041,"block":236,"target":"USDT","selector":"transfer","kind":"transfer","token":"USDT","payee":"Supplier B","amount":82,"value":0,"intent":"pay Supplier B invoice 4486"}
