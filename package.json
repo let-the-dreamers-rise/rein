@@ -18,7 +18,11 @@
     "bridge:base": "hardhat run scripts/bridge-to-base.js --network sepolia",
     "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia",
     "demo:sepolia": "hardhat run scripts/demo-injection.js --network sepolia",
-    "verify:sepolia": "hardhat verify --network sepolia"
+    "verify:sepolia": "hardhat verify --network sepolia",
+    "preflight:goat": "hardhat run scripts/preflight.js --network goatTestnet",
+    "deploy:goat": "hardhat run scripts/deploy.js --network goatTestnet",
+    "demo:goat": "hardhat run scripts/goat-pay-and-rate.js --network goatTestnet",
+    "verify:goat": "hardhat verify --network goatTestnet"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",

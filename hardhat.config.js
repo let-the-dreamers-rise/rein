@@ -23,6 +23,14 @@ const SEPOLIA = {
   explorer: "https://eth-sepolia.blockscout.com",
 };
 
+// GOAT Network testnet3: a Bitcoin L2 whose native gas token is BTC. This is
+// the chain the GOAT AI Builder Grant scores on. Explorer is Blockscout.
+const GOAT_TESTNET = {
+  chainId: 48816,
+  rpc: process.env.GOAT_TESTNET_RPC || "https://rpc.testnet3.goat.network",
+  explorer: "https://explorer.testnet3.goat.network",
+};
+
 // Read from the environment and never committed. Nothing in this repo should
 // ever contain a key.
 const accounts = process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [];
@@ -55,9 +63,19 @@ module.exports = {
       chainId: SEPOLIA.chainId,
       accounts,
     },
+    goatTestnet: {
+      url: GOAT_TESTNET.rpc,
+      chainId: GOAT_TESTNET.chainId,
+      accounts,
+    },
   },
   etherscan: {
-    apiKey: { whitechainSepolia: "blockscout", baseSepolia: "blockscout", sepolia: "blockscout" },
+    apiKey: {
+      whitechainSepolia: "blockscout",
+      baseSepolia: "blockscout",
+      sepolia: "blockscout",
+      goatTestnet: "blockscout",
+    },
     customChains: [
       {
         network: "whitechainSepolia",
@@ -81,6 +99,14 @@ module.exports = {
         urls: {
           apiURL: `${SEPOLIA.explorer}/api`,
           browserURL: SEPOLIA.explorer,
+        },
+      },
+      {
+        network: "goatTestnet",
+        chainId: GOAT_TESTNET.chainId,
+        urls: {
+          apiURL: `${GOAT_TESTNET.explorer}/api`,
+          browserURL: GOAT_TESTNET.explorer,
         },
       },
     ],

@@ -63,6 +63,32 @@ discovering the boundary by hitting it. The test suite runs every scenario
 through both paths and fails if they ever disagree, because a divergence would
 teach the agent the wrong lesson.
 
+## Rein for GOAT: a rating that cannot exist without the payment
+
+On GOAT Network the account also writes reputation. An agent pays a seller in
+BTC through the policy, then rates that seller in the ERC-8004 Reputation
+Registry, and the feedback carries the payment: `feedbackURI` is a receipt with
+the payment tx hash, the intent hash and the policy in force, and
+`feedbackHash` is its keccak. Anyone reading the registry can decode the
+receipt, hash it, and find the settlement on chain. Feedback the account did
+not pay for cannot be produced, because `giveFeedback` on the registry is the
+only other call the policy admits.
+
+Measured ERC-8004 deployments on Ethereum, BSC and Base show why this matters:
+98.7 to 100 percent of feedback records carry no proof of payment and most
+reviewers are Sybil-coordinated (arXiv 2606.26028). Making a rating cost a
+real payment is the missing default.
+
+```bash
+npm run preflight:goat     # chain 48816, needs ~0.002 BTC from https://bridge.testnet3.goat.network/faucet
+npm run demo:goat          # seller registers, agent pays, agent rates, agent is compromised, chain refuses
+```
+
+For agents built on `@goatnetwork/agentkit`, `goat/rein-wallet-provider.js` is
+a drop-in `WalletProvider`: every write (`x402 payment.transfer`,
+`erc8004.give_feedback`, any `writeContract`) is simulated against the account
+first and refused with the contract's own code if it is out of policy.
+
 ## The demo
 
 ```bash
