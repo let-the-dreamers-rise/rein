@@ -96,32 +96,6 @@ discovering the boundary by hitting it. The test suite runs every scenario
 through both paths and fails if they ever disagree, because a divergence would
 teach the agent the wrong lesson.
 
-## Rein for GOAT: a rating that cannot exist without the payment
-
-On GOAT Network the account also writes reputation. An agent pays a seller in
-BTC through the policy, then rates that seller in the ERC-8004 Reputation
-Registry, and the feedback carries the payment: `feedbackURI` is a receipt with
-the payment tx hash, the intent hash and the policy in force, and
-`feedbackHash` is its keccak. Anyone reading the registry can decode the
-receipt, hash it, and find the settlement on chain. Feedback the account did
-not pay for cannot be produced, because `giveFeedback` on the registry is the
-only other call the policy admits.
-
-Measured ERC-8004 deployments on Ethereum, BSC and Base show why this matters:
-98.7 to 100 percent of feedback records carry no proof of payment and most
-reviewers are Sybil-coordinated (arXiv 2606.26028). Making a rating cost a
-real payment is the missing default.
-
-```bash
-npm run preflight:goat     # chain 48816, needs ~0.002 BTC from https://bridge.testnet3.goat.network/faucet
-npm run demo:goat          # seller registers, agent pays, agent rates, agent is compromised, chain refuses
-```
-
-For agents built on `@goatnetwork/agentkit`, `goat/rein-wallet-provider.js` is
-a drop-in `WalletProvider`: every write (`x402 payment.transfer`,
-`erc8004.give_feedback`, any `writeContract`) is simulated against the account
-first and refused with the contract's own code if it is out of policy.
-
 ## The demo
 
 ```bash
@@ -156,28 +130,52 @@ instruction and tries in earnest to empty the account six different ways:
 
 The agent was fully compromised and the loss was zero.
 
-## Where this goes next
+## Where v2 goes next
 
-Today the owner writes the policy by hand, like every wallet policy engine
-(Coinbase Agentic Wallets, Privy, Turnkey, Safe roles). That is the weak point:
-hand-written policies are either loose enough to drain or tight enough to put a
-human back in the loop for every payment. The next version compiles the policy
-from the agent's own behaviour. **In development, not shipped.**
+Every wallet policy engine today (Coinbase Agentic Wallets, Privy, Turnkey,
+Safe roles) ships with an empty policy that a developer fills in by hand. The
+v2 section above is the answer to that: the policy compiled from the agent's
+own trail, measured with denominators. What runs today is the compile-and-
+measure loop on a simulated trail against Rein's own account. What is not
+built, in the order it will be:
 
-- **Compile.** Ingest the agent's tool-call and payment traces from shadow mode;
-  induce which targets, functions, payees, amounts per window and sequences are
-  normal; emit a one-page readable policy plus the enforcement artifact. Rein's
-  account today, Coinbase / Privy / Turnkey policy JSON next.
-- **Measure.** Every compiled policy ships with two numbers and their
-  denominators: coverage (how often honest actions get blocked on held-out
-  traces) and catch rate (how many injected attacks are refused).
-- **Prove.** Every allow and refusal carries a receipt a counterparty can check
+- **A real trail.** The same command over a real agent's ledger, where the
+  bounds will refuse honest exceptions and coverage below 100% is the honest
+  number.
+- **Export.** The compiled policy as Coinbase, Privy and Turnkey policy JSON,
+  so it sits on top of the wallet a team already uses rather than replacing it.
+- **Habits in the contract.** Time of day and per-payee amounts are learned
+  today and monitor-only; enforcing them needs new policy storage in
+  `ReinAccount`.
+- **Receipts.** Every allow and refusal as a receipt a counterparty can check
   before accepting settlement. On stablecoins there is no chargeback, so the
   control has to exist before the money leaves.
 
-The rule learner behind "compile" already exists and is measured elsewhere:
-[nyaya](https://github.com/let-the-dreamers-rise/nyaya) induces readable rules
-with abstention from a few hundred examples on a CPU in seconds.
+## Rein for GOAT: a rating that cannot exist without the payment
+
+On GOAT Network the account also writes reputation. An agent pays a seller in
+BTC through the policy, then rates that seller in the ERC-8004 Reputation
+Registry, and the feedback carries the payment: `feedbackURI` is a receipt with
+the payment tx hash, the intent hash and the policy in force, and
+`feedbackHash` is its keccak. Anyone reading the registry can decode the
+receipt, hash it, and find the settlement on chain. Feedback the account did
+not pay for cannot be produced, because `giveFeedback` on the registry is the
+only other call the policy admits.
+
+Measured ERC-8004 deployments on Ethereum, BSC and Base show why this matters:
+98.7 to 100 percent of feedback records carry no proof of payment and most
+reviewers are Sybil-coordinated (arXiv 2606.26028). Making a rating cost a
+real payment is the missing default.
+
+```bash
+npm run preflight:goat     # chain 48816, needs ~0.002 BTC from https://bridge.testnet3.goat.network/faucet
+npm run demo:goat          # seller registers, agent pays, agent rates, agent is compromised, chain refuses
+```
+
+For agents built on `@goatnetwork/agentkit`, `goat/rein-wallet-provider.js` is
+a drop-in `WalletProvider`: every write (`x402 payment.transfer`,
+`erc8004.give_feedback`, any `writeContract`) is simulated against the account
+first and refused with the contract's own code if it is out of policy.
 
 ## What this does not do
 
@@ -214,7 +212,7 @@ none.
   repetition. Bounding it honestly would require mirroring the token's allowance
   in storage, and that mirror goes stale as soon as the spender spends. Use
   `approve()` with an exact total instead.
-- **Not audited.** 36 tests pass. That is not an audit.
+- **Not audited.** 46 tests pass. That is not an audit.
 
 ## Layout
 
@@ -224,7 +222,10 @@ contracts/ReinCodes.sol         one table of refusal reasons, shared by simulate
 contracts/ReinFactory.sol       CREATE2, so an address can be funded before it exists
 contracts/lib/CalldataGuard.sol decodes the ERC-20 calls that actually move value
 scripts/demo-injection.js       the demo above, runs locally or on any configured chain
-test/rein.test.js               36 tests
+test/rein.test.js               46 tests
+scripts/v2/demo.js              Rein v2 end to end: shadow, export, compile, apply, measure
+v2/compile.py                   the compiler: bounds plus nyaya-learned habits, readable policy out
+web/v2/index.html               the compiled policy with every rule switchable, at rein-nine.vercel.app/v2
 web/index.html                  the demo page and video, deployed at rein-nine.vercel.app
 ```
 

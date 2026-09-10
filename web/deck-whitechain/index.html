@@ -148,7 +148,7 @@
     <div class="card"><p class="caption">Guardian breaker</p><p class="h3">A key that can stop</p><p class="small">And can never spend.</p></div>
     <div class="card"><p class="caption">Legible refusals</p><p class="h3">simulate() before execute()</p><p class="small">Same code, free. A well-built agent asks first and abstains.</p></div>
   </div>
-  <div class="foot"><span>36 tests. Not audited.</span><span>MIT, github.com/let-the-dreamers-rise/rein</span></div>
+  <div class="foot"><span>46 tests. Not audited.</span><span>MIT, github.com/let-the-dreamers-rise/rein</span></div>
   <div class="notes">Two structural properties do the work: the agent can never call its own account, and refusals are legible before they cost anything. The test suite runs every scenario through both simulate and execute and fails if they ever disagree.</div>
 </section>
 
@@ -229,7 +229,7 @@
   <div class="grid-4 in" style="margin-top:44px">
     <div class="card metric"><div class="v neutral">0</div><div class="l">users, revenue</div></div>
     <div class="card metric"><div class="v">6 / 6</div><div class="l">attacks refused on chain, zero loss</div></div>
-    <div class="card metric"><div class="v">36</div><div class="l">passing tests, source verified on the explorer</div></div>
+    <div class="card metric"><div class="v">46</div><div class="l">passing tests, source verified on the explorer</div></div>
     <div class="card metric"><div class="v">10</div><div class="l">prototypes of this layer in 8 months</div></div>
   </div>
   <p class="body in" style="margin-top:40px;max-width:1500px">Next 30 days, and the first gate of this grant: the policy in ERC-7579 module form, installing and enforcing on Safe, Kernel and Nexus on chain 1874 &mdash; plus the account-abstraction documentation Whitechain does not have yet.</p>
@@ -246,7 +246,7 @@
     <li><b>Scar one:</b> an intent hash is a commitment, not a proof. Rein claims only what it can enforce.</li>
     <li><b>Scar two:</b> you cannot cap increaseAllowance. I shipped the cap, found the hole, now it is refused.</li>
     <li><b>Scar three:</b> discrimination costs coverage. Measured, on the ARC-AGI-3 world model.</li>
-    <li><b>First hire:</b> a smart-contract security engineer. 36 tests is not an audit.</li>
+    <li><b>First hire:</b> a smart-contract security engineer. 46 tests is not an audit.</li>
   </ul>
   <div class="foot"><span>github.com/let-the-dreamers-rise</span><span>ashwingoyal2006@gmail.com</span></div>
   <div class="notes">The honest weakness is on this slide too: ten prototypes and no users means I kept starting instead of selling. Rein is the decision to stop. The security engineer is the first hire this grant pays for, and I would rather find them through the Whitechain and Hacken orbit than cold.</div>
