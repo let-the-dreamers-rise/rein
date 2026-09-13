@@ -1,0 +1,32 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: the synthesiser the compiler runs on
+        uses: actions/checkout@v4
+        with:
+          repository: let-the-dreamers-rise/nyaya
+          path: nyaya
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: npm ci
+      - run: npm test
+      - name: Rein v2 end to end on the in-process chain
+        run: npm run v2
+        env:
+          NYAYA_PATH: ${{ github.workspace }}/nyaya
+          PYTHON: python3
+      - name: the compiled policy must reproduce byte for byte
+        run: git diff --exit-code -- v2/out/policy.json v2/out/policy.md

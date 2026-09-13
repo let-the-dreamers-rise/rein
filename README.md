@@ -1,5 +1,7 @@
 # Rein
 
+[![test](https://github.com/let-the-dreamers-rise/rein/actions/workflows/test.yml/badge.svg)](https://github.com/let-the-dreamers-rise/rein/actions/workflows/test.yml)
+
 A smart account an autonomous agent can operate and cannot drain.
 
 **Live on two public EVM testnets, same bytecode, same result.** Chain-agnostic
@@ -19,6 +21,20 @@ The limits are in the contract, not in the agent. An agent that has been
 completely taken over -- wrong instructions, poisoned tool output, rewritten
 system prompt -- still cannot produce a transaction the account is unwilling to
 make.
+
+## Try it in one minute
+
+```bash
+git clone https://github.com/let-the-dreamers-rise/rein && cd rein && npm install
+npm test                                    # the whole suite, under a minute
+npx hardhat run scripts/demo-injection.js   # the transcript below, on an in-process chain
+```
+
+No chain, no key, nothing to sign up for. `npm run v2` runs the compile loop
+as well; it needs Python 3 and a checkout of
+[nyaya](https://github.com/let-the-dreamers-rise/nyaya) next to this repo, and
+says so if either is missing. CI runs all three on every push and fails if the
+compiled policy does not reproduce byte for byte.
 
 ## Rein v2: the policy compiled from the agent's own behaviour
 
@@ -44,6 +60,16 @@ attacks.
 | coverage: honest held-out calls allowed | 22 of 22 |
 | catch rate: attacks refused before gas | 10 of 10 |
 | attacker balance afterwards | 0 |
+
+The habits are not dead text. A guardian key (which can stop the agent and
+can never spend) reads every call against them through
+[`client/monitor.js`](client/monitor.js), the same bands the compiler used.
+The demo runs that guardian: it counts how many held-out calls would have
+paged a human for nothing, then makes one payment that is inside every bound
+and off habit. The contract allows it, the guardian flags the sentence it
+broke, trips the breaker, and the next honest call is refused with
+`BREAKER_TRIPPED`. That stops honest work too, until the owner clears it,
+which is why the false-flag count is printed next to it.
 
 Every refusal is cross-checked: `simulate()` and `execute()` must return the
 same code or the script exits non-zero. The compiled policy, the trail and the
@@ -239,7 +265,7 @@ none.
   repetition. Bounding it honestly would require mirroring the token's allowance
   in storage, and that mirror goes stale as soon as the spender spends. Use
   `approve()` with an exact total instead.
-- **Not audited.** 46 tests pass. That is not an audit.
+- **Not audited.** 49 tests pass. That is not an audit.
 
 ## Layout
 
@@ -250,7 +276,8 @@ contracts/ReinFactory.sol       CREATE2, so an address can be funded before it e
 contracts/lib/CalldataGuard.sol decodes the ERC-20 calls that actually move value
 scripts/demo-injection.js       the demo above, runs locally or on any configured chain
 client/rein.js                  simulate-then-execute for your agent, refusals in words
-test/rein.test.js               46 tests on the account; test/client.test.js covers the client
+client/monitor.js               the guardian's evaluator for learned habits, same bands as the compiler
+test/rein.test.js               46 tests on the account; client and monitor have their own, 49 in all
 scripts/v2/demo.js              Rein v2 end to end: shadow, export, compile, apply, measure
 v2/compile.py                   the compiler: bounds plus nyaya-learned habits, readable policy out
 web/v2/index.html               the compiled policy with every rule switchable, at rein-nine.vercel.app/v2

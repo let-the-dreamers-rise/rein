@@ -178,19 +178,24 @@ def _phrases(rule):
 def render_payee(rule, support, precision):
     tail = ", ".join(_phrases(rule))
     text = f"Pays {rule.outcome}" + (f" {tail}" if tail else "")
-    return _sentence(text, support, precision)
+    return _sentence(text, support, precision, rule, "payee")
 
 
 def render_amount(rule, support, precision):
     self_ = dict(rule.conditions)["self"]
     tail = ", ".join(_phrases(rule))
     text = f"{self_} receives {rule.outcome}" + (f" {tail}" if tail else "")
-    return _sentence(text, support, precision)
+    return _sentence(text, support, precision, rule, "amount")
 
 
-def _sentence(text, support, precision):
+def _sentence(text, support, precision, rule, predicts):
+    # `rule` is the machine-readable form a guardian evaluates (client/monitor.js):
+    # the sentence fires when every condition holds, and is broken when it fires
+    # and the outcome differs. Bands are the ones defined at the top of this file.
     return {"text": text, "kind": "learned", "enforced": "monitor only",
-            "evidence": {"fired on": int(support), "right": int(round(precision * support))}}
+            "evidence": {"fired on": int(support), "right": int(round(precision * support))},
+            "rule": {"conditions": [[n, v] for n, v in rule.conditions], "predicts": predicts,
+                     "outcome": rule.outcome}}
 
 
 def learned(rows):

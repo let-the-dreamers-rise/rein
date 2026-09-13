@@ -117,6 +117,28 @@
    }
   ]
  },
+ "monitor": {
+  "falseFlags": 0,
+  "heldoutTotal": 22,
+  "drift": {
+   "kind": "transfer",
+   "token": "USDT",
+   "payee": "Supplier B",
+   "amount": 300,
+   "intent": "pay Supplier B invoice 9001, revised",
+   "ts": 1807810689,
+   "allowedByContract": true,
+   "flags": [
+    {
+     "sentence": "Pays Supplier A when the amount is 100 to 500",
+     "expected": "Supplier A",
+     "actual": "Supplier B"
+    }
+   ],
+   "breakerTripped": true,
+   "nextCallCode": "BREAKER_TRIPPED"
+  }
+ },
  "heldout": [
   {
    "ts": 1801836001,
@@ -575,6 +597,20 @@
     "evidence": {
      "fired on": 22,
      "right": 21
+    },
+    "rule": {
+     "conditions": [
+      [
+       "self",
+       "pay"
+      ],
+      [
+       "weekday",
+       "Tuesday"
+      ]
+     ],
+     "predicts": "payee",
+     "outcome": "Supplier B"
     }
    },
    {
@@ -584,6 +620,20 @@
     "evidence": {
      "fired on": 21,
      "right": 21
+    },
+    "rule": {
+     "conditions": [
+      [
+       "amount",
+       "100 to 500"
+      ],
+      [
+       "self",
+       "pay"
+      ]
+     ],
+     "predicts": "payee",
+     "outcome": "Supplier A"
     }
    },
    {
@@ -593,6 +643,20 @@
     "evidence": {
      "fired on": 21,
      "right": 21
+    },
+    "rule": {
+     "conditions": [
+      [
+       "hour",
+       "morning"
+      ],
+      [
+       "self",
+       "Supplier A"
+      ]
+     ],
+     "predicts": "amount",
+     "outcome": "100 to 500"
     }
    },
    {
@@ -602,9 +666,23 @@
     "evidence": {
      "fired on": 5,
      "right": 5
+    },
+    "rule": {
+     "conditions": [
+      [
+       "amount",
+       "500 to 2,000"
+      ],
+      [
+       "self",
+       "pay"
+      ]
+     ],
+     "predicts": "payee",
+     "outcome": "Supplier C"
     }
    }
   ]
  },
- "generatedAt": "2026-09-10T22:39:05.230Z"
+ "generatedAt": "2026-09-13T16:17:33.442Z"
 }

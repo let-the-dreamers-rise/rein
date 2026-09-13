@@ -17,6 +17,7 @@ a{color:var(--brand-deep)}
 :focus-visible{outline:3px solid var(--brand);outline-offset:3px;border-radius:2px}
 .skip{position:absolute;left:12px;top:-60px;z-index:60;background:var(--ink);color:#fff;padding:10px 14px;border-radius:8px;font-weight:600;text-decoration:none;transition:top .15s}
 .skip:focus{top:12px}
+.vh{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
 h1,h2,h3{text-wrap:balance;margin:0;font-weight:700;letter-spacing:-.02em;line-height:1.05}
 p{margin:0;text-wrap:pretty}
 figure{margin:0}
@@ -105,7 +106,7 @@ footer a{font-family:var(--mono);font-size:13px}
   <div class="wrap">
     <h2 class="h2">Two numbers, with their denominators.</h2>
     <p class="sub">A policy that cannot state these is a guess. Coverage is measured on calls the compiler never saw. The catch rate is measured on attacks the shadow run never contained. Both were computed on chain by <code>simulate()</code>, and every refusal was cross-checked against <code>execute()</code> reverting with the same code.</p>
-    <div class="numbers">
+    <div class="numbers" aria-live="polite">
       <div><div class="n" id="cov"></div><p>honest held-out calls allowed. Every refusal of an honest call is a cost the owner pays in a human being paged.</p><p class="live" id="cov-live"></p></div>
       <div><div class="n" id="catch"></div><p>attacks refused before any gas was spent, with the reason in words.</p><p class="live" id="catch-live"></p></div>
       <div><div class="n" id="split"></div><p>calls compiled from, calls held out. Six simulated months, seeded, so the run is the same every time.</p><p class="live" id="gen"></p></div>
@@ -128,7 +129,7 @@ footer a{font-family:var(--mono);font-size:13px}
   <div class="wrap">
     <h2 class="h2">Ten attacks, and what the compiled policy said.</h2>
     <p class="sub">Each is a call the agent, once hijacked, genuinely wants to make. The verdict column follows the switches above.</p>
-    <div class="calls"><table><thead><tr><th>attack</th><th>the call</th><th>instruction</th><th>verdict</th></tr></thead><tbody id="atk"></tbody></table></div>
+    <div class="calls"><table><caption class="vh">Ten attacks and the compiled policy's verdict on each</caption><thead><tr><th>attack</th><th>the call</th><th>instruction</th><th>verdict</th></tr></thead><tbody id="atk"></tbody></table></div>
   </div>
 </section>
 
@@ -136,7 +137,15 @@ footer a{font-family:var(--mono);font-size:13px}
   <div class="wrap">
     <h2 class="h2">The held-out calls, replayed.</h2>
     <p class="sub">The last 20% of the trail, in order, through the policy compiled from the first 80%.</p>
-    <div class="calls"><table><thead><tr><th>when</th><th>the call</th><th>instruction</th><th>verdict</th></tr></thead><tbody id="ho"></tbody></table></div>
+    <div class="calls"><table><caption class="vh">The held-out calls and the verdict on each</caption><thead><tr><th>when</th><th>the call</th><th>instruction</th><th>verdict</th></tr></thead><tbody id="ho"></tbody></table></div>
+  </div>
+</section>
+
+<section id="monitor">
+  <div class="wrap">
+    <h2 class="h2">The habits the contract cannot enforce, and who watches them.</h2>
+    <p class="sub">Learned sentences are monitor-only. A guardian key reads every call against them with <code>client/monitor.js</code>, the same bands the compiler used, and can stop the agent but never spend. The run below is that guardian at work.</p>
+    <ul class="limits" id="mon"></ul>
   </div>
 </section>
 
@@ -181,6 +190,15 @@ npm run v2</div>
     document.getElementById("rules").innerHTML='<p style="padding:18px;color:var(--ink-2)">The run data did not load, so the tables on this page are empty. The same policy, as text, is at <a href="https://github.com/let-the-dreamers-rise/rein/blob/main/v2/out/policy.md">v2/out/policy.md</a>.</p>';
     return;
   }
+  (function(){
+    var M=D.monitor, mon=document.getElementById("mon"); if(!M||!mon) return;
+    function li(parts){var e=document.createElement("li");parts.forEach(function(p){if(p.b){var b=document.createElement("b");b.textContent=p.b;e.appendChild(b)}else{e.appendChild(document.createTextNode(p))}});mon.appendChild(e)}
+    li([{b:"Held-out calls that broke a habit: "+M.falseFlags+" of "+M.heldoutTotal+"."}," Each one is a page to a human for nothing. This is the cost side of the sentences above, measured on calls the compiler never saw."]);
+    var d=M.drift;
+    li([{b:"One payment inside every bound and off habit: "},"“"+d.intent+"”, "+d.amount+" "+d.token+" to "+d.payee+". The contract "+(d.allowedByContract?"allowed it; every bound held.":"refused it.")]);
+    d.flags.forEach(function(f){li([{b:"The guardian flagged it: "},"“"+f.sentence+"” expected "+f.expected+", saw "+f.actual+"."])});
+    if(d.breakerTripped) li([{b:"The guardian tripped the breaker. "},"The next honest call was refused with "+d.nextCallCode+". Stopping honest work is the price of a flag, and the owner has to clear it; that is why the false-flag count is printed first."]);
+  })();
   var P=D.policy, OC=P.onchain;
   var S=P.sentences.map(function(s,i){return Object.assign({on:true,i:i},s)});
   var WINDOW=P.window_seconds;

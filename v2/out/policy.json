@@ -190,6 +190,20 @@
    "evidence": {
     "fired on": 22,
     "right": 21
+   },
+   "rule": {
+    "conditions": [
+     [
+      "self",
+      "pay"
+     ],
+     [
+      "weekday",
+      "Tuesday"
+     ]
+    ],
+    "predicts": "payee",
+    "outcome": "Supplier B"
    }
   },
   {
@@ -199,6 +213,20 @@
    "evidence": {
     "fired on": 21,
     "right": 21
+   },
+   "rule": {
+    "conditions": [
+     [
+      "amount",
+      "100 to 500"
+     ],
+     [
+      "self",
+      "pay"
+     ]
+    ],
+    "predicts": "payee",
+    "outcome": "Supplier A"
    }
   },
   {
@@ -208,6 +236,20 @@
    "evidence": {
     "fired on": 21,
     "right": 21
+   },
+   "rule": {
+    "conditions": [
+     [
+      "hour",
+      "morning"
+     ],
+     [
+      "self",
+      "Supplier A"
+     ]
+    ],
+    "predicts": "amount",
+    "outcome": "100 to 500"
    }
   },
   {
@@ -217,6 +259,20 @@
    "evidence": {
     "fired on": 5,
     "right": 5
+   },
+   "rule": {
+    "conditions": [
+     [
+      "amount",
+      "500 to 2,000"
+     ],
+     [
+      "self",
+      "pay"
+     ]
+    ],
+    "predicts": "payee",
+    "outcome": "Supplier C"
    }
   }
  ]
