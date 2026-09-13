@@ -50,7 +50,4 @@ async function main() {
   console.log(`\n  wrote ${path.relative(process.cwd(), file)}\n`);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exitCode = 1;
-});
+main().catch(require("./explain-error").exitWith);

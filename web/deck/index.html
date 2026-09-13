@@ -148,7 +148,7 @@
     <div class="card"><p class="caption">Guardian breaker</p><p class="h3">A key that can stop</p><p class="small">And can never spend.</p></div>
     <div class="card"><p class="caption">Legible refusals</p><p class="h3">simulate() before execute()</p><p class="small">Same code, free. A well-built agent asks first and abstains.</p></div>
   </div>
-  <div class="foot"><span>49 tests. Not audited.</span><span>MIT, github.com/let-the-dreamers-rise/rein</span></div>
+  <div class="foot"><span>50 tests. Not audited.</span><span>MIT, github.com/let-the-dreamers-rise/rein</span></div>
   <div class="notes">Two structural properties do the work: the agent can never call its own account, and refusals are legible before they cost anything. The test suite runs every scenario through both simulate and execute and fails if they ever disagree.</div>
 </section>
 
@@ -232,7 +232,7 @@
     <div class="card metric"><div class="v">10 / 10</div><div class="l">attacks refused by a policy the agent's own trail compiled</div></div>
     <div class="card metric"><div class="v">10</div><div class="l">prototypes of this layer in 8 months</div></div>
   </div>
-  <p class="body in" style="margin-top:40px;max-width:1500px">49 tests, source verified on both explorers, CI reproduces the compiled policy byte for byte on every push. Next 30 days: the compile command on a real agent's traces, then five teams running a compiled policy in shadow mode.</p>
+  <p class="body in" style="margin-top:40px;max-width:1500px">50 tests, source verified on both explorers, CI reproduces the compiled policy byte for byte on every push. Next 30 days: the compile command on a real agent's traces, then five teams running a compiled policy in shadow mode.</p>
   <div class="notes">I am not going to dress this up. Zero users. What exists is a live, verified contract that survived a real injection, and the v2 loop that compiles a policy from the agent's own trail and measures it, on a simulated ledger. The near-term milestone is five design partners in shadow mode, unpaid is fine.</div>
 </section>
 
@@ -246,7 +246,7 @@
     <li><b>Scar one:</b> an intent hash is a commitment, not a proof. Rein claims only what it can enforce.</li>
     <li><b>Scar two:</b> you cannot cap increaseAllowance. I shipped the cap, found the hole, now it is refused.</li>
     <li><b>Scar three:</b> discrimination costs coverage. Measured, on the ARC-AGI-3 world model.</li>
-    <li><b>First hire:</b> a smart-contract security engineer. 49 tests is not an audit.</li>
+    <li><b>First hire:</b> a smart-contract security engineer. 50 tests is not an audit.</li>
   </ul>
   <div class="foot"><span>github.com/let-the-dreamers-rise</span><span>ashgoyal1990@gmail.com</span></div>
   <div class="notes">The honest weakness is on this slide too: ten prototypes and no users means I kept starting instead of selling. Rein is the decision to stop. I would rather find the security engineer inside the Alliance network than anywhere else.</div>

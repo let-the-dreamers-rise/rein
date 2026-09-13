@@ -257,7 +257,4 @@ async function main() {
   console.log("");
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exitCode = 1;
-});
+main().catch(require("./explain-error").exitWith);

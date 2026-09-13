@@ -265,7 +265,7 @@ none.
   repetition. Bounding it honestly would require mirroring the token's allowance
   in storage, and that mirror goes stale as soon as the spender spends. Use
   `approve()` with an exact total instead.
-- **Not audited.** 49 tests pass. That is not an audit.
+- **Not audited.** 50 tests pass. That is not an audit.
 
 ## Layout
 
@@ -277,7 +277,8 @@ contracts/lib/CalldataGuard.sol decodes the ERC-20 calls that actually move valu
 scripts/demo-injection.js       the demo above, runs locally or on any configured chain
 client/rein.js                  simulate-then-execute for your agent, refusals in words
 client/monitor.js               the guardian's evaluator for learned habits, same bands as the compiler
-test/rein.test.js               46 tests on the account; client and monitor have their own, 49 in all
+test/rein.test.js               46 tests on the account; client, monitor and the error explainer have their own, 50 in all
+scripts/explain-error.js        the three failures a first live run hits, in words, with the command that diagnoses each
 scripts/v2/demo.js              Rein v2 end to end: shadow, export, compile, apply, measure
 v2/compile.py                   the compiler: bounds plus nyaya-learned habits, readable policy out
 web/v2/index.html               the compiled policy with every rule switchable, at rein-nine.vercel.app/v2
