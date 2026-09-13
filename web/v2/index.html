@@ -15,6 +15,8 @@
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--display);font-size:17px;line-height:1.55;-webkit-font-smoothing:antialiased;font-optical-sizing:auto}
 a{color:var(--brand-deep)}
 :focus-visible{outline:3px solid var(--brand);outline-offset:3px;border-radius:2px}
+.skip{position:absolute;left:12px;top:-60px;z-index:60;background:var(--ink);color:#fff;padding:10px 14px;border-radius:8px;font-weight:600;text-decoration:none;transition:top .15s}
+.skip:focus{top:12px}
 h1,h2,h3{text-wrap:balance;margin:0;font-weight:700;letter-spacing:-.02em;line-height:1.05}
 p{margin:0;text-wrap:pretty}
 figure{margin:0}
@@ -81,6 +83,7 @@ footer a{font-family:var(--mono);font-size:13px}
 </style>
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <nav class="nav" aria-label="Primary">
   <div class="wrap">
     <a class="mark" href="../" aria-label="Rein, home"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--brand)"/><path d="M9 23V9h8.5a4.5 4.5 0 0 1 1.6 8.7L23 23h-3.6l-3.5-4.8H12V23z" fill="var(--ink)"/></svg>Rein <span>v2</span></a>
@@ -88,6 +91,7 @@ footer a{font-family:var(--mono);font-size:13px}
   </div>
 </nav>
 
+<main id="main">
 <header class="hero">
   <div class="wrap">
     <span class="badge">in development · every number below is from one run of <code style="background:oklch(0.3 0.02 45);color:var(--brand)">npm run v2</code></span>
@@ -164,6 +168,7 @@ npm run v2</div>
   </div>
 </section>
 
+</main>
 <div class="tape" role="presentation"></div>
 <footer><div class="wrap"><p>Rein, MIT. The compiler is <a href="https://github.com/let-the-dreamers-rise/rein/blob/main/v2/compile.py">v2/compile.py</a>; the run is <a href="https://github.com/let-the-dreamers-rise/rein/blob/main/scripts/v2/demo.js">scripts/v2/demo.js</a>; the synthesiser is <a href="https://github.com/let-the-dreamers-rise/nyaya">nyaya</a>.</p></div></footer>
 
@@ -171,7 +176,11 @@ npm run v2</div>
 <script src="data.js"></script>
 <script>
 (function(){
-  var D=window.REIN_V2; if(!D){return}
+  var D=window.REIN_V2;
+  if(!D){
+    document.getElementById("rules").innerHTML='<p style="padding:18px;color:var(--ink-2)">The run data did not load, so the tables on this page are empty. The same policy, as text, is at <a href="https://github.com/let-the-dreamers-rise/rein/blob/main/v2/out/policy.md">v2/out/policy.md</a>.</p>';
+    return;
+  }
   var P=D.policy, OC=P.onchain;
   var S=P.sentences.map(function(s,i){return Object.assign({on:true,i:i},s)});
   var WINDOW=P.window_seconds;

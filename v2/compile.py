@@ -278,10 +278,16 @@ def markdown(policy):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("trail")
+    ap.add_argument("trail", nargs="?")
     ap.add_argument("--train", type=float, default=0.8, help="share of the trail, in time order, to compile from")
     ap.add_argument("--out", default=os.path.join(HERE, "out"))
+    ap.add_argument("--check", action="store_true", help="exit 0 if python and nyaya are usable, without compiling")
     args = ap.parse_args(argv)
+    if args.check:
+        print(f"compiler ok: python {sys.version.split()[0]}, nyaya from {os.path.dirname(synthesis.__file__)}")
+        return 0
+    if not args.trail:
+        ap.error("a trail file is required (or --check)")
 
     with open(args.trail, encoding="utf-8") as handle:
         rows = [json.loads(line) for line in handle if line.strip()]

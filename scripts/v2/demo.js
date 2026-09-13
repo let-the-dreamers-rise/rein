@@ -73,7 +73,23 @@ function schedule(start) {
   return ev.sort((a, b) => a.ts - b.ts);
 }
 
+// Fail before the six-month shadow run if the compiler cannot run at all,
+// and say which of the two things is missing.
+function checkCompiler() {
+  const py = process.env.PYTHON || "python";
+  try {
+    execFileSync(py, [path.join(ROOT, "v2", "compile.py"), "--check"], { stdio: ["ignore", "ignore", "pipe"] });
+  } catch (e) {
+    const why = e.code === "ENOENT"
+      ? `"${py}" is not on PATH. Install Python 3, or set PYTHON=<path to python3>.`
+      : (e.stderr ? e.stderr.toString().trim() : e.message);
+    console.error(`\n  cannot run the compiler: ${why}\n`);
+    process.exit(1);
+  }
+}
+
 async function main() {
+  checkCompiler();
   fs.mkdirSync(OUT, { recursive: true });
   const [owner, agent, guardian, supplierA, supplierB, supplierC, payroll, attacker, newVendor, agent2] =
     await ethers.getSigners();
@@ -122,6 +138,8 @@ async function main() {
     await account.setTokenPolicy(agent.address, t, { enabled: true, windowSeconds: HOUR, maxPerWindow: U(1_000_000), maxApproval: U(1_000_000) });
   await account.setGuardian(guardian.address, true);
 
+  // hardhat.config.js pins the in-process chain's initial date, so this is
+  // the same calendar day on every machine and the trail reproduces exactly.
   const start = Math.floor((await time.latest()) / DAY) * DAY + DAY;
   const events = schedule(start);
   const intents = new Map();

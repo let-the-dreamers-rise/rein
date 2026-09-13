@@ -130,6 +130,33 @@ instruction and tries in earnest to empty the account six different ways:
 
 The agent was fully compromised and the loss was zero.
 
+## Use it from your agent
+
+The whole integration is two calls: ask `simulate()` whether the action is
+covered, and only then `execute()`. [`client/rein.js`](client/rein.js) wraps
+them and puts a refusal into words the agent can act on; it is thirty lines,
+tested, and depends only on ethers.
+
+```js
+const rein = require("./client/rein");
+
+const why = rein.intent("pay supplier invoice 4471");             // keccak of the instruction
+const data = usdt.interface.encodeFunctionData("transfer", [supplier, amount]);
+
+const verdict = await rein.check(account, agent.address, usdtAddress, 0n, data, why);
+if (!verdict.ok) return abstain(verdict.why);                      // free: no gas, no revert
+// verdict = { ok: false, code: 13, name: "PAYEE_NOT_ALLOWED",
+//             why: "that recipient is not on the agent's payee list" }
+
+const { tx } = await rein.act(account, agentSigner, usdtAddress, 0n, data, why);
+```
+
+Two practical notes. The agent key signs `execute()` itself, so it needs a
+little native gas on the chain the account lives on; the account holds the
+funds, the key holds only gas. And for agents built on
+`@goatnetwork/agentkit`, [`goat/rein-wallet-provider.js`](goat/rein-wallet-provider.js)
+is a drop-in `WalletProvider` that does the same check on every write.
+
 ## Where v2 goes next
 
 Every wallet policy engine today (Coinbase Agentic Wallets, Privy, Turnkey,
@@ -222,7 +249,8 @@ contracts/ReinCodes.sol         one table of refusal reasons, shared by simulate
 contracts/ReinFactory.sol       CREATE2, so an address can be funded before it exists
 contracts/lib/CalldataGuard.sol decodes the ERC-20 calls that actually move value
 scripts/demo-injection.js       the demo above, runs locally or on any configured chain
-test/rein.test.js               46 tests
+client/rein.js                  simulate-then-execute for your agent, refusals in words
+test/rein.test.js               46 tests on the account; test/client.test.js covers the client
 scripts/v2/demo.js              Rein v2 end to end: shadow, export, compile, apply, measure
 v2/compile.py                   the compiler: bounds plus nyaya-learned habits, readable policy out
 web/v2/index.html               the compiled policy with every rule switchable, at rein-nine.vercel.app/v2

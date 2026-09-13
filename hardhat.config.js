@@ -46,6 +46,11 @@ module.exports = {
     },
   },
   networks: {
+    // The in-process chain starts at a fixed date, so `npm run v2` lays its
+    // 182 simulated days over the same calendar on every machine and the
+    // compiled numbers in v2/out reproduce exactly. Tests use relative time
+    // and do not care.
+    hardhat: { initialDate: "2026-09-10T12:00:00Z" },
     whitechainSepolia: {
       url: WHITECHAIN_SEPOLIA.rpc,
       chainId: WHITECHAIN_SEPOLIA.chainId,
