@@ -324,7 +324,7 @@ html.anim .rise:nth-child(2){animation-delay:.08s}html.anim .rise:nth-child(3){a
 <section id="proof">
   <div class="wrap">
     <h2 class="h2">A fully compromised agent tried six ways to empty the account. Loss: zero.</h2>
-    <p class="sub">Unedited output of the demo script, as it ran on chain. An agent is hired to pay suppliers, does its job, then reads an injected instruction and tries in earnest to empty the account. Every refusal below is a free view call that returns the same code the transaction would revert with. The same bytecode ran the same way on both chains.</p>
+    <p class="sub">Unedited output of the demo script, as it ran on chain. An agent is hired to pay suppliers, does its job, then reads an injected instruction and tries in earnest to empty the account. Every refusal below is a free view call that returns the same code the transaction would revert with. The same bytecode ran the same way on all three chains.</p>
     <figure class="term big" id="term-full" aria-label="The full on-chain run">
       <div class="term-bar"><i></i><i></i><i></i><span>npm run demo:whitechain &middot; Whitechain Sepolia, chain 1874</span><button type="button" class="replay" data-replay="full">replay</button></div>
       <pre></pre>
@@ -332,14 +332,26 @@ html.anim .rise:nth-child(2){animation-delay:.08s}html.anim .rise:nth-child(3){a
     <div class="chains">
       <table>
         <caption style="position:absolute;left:-9999px">Verified deployments</caption>
-        <thead><tr><th></th><th>Base Sepolia (84532)</th><th>Whitechain Sepolia (1874)</th></tr></thead>
+        <thead><tr><th></th><th>Base Sepolia (84532)</th><th>Whitechain Sepolia (1874)</th><th>GOAT Testnet3 (48816)</th></tr></thead>
         <tbody>
-          <tr><td>demo account, verified source</td><td><a href="https://base-sepolia.blockscout.com/address/0x0dA3840BA3516e1aE2BB14aCc0eB920c2A660527#code">0x0dA3&hellip;0527</a></td><td><a href="https://explorer.testnet.whitechain.io/address/0x69a504e6beA9C76f3C19196c2D3FD02244674621#code">0x69a5&hellip;4621</a></td></tr>
-          <tr><td>factory, verified source</td><td><a href="https://base-sepolia.blockscout.com/address/0xa1B47042e1E41ef0790262369B59427184ea3191#code">0xa1B4&hellip;3191</a></td><td><a href="https://explorer.testnet.whitechain.io/address/0x30F0bAB7ed9064f07c1aa7B3BFBC6d8ea25fA316#code">0x30F0&hellip;A316</a></td></tr>
-          <tr><td>the one payment allowed</td><td><a href="https://base-sepolia.blockscout.com/tx/0xfc20e4f29916527e1cd2e32c73cb07e989dac8c2efcea76dffacaa61fae27b51">0xfc20&hellip;7b51</a></td><td><a href="https://explorer.testnet.whitechain.io/tx/0x334a4f63647b7830e3af83f85722f406c93c1be08a79fe62c2b8a4ede97dafdf">0x334a&hellip;afdf</a></td></tr>
-          <tr><td>everything after it</td><td>refused</td><td>refused</td></tr>
+          <tr><td>demo account, verified source</td><td><a href="https://base-sepolia.blockscout.com/address/0x0dA3840BA3516e1aE2BB14aCc0eB920c2A660527#code">0x0dA3&hellip;0527</a></td><td><a href="https://explorer.testnet.whitechain.io/address/0x69a504e6beA9C76f3C19196c2D3FD02244674621#code">0x69a5&hellip;4621</a></td><td><a href="https://explorer.testnet3.goat.network/address/0xaF047D5f5e817035bb402556Db6c6eb5f7a6C866#code">0xaF04&hellip;C866</a></td></tr>
+          <tr><td>factory, verified source</td><td><a href="https://base-sepolia.blockscout.com/address/0xa1B47042e1E41ef0790262369B59427184ea3191#code">0xa1B4&hellip;3191</a></td><td><a href="https://explorer.testnet.whitechain.io/address/0x30F0bAB7ed9064f07c1aa7B3BFBC6d8ea25fA316#code">0x30F0&hellip;A316</a></td><td><a href="https://explorer.testnet3.goat.network/address/0x9b6BD341F619cF672995b2ef98E4bace3686Df90#code">0x9b6B&hellip;Df90</a></td></tr>
+          <tr><td>the one payment allowed</td><td><a href="https://base-sepolia.blockscout.com/tx/0xfc20e4f29916527e1cd2e32c73cb07e989dac8c2efcea76dffacaa61fae27b51">0xfc20&hellip;7b51</a></td><td><a href="https://explorer.testnet.whitechain.io/tx/0x334a4f63647b7830e3af83f85722f406c93c1be08a79fe62c2b8a4ede97dafdf">0x334a&hellip;afdf</a></td><td><a href="https://explorer.testnet3.goat.network/tx/0xb584225d12a2a913f176e00ad76c85fb822e21e04164d3ddea30f498151560b4">0xb584&hellip;60b4</a></td></tr>
+          <tr><td>the rating that carries it</td><td>&mdash;</td><td>&mdash;</td><td><a href="https://explorer.testnet3.goat.network/tx/0x03bf00219984d530ba3ca463166cac3ba3bcd5fed176054ae52964b429787fce">0x03bf&hellip;7fce</a></td></tr>
+          <tr><td>everything after it</td><td>refused</td><td>refused</td><td>refused</td></tr>
         </tbody>
       </table>
+    </div>
+    <div class="props" style="margin-top:44px">
+      <div>
+        <h3>On GOAT: a rating that cannot exist without the payment</h3>
+        <p>Measured ERC-8004 deployments show 98.7 to 100 percent of feedback records carry no proof of payment, and most reviewers are Sybil-coordinated. So on GOAT the account's policy admits exactly two things: pay allowlisted sellers within the budget, and call <code>giveFeedback</code>. The feedback carries a receipt naming the payment transaction, the intent hash and the policy in force, and <code>feedbackHash</code> is its keccak. Decode it, hash it, find the settlement on chain. Feedback the account never paid for cannot be produced.</p>
+        <p style="margin-top:14px">It ran on Testnet3: the <a href="https://explorer.testnet3.goat.network/tx/0xb584225d12a2a913f176e00ad76c85fb822e21e04164d3ddea30f498151560b4">payment</a>, then the <a href="https://explorer.testnet3.goat.network/tx/0x03bf00219984d530ba3ca463166cac3ba3bcd5fed176054ae52964b429787fce">rating that names it</a>, then five compromised attempts refused and an attacker balance of zero.</p>
+      </div>
+      <div>
+        <h3>One thing we found by running it</h3>
+        <p>On GOAT Testnet3 the Reputation Registry validates agents against identity registry <code>0x54B8&hellip;15ce</code>, while the address table in <code>GOATNetwork/agentkit</code> lists <code>0x5560&hellip;5522</code>. Register on the published one and <code>giveFeedback</code> reverts with <code>ERC721NonexistentToken</code>. Mainnet is consistent. These scripts ask the reputation registry which identity registry it uses instead of trusting the table, so they work on both.</p>
+      </div>
     </div>
     <div class="run">
       <p>The same run on your own machine, with no chain, no key and nothing to sign up for:</p>
