@@ -28,6 +28,7 @@ const IDENTITY_ABI = [
 const REPUTATION_ABI = [
   "function giveFeedback(uint256 agentId, int128 value, uint8 valueDecimals, string tag1, string tag2, string endpoint, string feedbackURI, bytes32 feedbackHash)",
   "function getClients(uint256 agentId) view returns (address[])",
+  "function getIdentityRegistry() view returns (address)",
   "event NewFeedback(uint256 indexed agentId, address indexed clientAddress, uint64 feedbackIndex, int128 value, uint8 valueDecimals, string indexed indexedTag1, string tag1, string tag2, string endpoint, string feedbackURI, bytes32 feedbackHash)",
 ];
 
@@ -37,4 +38,28 @@ function registriesFor(chainId) {
   return entry;
 }
 
-module.exports = { GOAT_ERC8004, IDENTITY_ABI, REPUTATION_ABI, registriesFor };
+// The reputation registry checks that an agent exists by calling the identity
+// registry it was deployed against, so the only identity registry that matters
+// is the one it names. On mainnet that is the published 0x8004A169... On
+// testnet3 it is 0x54b8...15ce, while agentkit's addresses.ts lists
+// 0x5560...5522: registering there and then rating reverts with
+// ERC721NonexistentToken(agentId), which is what this resolver avoids.
+// Reported upstream; until it is fixed, ask the chain rather than the table.
+async function resolveIdentityRegistry(ethers, entry) {
+  try {
+    const rep = await ethers.getContractAt(REPUTATION_ABI, entry.reputationRegistry);
+    const onChain = await rep.getIdentityRegistry();
+    if (onChain && onChain !== "0x0000000000000000000000000000000000000000") {
+      if (onChain.toLowerCase() !== entry.identityRegistry.toLowerCase()) {
+        console.log(`  note      the reputation registry uses identity registry ${onChain},`);
+        console.log(`            not the ${entry.identityRegistry} in agentkit's address table`);
+      }
+      return onChain;
+    }
+  } catch {
+    // older deployment without the getter; fall back to the table
+  }
+  return entry.identityRegistry;
+}
+
+module.exports = { GOAT_ERC8004, IDENTITY_ABI, REPUTATION_ABI, registriesFor, resolveIdentityRegistry };

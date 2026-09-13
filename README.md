@@ -9,11 +9,12 @@ Solidity (`evmVersion: paris`, no PUSH0), so the account deploys wherever the
 agent's money already is. Demo page with the on-chain run and a 90-second
 video: [rein-nine.vercel.app](https://rein-nine.vercel.app).
 
-| | Base Sepolia (84532) | Whitechain Sepolia (1874) |
-|---|---|---|
-| Demo account, verified | [0x0dA3…0527](https://base-sepolia.blockscout.com/address/0x0dA3840BA3516e1aE2BB14aCc0eB920c2A660527#code) | [0x69a5…4621](https://explorer.testnet.whitechain.io/address/0x69a504e6beA9C76f3C19196c2D3FD02244674621#code) |
-| Factory, verified | [0xa1B4…3191](https://base-sepolia.blockscout.com/address/0xa1B47042e1E41ef0790262369B59427184ea3191#code) | [0x30F0…fA316](https://explorer.testnet.whitechain.io/address/0x30F0bAB7ed9064f07c1aa7B3BFBC6d8ea25fA316#code) |
-| The one payment allowed | [0xfc20…7b51](https://base-sepolia.blockscout.com/tx/0xfc20e4f29916527e1cd2e32c73cb07e989dac8c2efcea76dffacaa61fae27b51) | [0x334a…dafdf](https://explorer.testnet.whitechain.io/tx/0x334a4f63647b7830e3af83f85722f406c93c1be08a79fe62c2b8a4ede97dafdf) |
+| | Base Sepolia (84532) | Whitechain Sepolia (1874) | GOAT Testnet3 (48816) |
+|---|---|---|---|
+| Demo account, verified | [0x0dA3…0527](https://base-sepolia.blockscout.com/address/0x0dA3840BA3516e1aE2BB14aCc0eB920c2A660527#code) | [0x69a5…4621](https://explorer.testnet.whitechain.io/address/0x69a504e6beA9C76f3C19196c2D3FD02244674621#code) | [0xaF04…C866](https://explorer.testnet3.goat.network/address/0xaF047D5f5e817035bb402556Db6c6eb5f7a6C866#code) |
+| Factory, verified | [0xa1B4…3191](https://base-sepolia.blockscout.com/address/0xa1B47042e1E41ef0790262369B59427184ea3191#code) | [0x30F0…fA316](https://explorer.testnet.whitechain.io/address/0x30F0bAB7ed9064f07c1aa7B3BFBC6d8ea25fA316#code) | [0x9b6B…Df90](https://explorer.testnet3.goat.network/address/0x9b6BD341F619cF672995b2ef98E4bace3686Df90#code) |
+| The one payment allowed | [0xfc20…7b51](https://base-sepolia.blockscout.com/tx/0xfc20e4f29916527e1cd2e32c73cb07e989dac8c2efcea76dffacaa61fae27b51) | [0x334a…dafdf](https://explorer.testnet.whitechain.io/tx/0x334a4f63647b7830e3af83f85722f406c93c1be08a79fe62c2b8a4ede97dafdf) | [0xb584…60b4](https://explorer.testnet3.goat.network/tx/0xb584225d12a2a913f176e00ad76c85fb822e21e04164d3ddea30f498151560b4) |
+| The rating that carries it | | | [0x03bf…7fce](https://explorer.testnet3.goat.network/tx/0x03bf00219984d530ba3ca463166cac3ba3bcd5fed176054ae52964b429787fce) |
 
 Everything after that one payment, in the demo below, is a refusal.
 
@@ -221,9 +222,27 @@ reviewers are Sybil-coordinated (arXiv 2606.26028). Making a rating cost a
 real payment is the missing default.
 
 ```bash
-npm run preflight:goat     # chain 48816, needs ~0.002 BTC from https://bridge.testnet3.goat.network/faucet
+npm run preflight:goat     # chain 48816, one faucet drip is enough: https://bridge.testnet3.goat.network/faucet
+npm run deploy:goat
 npm run demo:goat          # seller registers, agent pays, agent rates, agent is compromised, chain refuses
 ```
+
+This has run on GOAT Testnet3. The seller registered as agent 65, the account
+paid it, and the rating that names that payment is
+[0x03bf…7fce](https://explorer.testnet3.goat.network/tx/0x03bf00219984d530ba3ca463166cac3ba3bcd5fed176054ae52964b429787fce).
+Then five compromised attempts were refused: two `TARGET_NOT_ALLOWED`, one
+`NATIVE_PER_CALL`, one `SELF_CALL`, one `INTENT_REQUIRED`. Attacker balance
+afterwards: zero. The whole run, including both deployments, cost well under
+one faucet drip, and the receipt is in
+[`deployments/goatTestnet.evidence.json`](deployments/goatTestnet.evidence.json).
+
+One thing worth reporting, found by running it: on GOAT Testnet3 the
+Reputation Registry validates agents against identity registry
+`0x54B8…15ce`, while `addresses.ts` in `GOATNetwork/agentkit` lists
+`0x5560…5522`. Register on the published one and `giveFeedback` reverts with
+`ERC721NonexistentToken(agentId)`. On mainnet the two agree. The scripts here
+ask the reputation registry which identity registry it uses rather than
+trusting the table, so they work either way.
 
 For agents built on `@goatnetwork/agentkit`, `goat/rein-wallet-provider.js` is
 a drop-in `WalletProvider`: every write (`x402 payment.transfer`,
@@ -299,10 +318,11 @@ Rein is not tied to a chain. The policy is plain Solidity compiled for the
 should live wherever its money already is: Base if it is paid over x402, an
 exchange L2 if it is funded from an exchange.
 
-Three networks are configured, and the demo above has run unchanged on two of
-them: Base Sepolia (84532) and Whitechain Sepolia (1874). Ethereum Sepolia
-(11155111) is configured mainly because it is where testnet ETH arrives from
-faucets, and `bridge:base` moves it down to Base through Base's own portal.
+Four networks are configured, and the account has run unchanged on three of
+them: Base Sepolia (84532), Whitechain Sepolia (1874) and GOAT Testnet3
+(48816). Ethereum Sepolia (11155111) is configured mainly because it is where
+testnet ETH arrives from faucets, and `bridge:base` moves it down to Base
+through Base's own portal.
 
 ```bash
 cp .env.example .env         # then add a throwaway PRIVATE_KEY with testnet gas

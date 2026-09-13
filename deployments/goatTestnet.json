@@ -1,0 +1,10 @@
+{
+  "network": "goatTestnet",
+  "chainId": 48816,
+  "deployer": "0xBb80371E6457551fe671420FFA6F62f876AE14C6",
+  "factory": "0x9b6BD341F619cF672995b2ef98E4bace3686Df90",
+  "account": "0xaF047D5f5e817035bb402556Db6c6eb5f7a6C866",
+  "salt": "0x89b71f5441471079bc93d84005355e669639a0a7ef729d097f99bd6597da6dbc",
+  "deployTx": "0x4623c3b598701f154248691722eba1c0526a041f41f53b885356a86660306075",
+  "deployedAt": "2026-09-13T16:48:25.488Z"
+}

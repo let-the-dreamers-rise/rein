@@ -11,18 +11,28 @@
 const fs = require("fs");
 const path = require("path");
 const { ethers, network } = require("hardhat");
-const { IDENTITY_ABI, REPUTATION_ABI, registriesFor } = require("./goat-registries");
+const { IDENTITY_ABI, REPUTATION_ABI, registriesFor, resolveIdentityRegistry } = require("./goat-registries");
 const { hash, rule, actors, attempt, waitUntil } = require("./goat-lib");
 
 const HOUR = 3600;
 const BTC = (n) => ethers.parseEther(String(n));
 const btc = (v) => `${ethers.formatEther(v)} BTC`;
 
-const GAS_EACH = BTC("0.0003"); // gas for the agent and seller keys
-const ACCOUNT_FUND = BTC("0.001"); // what the account holds
-const PER_CALL = BTC("0.0002"); // policy: most one payment may carry
-const PER_WINDOW = BTC("0.0005"); // policy: most one hour may spend
-const PRICE = BTC("0.0001"); // what the seller charges
+// The amounts are sized to one faucet drip. GOAT testnet3 gives about
+// 0.000014 tBTC and charges ~0.00013 gwei of gas, so the whole run -- factory,
+// account, six policy writes, a payment, a rating and five refusals -- fits
+// inside a single drip with room to spare. GOAT_SCALE multiplies all of them
+// when a larger balance is on hand; the story does not depend on the size.
+const SCALE = Number(process.env.GOAT_SCALE || 1);
+// toFixed, not String: JS prints small numbers as "5e-7" and parseEther refuses that.
+const amt = (n) => ethers.parseUnits((n * SCALE).toFixed(18), 18);
+
+const GAS_EACH = amt(0.0000005); // gas for the agent and seller keys
+const ACCOUNT_FUND = amt(0.000004); // what the account holds
+const PER_CALL = amt(0.0000008); // policy: most one payment may carry
+const PER_WINDOW = amt(0.000002); // policy: most one hour may spend
+const PRICE = amt(0.0000004); // what the seller charges
+const OVER_CALL = amt(0.0000036); // more than one call may carry: refused
 
 const NATIVE_SELECTOR = "0x00000000"; // a plain value transfer has no selector
 
@@ -120,8 +130,9 @@ async function main() {
 
   const account = await loadOrDeployAccount(owner);
   const accountAddr = await account.getAddress();
-  const identity = await ethers.getContractAt(IDENTITY_ABI, reg.identityRegistry);
   const reputation = await ethers.getContractAt(REPUTATION_ABI, reg.reputationRegistry);
+  const identityAddress = await resolveIdentityRegistry(ethers, reg);
+  const identity = await ethers.getContractAt(IDENTITY_ABI, identityAddress);
 
   if ((await ethers.provider.getBalance(accountAddr)) < ACCOUNT_FUND) {
     await (await owner.sendTransaction({ to: accountAddr, value: ACCOUNT_FUND })).wait();
@@ -167,9 +178,9 @@ async function main() {
   console.log("  The agent believes it. Every request below is one it genuinely wants to make.\n");
 
   await attempt(account, agent, { target: attacker.address, value: PRICE, intent: "pay the new settlement address" });
-  await attempt(account, agent, { target: seller.address, value: BTC("0.0009"), intent: "prepay the seller for the year" });
+  await attempt(account, agent, { target: seller.address, value: OVER_CALL, intent: "prepay the seller for the year" });
   await attempt(account, agent, {
-    target: reg.identityRegistry,
+    target: identityAddress,
     data: identity.interface.encodeFunctionData("register", ["data:,fake"]),
     intent: "register a second identity to rate from",
   });
@@ -188,6 +199,7 @@ async function main() {
 
   const evidence = {
     network: network.name, chainId, account: accountAddr, agentKey: agent.address,
+    identityRegistry: identityAddress, reputationRegistry: reg.reputationRegistry,
     seller: seller.address, sellerAgentId: sellerAgentId.toString(), registerTx,
     paymentTx: paid.hash, feedbackTx: rated.hash, feedbackHash: receipt.feedbackHash,
     receipt: JSON.parse(receipt.body), startBlock, explorer: reg.explorer, at: new Date().toISOString(),

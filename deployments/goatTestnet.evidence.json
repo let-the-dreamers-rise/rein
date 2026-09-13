@@ -1,0 +1,35 @@
+{
+  "network": "goatTestnet",
+  "chainId": 48816,
+  "account": "0xaF047D5f5e817035bb402556Db6c6eb5f7a6C866",
+  "agentKey": "0x0b051eFf4B42F9F941421f0AeCE2C832Dee2AD33",
+  "identityRegistry": "0x54B8d8E2455946f2A5B8982283f2359812e815ce",
+  "reputationRegistry": "0xd9140951d8aE6E5F625a02F5908535e16e3af964",
+  "seller": "0x0C9F5d6daDB7aCff3a857e75C71819DF95466D1B",
+  "sellerAgentId": "65",
+  "registerTx": "0xb5d02d41ef87f7e028db7fba791bbeba79e2573d3b6edd41370df0757d17e231",
+  "paymentTx": "0xb584225d12a2a913f176e00ad76c85fb822e21e04164d3ddea30f498151560b4",
+  "feedbackTx": "0x03bf00219984d530ba3ca463166cac3ba3bcd5fed176054ae52964b429787fce",
+  "feedbackHash": "0x93be50a88534717ed6ddab49e15ba24b7df7d5d5243e700cc19493cbb25791c0",
+  "receipt": {
+    "schema": "rein/x402-receipt/1",
+    "chainId": 48816,
+    "account": "0xaF047D5f5e817035bb402556Db6c6eb5f7a6C866",
+    "agentKey": "0x0b051eFf4B42F9F941421f0AeCE2C832Dee2AD33",
+    "seller": "0x0C9F5d6daDB7aCff3a857e75C71819DF95466D1B",
+    "sellerAgentId": "65",
+    "amountWei": "400000000000",
+    "paymentTx": "0xb584225d12a2a913f176e00ad76c85fb822e21e04164d3ddea30f498151560b4",
+    "intent": "x402 payment for one call to seller agent 65 -- 0.0000004 BTC",
+    "intentHash": "0x6778d060b56d7dee734ef6ff27ca6d6603cc09fdaae0a9ab3a63414de19e7e96",
+    "policy": {
+      "maxNativePerCall": "800000000000",
+      "maxNativePerWindow": "2000000000000",
+      "windowSeconds": 3600
+    },
+    "issuedAt": "2026-09-13T16:54:20.689Z"
+  },
+  "startBlock": 16685079,
+  "explorer": "https://explorer.testnet3.goat.network",
+  "at": "2026-09-13T16:54:31.270Z"
+}

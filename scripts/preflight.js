@@ -10,8 +10,9 @@ const EXPECTED = {
   baseSepolia: { chainId: 84532n, label: "Base Sepolia", minBalance: "0.005", faucet: "a Base Sepolia faucet (Coinbase, Alchemy), or bridge from Sepolia with npm run bridge:base" },
   sepolia: { chainId: 11155111n, label: "Ethereum Sepolia", minBalance: "0.05", faucet: "a Sepolia faucet (Google Cloud, Alchemy)" },
   // Native gas is BTC and the gas price is near zero; the deploy plus the
-  // pay-and-rate demo (which parks 0.001 in the account) fits in 0.002.
-  goatTestnet: { chainId: 48816n, label: "GOAT Testnet3", minBalance: "0.002", faucet: "https://bridge.testnet3.goat.network/faucet" },
+  // pay-and-rate demo parks 0.000004 in the account and gas is ~0.00013 gwei,
+  // so one faucet drip (about 0.000014) covers the whole run.
+  goatTestnet: { chainId: 48816n, label: "GOAT Testnet3", minBalance: "0.00001", faucet: "https://bridge.testnet3.goat.network/faucet" },
 };
 
 async function main() {
