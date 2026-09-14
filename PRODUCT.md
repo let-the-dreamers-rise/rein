@@ -8,7 +8,7 @@ function and payee allowlists, rolling spend windows, call rate, approval
 ceiling, expiry, a guardian breaker, and an intent hash on every call.
 `simulate()` returns the same refusal code `execute()` reverts with, for
 free, so an agent can ask before acting. Live on Base Sepolia and Whitechain
-Sepolia, same bytecode, verified. 50 tests. Not audited.
+Sepolia, same bytecode, verified. 56 tests. Not audited.
 
 **Who it is for.** Developers and small teams who give an AI agent a wallet
 to pay suppliers, APIs (x402), or contractors, and who cannot accept that one

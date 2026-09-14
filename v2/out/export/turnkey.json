@@ -1,0 +1,23 @@
+[
+  {
+    "policyName": "Rein: approve on USDT",
+    "notes": "compiled from the agent's own trail by Rein v2; per-window totals are not expressible here",
+    "effect": "EFFECT_ALLOW",
+    "consensus": "approvers.any(user, user.id == '<AGENT_USER_ID>')",
+    "condition": "eth.tx.to == '0xdAC17F958D2ee523a2206206994597C13D831ec7' && eth.tx.data[0..4] == '0x095ea7b3' && eth.tx.contract_call_args['spender'] in ['<Payroll>', '<Router>', '<Supplier A>', '<Supplier B>', '<Supplier C>'] && eth.tx.contract_call_args['value'] <= 500000000 && eth.tx.value <= 0"
+  },
+  {
+    "policyName": "Rein: transfer on USDT",
+    "notes": "compiled from the agent's own trail by Rein v2; per-window totals are not expressible here",
+    "effect": "EFFECT_ALLOW",
+    "consensus": "approvers.any(user, user.id == '<AGENT_USER_ID>')",
+    "condition": "eth.tx.to == '0xdAC17F958D2ee523a2206206994597C13D831ec7' && eth.tx.data[0..4] == '0xa9059cbb' && eth.tx.contract_call_args['to'] in ['<Payroll>', '<Router>', '<Supplier A>', '<Supplier B>', '<Supplier C>'] && eth.tx.value <= 0"
+  },
+  {
+    "policyName": "Rein: swapExact on Router",
+    "notes": "compiled from the agent's own trail by Rein v2",
+    "effect": "EFFECT_ALLOW",
+    "consensus": "approvers.any(user, user.id == '<AGENT_USER_ID>')",
+    "condition": "eth.tx.to == '<Router>' && eth.tx.data[0..4] == 'swapExact' && eth.tx.value <= 0"
+  }
+]

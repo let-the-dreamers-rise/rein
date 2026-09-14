@@ -356,7 +356,7 @@ html.anim .rise:nth-child(2){animation-delay:.08s}html.anim .rise:nth-child(3){a
     <div class="run">
       <p>The same run on your own machine, with no chain, no key and nothing to sign up for:</p>
       <pre>git clone https://github.com/let-the-dreamers-rise/rein &amp;&amp; cd rein &amp;&amp; npm install
-npm test                                    <i># 50 tests</i>
+npm test                                    <i># 56 tests</i>
 npx hardhat run scripts/demo-injection.js   <i># the transcript above, on an in-process chain</i></pre>
     </div>
   </div>
@@ -380,7 +380,7 @@ npx hardhat run scripts/demo-injection.js   <i># the transcript above, on an in-
     </figure>
     <div class="ctas" style="margin-top:26px"><a class="btn btn-brand" href="v2/">Read the compiled policy, switch rules off</a></div>
     <div class="trio">
-      <div><h3>Compile</h3><p>Induce which targets, functions, payees, amounts per window and sequences are normal, and emit a one-page readable policy plus the enforcement artefact: Rein's account today, Coinbase, Privy and Turnkey policy JSON next.</p></div>
+      <div><h3>Compile</h3><p>Induce which targets, functions, payees, amounts per window and sequences are normal, and emit a one-page readable policy plus the enforcement artefact: Rein's account, and the same bounds as Turnkey, Coinbase and Privy policy JSON, with a table of what each engine can hold. Shape-checked against their docs, not yet run against their APIs.</p></div>
       <div><h3>Measure</h3><p>Every compiled policy ships with two numbers and their denominators. Coverage: how often honest actions get blocked on held-out traces. Catch rate: how many injected attacks are refused. A policy that cannot state those numbers is a guess.</p></div>
       <div><h3>Prove</h3><p>Every allow and refusal carries a receipt. A merchant, treasury owner or insurer can verify the agent was inside an attested policy before accepting settlement. On stablecoins there is no chargeback, so the control has to exist before the money leaves.</p></div>
     </div>
@@ -405,7 +405,7 @@ npx hardhat run scripts/demo-injection.js   <i># the transcript above, on an in-
       <li><b>A permitted call is still a permitted call.</b> Rein bounds the blast radius. It does not make the agent's decisions good.</li>
       <li><b>It assumes the owner is not compromised.</b> Use a multisig for anything that matters.</li>
       <li><b>Only <code>transfer</code>, <code>approve</code>, <code>transferFrom</code> and <code>increaseAllowance</code> are decoded.</b> Other value-moving methods on an allowlisted token are outside what the policy understands.</li>
-      <li><b>Not audited.</b> 50 tests pass. That is not an audit.</li>
+      <li><b>Not audited.</b> 56 tests pass. That is not an audit.</li>
     </ul>
     <div class="ctas" style="margin-top:40px">
       <a class="btn btn-brand" href="mailto:ashwingoyal2006@gmail.com?subject=Rein%20early%20access">Get early access</a>

@@ -1,0 +1,91 @@
+{
+  "scope": "project",
+  "description": "Rein v2: compiled from the agent's own trail. Per-call ceilings stand in for per-window totals.",
+  "rules": [
+    {
+      "action": "accept",
+      "operation": "signEvmTransaction",
+      "criteria": [
+        {
+          "type": "evmAddress",
+          "addresses": [
+            "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+          ],
+          "operator": "in"
+        },
+        {
+          "type": "ethValue",
+          "ethValue": "0",
+          "operator": "<="
+        },
+        {
+          "type": "evmData",
+          "abi": "erc20",
+          "conditions": [
+            {
+              "function": "transfer",
+              "params": [
+                {
+                  "name": "to",
+                  "operator": "in",
+                  "values": [
+                    "<Payroll>",
+                    "<Router>",
+                    "<Supplier A>",
+                    "<Supplier B>",
+                    "<Supplier C>"
+                  ]
+                },
+                {
+                  "name": "value",
+                  "operator": "<=",
+                  "value": "4002000000"
+                }
+              ]
+            },
+            {
+              "function": "approve",
+              "params": [
+                {
+                  "name": "spender",
+                  "operator": "in",
+                  "values": [
+                    "<Payroll>",
+                    "<Router>",
+                    "<Supplier A>",
+                    "<Supplier B>",
+                    "<Supplier C>"
+                  ]
+                },
+                {
+                  "name": "value",
+                  "operator": "<=",
+                  "value": "500000000"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "action": "accept",
+      "operation": "signEvmTransaction",
+      "criteria": [
+        {
+          "type": "evmAddress",
+          "addresses": [
+            "<Router>"
+          ],
+          "operator": "in"
+        },
+        {
+          "type": "ethValue",
+          "ethValue": "0",
+          "operator": "<="
+        }
+      ],
+      "note": "functions allowed on chain: swapExact; CDP criteria match the contract, not the selector, without an ABI"
+    }
+  ]
+}

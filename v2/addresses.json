@@ -1,0 +1,9 @@
+{
+  "_comment": "Names in v2/out/policy.json to chain facts. These are the demo's stand-ins; replace with your own before exporting for a real wallet.",
+  "USDT": { "address": "0xdAC17F958D2ee523a2206206994597C13D831ec7", "decimals": 6 },
+  "Router": { "address": "<Router>" },
+  "Payroll": { "address": "<Payroll>" },
+  "Supplier A": { "address": "<Supplier A>" },
+  "Supplier B": { "address": "<Supplier B>" },
+  "Supplier C": { "address": "<Supplier C>" }
+}
