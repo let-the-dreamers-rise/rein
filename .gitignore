@@ -6,3 +6,7 @@ typechain-types/
 deployments/*.local.json
 
 .vercel
+
+# Python bytecode from v2/compile.py and its tests
+__pycache__/
+*.pyc
