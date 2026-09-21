@@ -94,7 +94,7 @@
   <div class="in" style="display:flex;gap:14px;margin-bottom:40px"><span class="badge badge-outline">AI agents x crypto infrastructure</span><span class="badge badge-accent">live on Base Sepolia and Whitechain Sepolia</span><span class="badge badge-primary">Alliance ALL19</span></div>
   <h1 class="hero in">Rein</h1>
   <p class="h2 in" style="margin-top:28px;max-width:1400px;font-weight:600;color:var(--c-text)">A smart account an autonomous agent can operate and cannot drain.</p>
-  <p class="body in" style="margin-top:26px;max-width:1300px">The limits live in the contract, not in the agent. v2 compiles the policy from the agent's own behaviour: on the first measured run, 22 of 22 honest calls allowed, 10 of 10 attacks refused.</p>
+  <p class="body in" style="margin-top:26px;max-width:1300px">The limits live in the contract, not in the agent. v2 compiles the policy from the agent's own behaviour: on the first measured run, 22 of 22 honest calls allowed, 10 of 10 attacks refused &mdash; 2 of them attributable to compiling, and the in-bounds attack still gets through. We print all three.</p>
   <div class="foot"><span>Ashwin Goyal</span><span>rein-nine.vercel.app</span></div>
   <div class="notes">Bar test: Rein is the leash for an AI agent that holds money. The agent can pay who it is supposed to pay and nothing else, even when it has been fully hijacked. Today the owner writes the leash. Next, the leash is grown from what the agent actually does.</div>
 </section>
@@ -172,7 +172,7 @@
   <div class="divider in"></div>
   <div class="grid-3 in">
     <div class="card"><p class="caption">Compile, done</p><p class="h3">Trail in, policy out</p><p class="small">The agent's intent trail is read back from the chain and compiled by the nyaya synthesiser into 14 rules with their evidence. "Pays Supplier B on Tuesdays, 21 of 22." Enforced by Rein's account, and exported as Turnkey, Coinbase and Privy policy JSON with a table of what each can hold.</p></div>
-    <div class="card"><p class="caption">Measure, done</p><p class="h3">Two numbers, with denominators</p><p class="small">Coverage: 22 of 22 honest held-out calls allowed. Catch rate: 10 of 10 attacks refused before gas. Switch any rule off on the site and see which attack gets through.</p></div>
+    <div class="card"><p class="caption">Measure, done</p><p class="h3">Numbers, with their denominators</p><p class="small">Coverage: 22 of 22 honest held-out calls allowed. Catch rate: 10 of 10 refused before gas &mdash; but 8 of those the wide policy caught before compiling, so <b>2 are the compiler's</b>. And an in-bounds drain to an allowlisted payee still works: <b>208,000 USDT, 0 flags</b>. We publish the number that beats us.</p></div>
     <div class="card"><p class="caption">Watch, done</p><p class="h3">A guardian that can stop and cannot spend</p><p class="small">Habits the contract cannot enforce are read by a guardian key with the compiler's own bands. An in-bounds, off-habit payment is allowed by the chain, flagged, and the breaker trips: the next call is refused. 0 of 22 held-out calls flagged. Receipts a counterparty can verify: next.</p></div>
   </div>
   <div class="notes">This is the company. Rein today is the enforcement half. The compile half is the rule learner I built for ARC-AGI-3 pointed at agent traces. It sits on top of the wallets people already use rather than competing with them.</div>

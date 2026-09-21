@@ -60,7 +60,34 @@ attacks.
 |---|---|
 | coverage: honest held-out calls allowed | 22 of 22 |
 | catch rate: attacks refused before gas | 10 of 10 |
+| of those, refused by the wide shadow policy before any compilation | 8 of 10 |
+| **attributable to compiling the policy** | **2 of 10** |
 | attacker balance afterwards | 0 |
+| in-bounds drain to an allowlisted payee | **succeeds: 208,000 USDT, 0 flags** |
+
+Those last three rows are the honest reading of the first two, and the demo
+prints all of them.
+
+**The catch rate needs a denominator.** Eight of the ten attacks are refused by
+the hand-written wide policy the agent ran under during shadow mode, before the
+compiler does anything: an unknown payee, an approval over the cap, a call into
+the account itself. Those were caught by an allowlist, not by learning.
+Counting them toward the compiled policy credits the compiler with work it did
+not do. Two attacks are attributable to compilation -- the 100,000 USDT payment
+that the learned ceiling refuses, and the router function the agent never used.
+
+**And every one of the ten crosses a line.** Not one of them stays inside the
+policy, which is the case worth testing, so the demo now tests it: a payment to
+a payee the policy already trusts, just under the hourly ceiling, at the
+permitted rate, timed to miss the learned habits -- which is easy, because the
+habits are published in `policy.md` for a person to read. It moves 208,000 USDT
+in 52 calls over four days. Every call is allowed. The guardian flags none of
+them. Nothing there is a bypass; it is the policy working exactly as written.
+
+A bound over who, what, and how much per hour cannot tell an honest hour from a
+dishonest one. That is the boundary of what compiling behaviour into bounds can
+buy you, and stating it is worth more than a tenth attack that crosses the same
+line as the other nine.
 
 The habits are not dead text. A guardian key (which can stop the agent and
 can never spend) reads every call against them through

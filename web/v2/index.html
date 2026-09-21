@@ -105,12 +105,14 @@ footer a{font-family:var(--mono);font-size:13px}
 <section id="numbers">
   <div class="wrap">
     <h2 class="h2">Two numbers, with their denominators.</h2>
-    <p class="sub">A policy that cannot state these is a guess. Coverage is measured on calls the compiler never saw. The catch rate is measured on attacks the shadow run never contained. Both were computed on chain by <code>simulate()</code>, and every refusal was cross-checked against <code>execute()</code> reverting with the same code.</p>
+    <p class="sub">A policy that cannot state these is a guess. Coverage is measured on calls the compiler never saw. Both numbers were computed on chain by <code>simulate()</code>, and every refusal was cross-checked against <code>execute()</code> reverting with the same code.</p>
+    <p class="sub"><strong>The catch rate needs a denominator, so here it is.</strong> Eight of the ten attacks are refused by the wide hand-written policy the agent ran under during shadow mode, before the compiler does anything at all &mdash; an unknown payee, an approval over the cap, a call into the account itself. Those were caught by an allowlist, not by learning. <strong>Two of the ten are attributable to compiling the policy:</strong> the 100,000 USDT payment the learned ceiling refuses, and the router function the agent never used. The demo prints both figures on every run.</p>
     <div class="numbers" aria-live="polite">
       <div><div class="n" id="cov"></div><p>honest held-out calls allowed. Every refusal of an honest call is a cost the owner pays in a human being paged.</p><p class="live" id="cov-live"></p></div>
       <div><div class="n" id="catch"></div><p>attacks refused before any gas was spent, with the reason in words.</p><p class="live" id="catch-live"></p></div>
       <div><div class="n" id="split"></div><p>calls compiled from, calls held out. Six simulated months, seeded, so the run is the same every time.</p><p class="live" id="gen"></p></div>
     </div>
+    <p class="sub"><strong>And every one of those ten attacks crosses a line.</strong> None of them stays inside the policy, which is the case worth testing &mdash; so the demo tests it too. A payment to a payee the policy already trusts, just under the hourly ceiling, at the permitted rate, timed to miss the learned habits (which is easy, because the habits are published on this page for a person to read) moves <strong>208,000 USDT in 52 calls over four days. Every call allowed. The guardian flags none of them.</strong> Nothing there is a bypass; it is the policy working exactly as written. A bound over who, what and how much per hour cannot tell an honest hour from a dishonest one, and that is the boundary of what compiling behaviour into bounds can buy.</p>
   </div>
 </section>
 

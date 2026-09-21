@@ -376,6 +376,8 @@ npx hardhat run scripts/demo-injection.js   <i># the transcript above, on an in-
         <li>pays Supplier B on Tuesdays; Supplier A receives 100 to 500 in the morning <em>21 of 22, 21 of 21 &middot; monitor only</em></li>
         <li>the guardian watches the habits: 0 of 22 held-out calls flagged; one in-bounds, off-habit payment allowed by the contract, flagged, breaker tripped <em>measured</em></li>
         <li class="no">held out: 22 of 22 honest calls allowed. Attacks: 10 of 10 refused, attacker balance 0 <em>measured on chain</em></li>
+        <li class="no">of those ten, the wide policy already refused 8 before compiling; <strong>2 are attributable to the compiled policy</strong> <em>the denominator, stated</em></li>
+        <li class="no">an in-bounds drain to an allowlisted payee succeeds: 208,000 USDT, 0 guardian flags <em>the honest limit of a compiled bound</em></li>
       </ul>
     </figure>
     <div class="ctas" style="margin-top:26px"><a class="btn btn-brand" href="v2/">Read the compiled policy, switch rules off</a></div>
