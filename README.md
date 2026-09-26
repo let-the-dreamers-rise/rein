@@ -4,7 +4,7 @@
 
 A smart account an autonomous agent can operate and cannot drain.
 
-**Live on two public EVM testnets, same bytecode, same result.** Chain-agnostic
+**Live on three public EVM testnets, same bytecode, same result.** Chain-agnostic
 Solidity (`evmVersion: paris`, no PUSH0), so the account deploys wherever the
 agent's money already is. Demo page with the on-chain run and a 90-second
 video: [rein-nine.vercel.app](https://rein-nine.vercel.app).
@@ -317,7 +317,7 @@ none.
   repetition. Bounding it honestly would require mirroring the token's allowance
   in storage, and that mirror goes stale as soon as the spender spends. Use
   `approve()` with an exact total instead.
-- **Not audited.** 56 tests pass. That is not an audit.
+- **Not audited.** 84 JavaScript and 18 Python tests pass. That is not an audit.
 
 ## Layout
 
@@ -330,7 +330,7 @@ scripts/demo-injection.js       the demo above, runs locally or on any configure
 client/rein.js                  simulate-then-execute for your agent, refusals in words
 client/monitor.js               the guardian's evaluator for learned habits, same bands as the compiler
 v2/export.js                    the compiled bounds as Turnkey, Coinbase CDP and Privy policy JSON, with the honest table
-test/rein.test.js               46 tests on the account; client, monitor, export and the error explainer have their own, 56 in all
+test/rein.test.js               36 tests on the account; the API, MCP server, client, monitor, export, router and error explainer have their own, 84 in all
 scripts/explain-error.js        the three failures a first live run hits, in words, with the command that diagnoses each
 scripts/v2/demo.js              Rein v2 end to end: shadow, export, compile, apply, measure
 v2/compile.py                   the compiler: bounds plus nyaya-learned habits, readable policy out
