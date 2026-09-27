@@ -73,7 +73,7 @@ Or in a project's `.mcp.json`:
 | `rein_budget` | What is still spendable this window, per token, plus calls left. |
 | `rein_policy` | The policy in force, in words. |
 | `rein_explain_refusal` | Turn a refusal code into plain English. |
-| `rein_scan_wallet` | Any agent wallet's public history in; the policy it supports and what it could lose out. Needs no account. See [`../scan`](../scan/README.md). |
+| `rein_scan_wallet` | Any agent wallet's public history in; the policy it supports, what it holds with no on-chain limit, and what it could lose under that policy. Needs no account. See [`../scan`](../scan/README.md). |
 
 They take payees, amounts and reasons. No ABI encoding, no wei: `"12.50"` means
 twelve dollars fifty. A payee is an address or a name from `REIN_PAYEES`

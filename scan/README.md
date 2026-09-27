@@ -10,6 +10,7 @@ node scan/cli.js 0xAgentWallet                 # Base
 node scan/cli.js 0xAgentWallet --chain ethereum
 node scan/cli.js 0xAgentWallet --out report    # plus report.json, trail.jsonl, export/{turnkey,coinbase,privy}.json
 node scan/cli.js --sample                      # a made-up wallet, no network
+node scan/cli.js --batch wallets.csv --out reports   # many wallets, then the totals
 ```
 
 In Claude, the same scan is the `rein_scan_wallet` tool, or `/rein:scan 0x…`
@@ -41,8 +42,30 @@ history (Blockscout API v2, keyless)  ->  trail
 - **Amounts are compiled in millionths of a token**, so an ETH ceiling is not
   rounded up to a whole ETH.
 
+## Many wallets
+
+`--batch wallets.csv --out reports` scans every address in a CSV with columns
+`address,label,team,contact` (a header row is fine; only the address is
+needed). It goes one wallet at a time with a two-second pause (`--pause MS`),
+retries a failed wallet once, writes `reports/<address>/` for each exactly as
+a single scan's `--out` does, and records wallets that failed twice in
+`reports/errors.json`. Then it runs [`aggregate.js`](aggregate.js) over the
+folder:
+
+- `reports/summary.md`: totals with their denominators and no addresses, for
+  publishing.
+- `reports/summary-private.csv`: one row per wallet with the CSV's labels and
+  contacts, for outreach. Never publish it.
+
+The synthetic sample is never counted in the totals. `node scan/aggregate.js
+reports --wallets wallets.csv --out summary` reruns the totals on their own.
+
 ## What it does not say
 
+- **No on-chain limit is not the same as no limit.** A key held in Privy,
+  Turnkey or Coinbase CDP may sit behind a signing policy that no explorer
+  can see. The report says what the chain shows and puts this caveat on every
+  real scan.
 - A public history has no instructions in it, so intent hashes are not
   checked. An agent running on Rein supplies one per call.
 - Native coin leaving a contract wallet through internal transactions, and

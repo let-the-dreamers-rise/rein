@@ -40,8 +40,8 @@ Any other MCP client, or the HTTP API with a key: [QUICKSTART.md](QUICKSTART.md)
 
 Or point it at a wallet that exists: `/rein:scan 0x…` (or `npm run scan -- 0x…`)
 reads an agent wallet's public history on Base and reports the policy that
-history supports, what the wallet could lose today, what it could lose under
-that policy, and how many of its recent calls the policy would have refused.
+history supports, what the wallet holds with no on-chain limit on where it
+can go, what it could lose under that policy, and how many of its recent calls the policy would have refused.
 See [`scan/`](scan/README.md).
 
 ## Try it in one minute
