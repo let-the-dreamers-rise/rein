@@ -110,6 +110,33 @@ the model was persuaded. Checking costs nothing (`simulate()` is a free view
 call), so a well-behaved agent asks first and explains the refusal; a
 compromised one gets the same refusal from `execute()`.
 
+## Scan a real agent wallet
+
+The sandbox shows the contract refusing. The scanner shows what a policy would
+do for a wallet that exists today: paste any agent wallet on Base and get the
+policy its own history supports, what it could lose now, what it could lose
+under that policy, and how many of its recent calls the policy would have
+refused.
+
+In Claude, with any of the installs above:
+
+```
+/rein:scan 0xAgentWallet          # Claude Code plugin
+```
+
+or just ask *"Scan 0x… with Rein."* Without an address, it runs a made-up
+sample wallet that needs no network.
+
+From a terminal:
+
+```bash
+git clone https://github.com/let-the-dreamers-rise/rein && cd rein && npm install
+npm run scan -- 0xAgentWallet --out report
+```
+
+It reads public data from Blockscout and signs nothing. More in
+[`scan/README.md`](scan/README.md).
+
 ## What the sandbox does not show
 
 - **An allowed payment is still allowed.** Paying Acme 1,000 an hour is inside

@@ -14,6 +14,7 @@ from it, and CI fails if the committed files differ from a fresh build.
 | `server/rein-mcp.cjs` | the MCP server, ethers and the sandbox EVM in one file |
 | `.mcp.json`, `.claude-plugin/` | the Claude Code plugin |
 | `commands/try.md` | `/rein:try`, one honest payment then five attempts to drain the account |
+| `commands/scan.md` | `/rein:scan 0x…`, the policy an agent wallet's own history supports and what it could lose |
 | [`../dist/rein.mcpb`](../dist/rein.mcpb) | the same server as a Claude Desktop extension: download it and double-click |
 
 Install instructions are in [QUICKSTART.md](../QUICKSTART.md).
