@@ -10,10 +10,18 @@
 //                     server refuses to start rather than listening openly
 //   REIN_API_PORT     default 8402
 //   plus the same REIN_RPC_URL / REIN_ACCOUNT / REIN_AGENT_PRIVATE_KEY /
-//   REIN_TOKENS / REIN_INTENT_SALT the MCP server reads
+//   REIN_TOKENS / REIN_PAYEES / REIN_INTENT_SALT the MCP server reads
+//
+// Or, to try it with nothing configured:
+//
+//   node api/server.js --sandbox
+//
+// which runs against the sandbox account on a chain inside this process and,
+// if no token is given, makes one up and prints it -- there is no real money
+// behind the sandbox, so a generated key guards nothing worth guarding.
 const http = require("node:http");
 const crypto = require("node:crypto");
-const { ReinClient } = require("../mcp/lib/account");
+const { openClient, wantsSandbox } = require("../mcp/lib/config");
 
 const PORT = Number(process.env.REIN_API_PORT || 8402);
 const MAX_BODY = 64 * 1024;
@@ -77,30 +85,24 @@ function withinLimit(caller, kind) {
 
 // -- routes ----------------------------------------------------------------
 
-let client = null;
+let opening = null;
 function rein() {
-  if (client) return client;
-  const tokens = {};
-  for (const pair of (process.env.REIN_TOKENS || "").split(",")) {
-    const [symbol, address] = pair.split(":").map((s) => (s || "").trim());
-    if (symbol && address) tokens[symbol.toUpperCase()] = address;
+  if (!opening) {
+    opening = openClient()
+      .then((opened) => opened.client)
+      .catch((err) => {
+        opening = null;
+        throw err;
+      });
   }
-  client = new ReinClient({
-    rpcUrl: process.env.REIN_RPC_URL,
-    account: process.env.REIN_ACCOUNT,
-    agentKey: process.env.REIN_AGENT_PRIVATE_KEY || null,
-    agentAddress: process.env.REIN_AGENT_ADDRESS || null,
-    intentSalt: process.env.REIN_INTENT_SALT || null,
-    tokens,
-  });
-  return client;
+  return opening;
 }
 
 const ROUTES = {
-  "POST /v1/check": { kind: "check", run: (body) => rein().check(body) },
-  "POST /v1/pay": { kind: "pay", run: (body) => rein().pay(body) },
-  "GET /v1/budget": { kind: "read", run: () => rein().budget() },
-  "GET /v1/policy": { kind: "read", run: () => rein().policy() },
+  "POST /v1/check": { kind: "check", run: async (body) => (await rein()).check(body) },
+  "POST /v1/pay": { kind: "pay", run: async (body) => (await rein()).pay(body) },
+  "GET /v1/budget": { kind: "read", run: async () => (await rein()).budget() },
+  "GET /v1/policy": { kind: "read", run: async () => (await rein()).policy() },
 };
 
 function json(res, status, payload) {
@@ -165,6 +167,16 @@ function createServer(tokens) {
 }
 
 function main() {
+  const sandbox = wantsSandbox();
+  if (sandbox && !process.env.REIN_API_TOKENS) {
+    const secret = crypto.randomBytes(32).toString("hex");
+    process.env.REIN_API_TOKENS = `sandbox:${secret}`;
+    console.error(
+      `rein-api: sandbox mode, no REIN_API_TOKENS given, so this run's key is:\n\n  ${secret}\n\n` +
+      `  curl -s -H "Authorization: Bearer ${secret}" http://127.0.0.1:${PORT}/v1/budget\n`
+    );
+  }
+
   let tokens;
   try {
     tokens = loadTokens();
@@ -179,6 +191,7 @@ function main() {
     );
     process.exit(1);
   }
+  if (sandbox) rein().catch((err) => console.error(`rein-api: the sandbox did not start: ${err.message}`));
   createServer(tokens).listen(PORT, "127.0.0.1", () => {
     // Loopback by default. Putting a key that can spend on a public interface
     // should be a decision somebody makes on purpose, behind a proxy they chose.
