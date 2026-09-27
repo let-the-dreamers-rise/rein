@@ -1,0 +1,18 @@
+{
+  "name": "rein",
+  "owner": {
+    "name": "Ashwin Goyal",
+    "url": "https://github.com/let-the-dreamers-rise"
+  },
+  "metadata": {
+    "description": "Rein: a wallet your agent can operate and cannot drain."
+  },
+  "plugins": [
+    {
+      "name": "rein",
+      "source": "./plugin",
+      "description": "Give Claude a Rein account in a sandbox, with 50,000 test USDC and a policy the chain enforces, then try to talk it into draining it. Nothing to configure.",
+      "category": "security"
+    }
+  ]
+}

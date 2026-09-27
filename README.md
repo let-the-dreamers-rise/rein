@@ -23,6 +23,21 @@ completely taken over -- wrong instructions, poisoned tool output, rewritten
 system prompt -- still cannot produce a transaction the account is unwilling to
 make.
 
+## Try it in Claude, with nothing to set up
+
+Give Claude a Rein account holding 50,000 test USDC, then try to talk it into
+emptying it. The account, the policy and the chain all run inside the MCP
+server, so there is no wallet, key or faucet involved.
+
+```
+/plugin marketplace add let-the-dreamers-rise/rein     # in Claude Code
+/plugin install rein@rein
+/rein:try                                              # one honest payment, five drain attempts
+```
+
+Claude Desktop: download [`dist/rein.mcpb`](dist/rein.mcpb) and double-click it.
+Any other MCP client, or the HTTP API with a key: [QUICKSTART.md](QUICKSTART.md).
+
 ## Try it in one minute
 
 ```bash
@@ -328,6 +343,11 @@ contracts/ReinFactory.sol       CREATE2, so an address can be funded before it e
 contracts/lib/CalldataGuard.sol decodes the ERC-20 calls that actually move value
 scripts/demo-injection.js       the demo above, runs locally or on any configured chain
 client/rein.js                  simulate-then-execute for your agent, refusals in words
+mcp/rein-mcp.js                 the MCP server; --sandbox runs it against a funded account on an in-process chain
+mcp/sandbox/                    that chain (@ethereumjs/vm behind JSON-RPC) and the account it deploys
+api/server.js                   the same tools over HTTP with a bearer key
+plugin/                         the MCP server as one file, packaged as a Claude Code plugin
+dist/rein.mcpb                  the same file as a Claude Desktop extension
 client/monitor.js               the guardian's evaluator for learned habits, same bands as the compiler
 v2/export.js                    the compiled bounds as Turnkey, Coinbase CDP and Privy policy JSON, with the honest table
 test/rein.test.js               46 tests on the account; client, monitor, export and the error explainer have their own, 56 in all

@@ -1,0 +1,13 @@
+{
+  "name": "rein",
+  "version": "0.1.0",
+  "description": "A wallet your agent can operate and cannot drain. Runs Rein's sandbox: a funded account on a chain inside the plugin, the policy already written, nothing to configure.",
+  "author": {
+    "name": "Ashwin Goyal",
+    "url": "https://github.com/let-the-dreamers-rise"
+  },
+  "homepage": "https://rein-nine.vercel.app",
+  "repository": "https://github.com/let-the-dreamers-rise/rein",
+  "license": "MIT",
+  "keywords": ["wallet", "agents", "payments", "policy", "prompt-injection"]
+}

@@ -23,6 +23,10 @@ jobs:
           python-version: "3.12"
       - run: npm ci
       - run: npm test
+      - name: the plugin and the Desktop bundle must be what mcp/ builds, byte for byte
+        run: |
+          node scripts/build-bundle.js
+          git diff --exit-code -- plugin/ dist/
       - name: Rein v2 end to end on the in-process chain
         run: npm run v2
         env:

@@ -7,11 +7,12 @@
 // promise is that a stranger can read the thing that guards their money, and
 // one more dependency in that path is one more thing they have to trust.
 //
-// Wire it into Claude Code (or any MCP client) with:
+// Try it with nothing configured -- a funded account on a chain inside this
+// process, the policy already written:
 //
-//   claude mcp add rein -- node /path/to/rein/mcp/rein-mcp.js
+//   claude mcp add rein -- node /path/to/rein/mcp/rein-mcp.js --sandbox
 //
-// and these in the environment:
+// Or point it at a real account with these in the environment:
 //
 //   REIN_RPC_URL             the chain the account lives on
 //   REIN_ACCOUNT             the ReinAccount address
@@ -19,37 +20,35 @@
 //                            it can answer questions and cannot spend.
 //   REIN_AGENT_ADDRESS       optional, for read-only use without a key
 //   REIN_TOKENS              "USDC:0x...,USDT:0x..."
+//   REIN_PAYEES              optional address book, "acme:0x...,northwind:0x..."
 //   REIN_INTENT_SALT         optional but recommended: salts the instruction
 //                            commitment so it is not readable by strangers
+
 const readline = require("readline");
-const { ReinClient } = require("./lib/account");
+const { openClient } = require("./lib/config");
 const { NAMES, explain } = require("../scripts/codes");
 
 const PROTOCOL_VERSION = "2024-11-05";
-const SERVER = { name: "rein", version: "0.3.0" };
-
-function config() {
-  const tokens = {};
-  for (const pair of (process.env.REIN_TOKENS || "").split(",")) {
-    const [symbol, address] = pair.split(":").map((s) => (s || "").trim());
-    if (symbol && address) tokens[symbol.toUpperCase()] = address;
-  }
-  return {
-    rpcUrl: process.env.REIN_RPC_URL,
-    account: process.env.REIN_ACCOUNT,
-    agentKey: process.env.REIN_AGENT_PRIVATE_KEY || null,
-    agentAddress: process.env.REIN_AGENT_ADDRESS || null,
-    intentSalt: process.env.REIN_INTENT_SALT || null,
-    tokens,
-  };
-}
+const SERVER = { name: "rein", version: "0.4.0" };
 
 // The descriptions below are the real interface. A model decides whether to
 // check before paying based on what these say, so they state the two facts that
 // change its behaviour: checking is free, and a refusal comes with a reason it
 // can act on. An agent that knows both will abstain and explain instead of
 // retrying blindly, which is the entire behaviour this account was built to buy.
+const PAYEE = {
+  type: "string",
+  description: 'The recipient: an address (0x...), or a payee name from rein_about such as "acme".',
+};
+
 const TOOLS = [
+  {
+    name: "rein_about",
+    description:
+      "Start here. Which Rein account you are operating, on which network, who you may pay, and the limits the account enforces on you. " +
+      "In the sandbox it also says what to try. Call this once before your first payment and whenever a person asks what you are allowed to do.",
+    inputSchema: { type: "object", properties: {} },
+  },
   {
     name: "rein_check_payment",
     description:
@@ -59,7 +58,7 @@ const TOOLS = [
     inputSchema: {
       type: "object",
       properties: {
-        payee: { type: "string", description: "The recipient's address (0x...)." },
+        payee: PAYEE,
         amount: { type: "string", description: 'Amount in normal units, e.g. "250" or "12.50". Not wei.' },
         token: { type: "string", description: 'Token symbol (e.g. "USDC") or address.' },
         because: {
@@ -79,7 +78,7 @@ const TOOLS = [
     inputSchema: {
       type: "object",
       properties: {
-        payee: { type: "string", description: "The recipient's address (0x...)." },
+        payee: PAYEE,
         amount: { type: "string", description: "Amount in normal units, not wei." },
         token: { type: "string", description: 'Token symbol (e.g. "USDC") or address.' },
         because: { type: "string", description: "The instruction behind this payment, in one sentence." },
@@ -112,29 +111,33 @@ const TOOLS = [
   },
 ];
 
-let client = null;
+// Opened on first use rather than at startup, so a misconfigured server still
+// answers initialize and tools/list and can explain what is wrong through the
+// tool result, where the person will actually see it. A failed open is not
+// cached: fixing the environment and calling again should work.
+let opening = null;
 function rein() {
-  if (client) return client;
-  const c = config();
-  if (!c.rpcUrl) throw new Error("REIN_RPC_URL is not set");
-  if (!c.account) throw new Error("REIN_ACCOUNT is not set");
-  if (!c.agentKey && !c.agentAddress) {
-    throw new Error("set REIN_AGENT_PRIVATE_KEY to spend, or REIN_AGENT_ADDRESS to run read-only");
+  if (!opening) {
+    opening = openClient().catch((err) => {
+      opening = null;
+      throw err;
+    });
   }
-  client = new ReinClient(c);
-  return client;
+  return opening;
 }
 
 async function callTool(name, args) {
   switch (name) {
+    case "rein_about":
+      return (await rein()).info;
     case "rein_check_payment":
-      return rein().check(args);
+      return (await rein()).client.check(args);
     case "rein_pay":
-      return rein().pay(args);
+      return (await rein()).client.pay(args);
     case "rein_budget":
-      return rein().budget();
+      return (await rein()).client.budget();
     case "rein_policy":
-      return rein().policy();
+      return (await rein()).client.policy();
     case "rein_explain_refusal": {
       const raw = String(args.code).trim();
       const code = /^\d+$/.test(raw) ? Number(raw) : NAMES.indexOf(raw.toUpperCase());
@@ -206,6 +209,16 @@ async function handle(msg) {
 }
 
 function main() {
+  // stdout is the protocol. Anything a dependency prints there would corrupt
+  // the stream, so ordinary logging goes to stderr for the life of the process.
+  console.log = console.error;
+  console.info = console.error;
+
+  // Start the sandbox chain while the client is still shaking hands, so the
+  // first tool call does not wait for four deployments. A real-account
+  // misconfiguration is left for the first tool call to report.
+  rein().catch(() => {});
+  let queue = Promise.resolve();
   const rl = readline.createInterface({ input: process.stdin, terminal: false });
   rl.on("line", (line) => {
     const text = line.trim();
@@ -216,11 +229,14 @@ function main() {
     } catch {
       return fail(null, -32700, "parse error");
     }
-    handle(msg).catch((err) => fail(msg.id ?? null, -32603, err.message));
+    // One message at a time, in the order they arrived. Two payments in flight
+    // from one key would race for the same nonce, and a budget read that
+    // overtakes the payment before it would report money that is already gone.
+    queue = queue.then(() => handle(msg)).catch((err) => fail(msg.id ?? null, -32603, err.message));
   });
-  rl.on("close", () => process.exit(0));
+  rl.on("close", () => queue.then(() => process.exit(0)));
 }
 
 if (require.main === module) main();
 
-module.exports = { TOOLS, handle, callTool };
+module.exports = { TOOLS, handle, callTool, rein };

@@ -16,6 +16,13 @@ const NAMES = [
   "PAYEE_NOT_ALLOWED",
   "INTENT_REQUIRED",
   "DELTA_APPROVAL_UNSUPPORTED",
+  // v3 only: refusals that come from what a call did, not what it said.
+  "UNMETERED_CALL",
+  "OUTFLOW_EXCEEDED",
+  "ALLOWANCE_STANDING",
+  "RETURNDATA_TOO_LARGE",
+  "AUTHORIZATION_NOT_APPROVED",
+  "GUARDIAN_COOLDOWN",
 ];
 
 const EXPLAIN = {
@@ -35,6 +42,12 @@ const EXPLAIN = {
   INTENT_REQUIRED: "the call carries no record of the instruction behind it",
   DELTA_APPROVAL_UNSUPPORTED:
     "increaseAllowance raises an allowance by a delta, which no ceiling can bound -- use approve() with an exact total",
+  UNMETERED_CALL: "a call the policy cannot read, with no metered token to bound what it moves",
+  OUTFLOW_EXCEEDED: "more value left the account than remains in this window, so the call was undone",
+  ALLOWANCE_STANDING: "the call left an allowance to a watched spender above the owner's ceiling",
+  RETURNDATA_TOO_LARGE: "the target returned more data than the account will copy",
+  AUTHORIZATION_NOT_APPROVED: "a signed transfer authorization the policy never approved",
+  GUARDIAN_COOLDOWN: "a guardian stopped this agent too recently to stop it again",
 };
 
 const name = (code) => NAMES[Number(code)] ?? `UNKNOWN(${code})`;

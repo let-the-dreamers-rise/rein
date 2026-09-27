@@ -10,9 +10,33 @@ instead of discovering the boundary by hitting it.
 
 ---
 
+## 0. The sandbox
+
+Every surface below takes `--sandbox` (or `REIN_SANDBOX=1`): a Rein account
+holding 50,000 test USDC, with a policy already written, on a private EVM
+chain inside the server's own process. Nothing to configure and no real money,
+so it is the way to try Rein before you have an account. The sandbox is only
+ever used when asked for; a server missing `REIN_RPC_URL` refuses to start
+rather than falling back to it.
+
+```bash
+npm run sandbox                                   # the MCP server, sandboxed
+npm run api:sandbox                               # the HTTP API, sandboxed; prints a key
+claude mcp add rein -- node /path/to/rein/mcp/rein-mcp.js --sandbox
+```
+
+The chain is `@ethereumjs/vm` behind the JSON-RPC methods ethers uses
+([`sandbox/chain.js`](sandbox/chain.js)); the account is `ReinAccountV3` with
+the bytecode in [`sandbox/contracts.json`](sandbox/contracts.json), which the
+test suite checks against a fresh compile. The one-file build that the Claude
+Code plugin and the Claude Desktop extension ship is in [`../plugin`](../plugin).
+Install steps for each client are in [QUICKSTART.md](../QUICKSTART.md).
+
+---
+
 ## 1. MCP server
 
-Dependency-free, stdio JSON-RPC, no SDK to install.
+Stdio JSON-RPC, no MCP SDK to install.
 
 ```bash
 claude mcp add rein -- node /path/to/rein/mcp/rein-mcp.js
@@ -31,6 +55,7 @@ Or in a project's `.mcp.json`:
         "REIN_ACCOUNT": "0x...",
         "REIN_AGENT_PRIVATE_KEY": "0x...",
         "REIN_TOKENS": "USDC:0x...",
+        "REIN_PAYEES": "acme:0x...,northwind:0x...",
         "REIN_INTENT_SALT": "something-only-the-owner-knows"
       }
     }
@@ -42,6 +67,7 @@ Or in a project's `.mcp.json`:
 
 | Tool | What it does |
 |---|---|
+| `rein_about` | Start here: which account, which network, who may be paid, the limits. |
 | `rein_check_payment` | May I pay this person? Free, no gas, no trace. Returns the reason and the budget left. |
 | `rein_pay` | Pay, recording the instruction behind it. Refuses rather than failing. |
 | `rein_budget` | What is still spendable this window, per token, plus calls left. |
@@ -49,7 +75,9 @@ Or in a project's `.mcp.json`:
 | `rein_explain_refusal` | Turn a refusal code into plain English. |
 
 They take payees, amounts and reasons. No ABI encoding, no wei: `"12.50"` means
-twelve dollars fifty.
+twelve dollars fifty. A payee is an address or a name from `REIN_PAYEES`
+(`"acme"`); the name only saves typing an address, and the payee allowlist on
+chain still decides who may be paid.
 
 `rein_pay` requires a `because` — the instruction the agent believes it is acting
 on. A hash of it is recorded on chain with the payment, so an owner reviewing an
