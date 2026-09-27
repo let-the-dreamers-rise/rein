@@ -20,7 +20,7 @@
 // Reads public chain data from a Blockscout explorer. Signs nothing.
 const fs = require("fs");
 const path = require("path");
-const { scan, scanHistory, exportPolicy, markdown, summary, CHAINS } = require("./index");
+const { scan, scanHistory, exportPolicy, exportFleet, markdown, summary, CHAINS } = require("./index");
 const { sampleHistory } = require("./sample");
 const { aggregate, publicMarkdown, privateCsv, loadReports, loadLabels } = require("./aggregate");
 
@@ -89,6 +89,7 @@ async function runBatch(opts, { scanOne = (a) => scan(a, opts), log = console.er
   if (!wallets.length) throw new Error(`no addresses found in ${opts.batch}`);
   fs.mkdirSync(opts.out, { recursive: true });
   const errors = [];
+  const compiled = [];
   for (const [i, address] of wallets.entries()) {
     if (i) await sleep(opts.pause);
     let report = null;
@@ -105,6 +106,7 @@ async function runBatch(opts, { scanOne = (a) => scan(a, opts), log = console.er
     }
     if (report) {
       writeReport(report, path.join(opts.out, address.toLowerCase()));
+      compiled.push(report);
       log(`[${i + 1}/${wallets.length}] ${address}: ${report.verdict}`);
     } else log(`[${i + 1}/${wallets.length}] ${address}: failed twice, skipped`);
   }
@@ -113,8 +115,10 @@ async function runBatch(opts, { scanOne = (a) => scan(a, opts), log = console.er
   const totals = aggregate(reports);
   fs.writeFileSync(path.join(opts.out, "summary.md"), publicMarkdown(totals));
   fs.writeFileSync(path.join(opts.out, "summary-private.csv"), privateCsv(reports, loadLabels(opts.batch)));
+  const fleet = exportFleet(compiled);
+  if (fleet) fs.writeFileSync(path.join(opts.out, "turnkey-fleet.json"), `${JSON.stringify(fleet, null, 2)}\n`);
   log(`scanned ${reports.length} of ${wallets.length}; wrote ${opts.out}/summary.md (public) and summary-private.csv (keep private)`);
-  return { wallets: wallets.length, scanned: reports.length, errors, totals };
+  return { wallets: wallets.length, scanned: reports.length, errors, totals, fleet };
 }
 
 async function main(argv) {

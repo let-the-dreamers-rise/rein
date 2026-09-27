@@ -1,287 +1,393 @@
 {
-  "version": "1.0",
-  "name": "Rein v2: compiled from the agent's own trail",
-  "chain_type": "ethereum",
-  "aggregations": [
+  "vendor": "privy",
+  "method": "eth_signTransaction",
+  "fill": [
+    "privy_wallet_id"
+  ],
+  "steps": [
     {
-      "id": "rein_usdt_window",
-      "method": "eth_sendTransaction",
-      "window": 3600,
-      "metric": {
-        "field_source": "ethereum_calldata",
-        "field": "transfer.value",
-        "abi": [
-          {
-            "type": "function",
-            "name": "transfer",
-            "stateMutability": "nonpayable",
-            "inputs": [
+      "step": "create the rolling 1-hour USDT window",
+      "returns": "aggregation_usdt",
+      "request": {
+        "method": "POST",
+        "url": "https://api.privy.io/v1/aggregations",
+        "auth": "Basic <app id>:<app secret>, plus the privy-app-id header",
+        "body": {
+          "name": "rein usdt window",
+          "method": "eth_signTransaction",
+          "metric": {
+            "field_source": "ethereum_calldata",
+            "field": "transfer.value",
+            "abi": [
               {
-                "name": "to",
-                "type": "address"
+                "type": "function",
+                "name": "transfer",
+                "stateMutability": "nonpayable",
+                "inputs": [
+                  {
+                    "name": "to",
+                    "type": "address"
+                  },
+                  {
+                    "name": "value",
+                    "type": "uint256"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "name": "",
+                    "type": "bool"
+                  }
+                ]
               },
               {
-                "name": "value",
-                "type": "uint256"
+                "type": "function",
+                "name": "approve",
+                "stateMutability": "nonpayable",
+                "inputs": [
+                  {
+                    "name": "spender",
+                    "type": "address"
+                  },
+                  {
+                    "name": "value",
+                    "type": "uint256"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "name": "",
+                    "type": "bool"
+                  }
+                ]
               }
             ],
-            "outputs": [
-              {
-                "name": "",
-                "type": "bool"
-              }
-            ]
+            "function": "sum"
           },
-          {
-            "type": "function",
-            "name": "approve",
-            "stateMutability": "nonpayable",
-            "inputs": [
-              {
-                "name": "spender",
-                "type": "address"
-              },
-              {
-                "name": "value",
-                "type": "uint256"
-              }
-            ],
-            "outputs": [
-              {
-                "name": "",
-                "type": "bool"
-              }
-            ]
-          }
-        ],
-        "function": "sum"
-      },
-      "conditions": [
-        {
-          "field_source": "ethereum_transaction",
-          "field": "to",
-          "operator": "eq",
-          "value": "0xdAC17F958D2ee523a2206206994597C13D831ec7"
-        }
-      ],
-      "note": "Privy assigns the aggregation id on creation; reference it below"
-    }
-  ],
-  "rules": [
-    {
-      "name": "Rein: USDT transfers to known payees within the rolling window",
-      "method": "eth_sendTransaction",
-      "action": "ALLOW",
-      "conditions": [
-        {
-          "field_source": "ethereum_transaction",
-          "field": "to",
-          "operator": "eq",
-          "value": "0xdAC17F958D2ee523a2206206994597C13D831ec7"
-        },
-        {
-          "field_source": "ethereum_calldata",
-          "field": "transfer.to",
-          "abi": [
+          "window": {
+            "type": "rolling",
+            "seconds": 3600
+          },
+          "conditions": [
             {
-              "type": "function",
-              "name": "transfer",
-              "stateMutability": "nonpayable",
-              "inputs": [
-                {
-                  "name": "to",
-                  "type": "address"
-                },
-                {
-                  "name": "value",
-                  "type": "uint256"
-                }
-              ],
-              "outputs": [
-                {
-                  "name": "",
-                  "type": "bool"
-                }
-              ]
-            },
-            {
-              "type": "function",
-              "name": "approve",
-              "stateMutability": "nonpayable",
-              "inputs": [
-                {
-                  "name": "spender",
-                  "type": "address"
-                },
-                {
-                  "name": "value",
-                  "type": "uint256"
-                }
-              ],
-              "outputs": [
-                {
-                  "name": "",
-                  "type": "bool"
-                }
-              ]
+              "field_source": "ethereum_transaction",
+              "field": "to",
+              "operator": "eq",
+              "value": "0xdAC17F958D2ee523a2206206994597C13D831ec7"
             }
-          ],
-          "operator": "in",
-          "value": [
-            "<Payroll>",
-            "<Router>",
-            "<Supplier A>",
-            "<Supplier B>",
-            "<Supplier C>"
           ]
-        },
-        {
-          "field_source": "reference",
-          "field": "aggregation.rein_usdt_window",
-          "operator": "lte",
-          "value": "0xee89ac80"
         }
-      ]
+      }
     },
     {
-      "name": "Rein: USDT approvals capped",
-      "method": "eth_sendTransaction",
-      "action": "ALLOW",
-      "conditions": [
-        {
-          "field_source": "ethereum_transaction",
-          "field": "to",
-          "operator": "eq",
-          "value": "0xdAC17F958D2ee523a2206206994597C13D831ec7"
-        },
-        {
-          "field_source": "ethereum_calldata",
-          "field": "approve.spender",
-          "abi": [
+      "step": "create the policy: 3 allow rule(s), nothing else allowed",
+      "returns": "policy",
+      "request": {
+        "method": "POST",
+        "url": "https://api.privy.io/v1/policies",
+        "auth": "Basic <app id>:<app secret>, plus the privy-app-id header",
+        "body": {
+          "version": "1.0",
+          "name": "Rein compiled policy",
+          "chain_type": "ethereum",
+          "rules": [
             {
-              "type": "function",
-              "name": "transfer",
-              "stateMutability": "nonpayable",
-              "inputs": [
+              "name": "USDT to known payees, per tx and per window",
+              "method": "eth_signTransaction",
+              "action": "ALLOW",
+              "conditions": [
                 {
-                  "name": "to",
-                  "type": "address"
+                  "field_source": "ethereum_transaction",
+                  "field": "chain_id",
+                  "operator": "eq",
+                  "value": "8453"
                 },
                 {
-                  "name": "value",
-                  "type": "uint256"
-                }
-              ],
-              "outputs": [
+                  "field_source": "ethereum_transaction",
+                  "field": "to",
+                  "operator": "eq",
+                  "value": "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+                },
                 {
-                  "name": "",
-                  "type": "bool"
+                  "field_source": "ethereum_calldata",
+                  "field": "transfer.to",
+                  "abi": [
+                    {
+                      "type": "function",
+                      "name": "transfer",
+                      "stateMutability": "nonpayable",
+                      "inputs": [
+                        {
+                          "name": "to",
+                          "type": "address"
+                        },
+                        {
+                          "name": "value",
+                          "type": "uint256"
+                        }
+                      ],
+                      "outputs": [
+                        {
+                          "name": "",
+                          "type": "bool"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "function",
+                      "name": "approve",
+                      "stateMutability": "nonpayable",
+                      "inputs": [
+                        {
+                          "name": "spender",
+                          "type": "address"
+                        },
+                        {
+                          "name": "value",
+                          "type": "uint256"
+                        }
+                      ],
+                      "outputs": [
+                        {
+                          "name": "",
+                          "type": "bool"
+                        }
+                      ]
+                    }
+                  ],
+                  "operator": "in",
+                  "value": [
+                    "<Payroll>",
+                    "<Router>",
+                    "<Supplier A>",
+                    "<Supplier B>",
+                    "<Supplier C>"
+                  ]
+                },
+                {
+                  "field_source": "ethereum_calldata",
+                  "field": "transfer.value",
+                  "abi": [
+                    {
+                      "type": "function",
+                      "name": "transfer",
+                      "stateMutability": "nonpayable",
+                      "inputs": [
+                        {
+                          "name": "to",
+                          "type": "address"
+                        },
+                        {
+                          "name": "value",
+                          "type": "uint256"
+                        }
+                      ],
+                      "outputs": [
+                        {
+                          "name": "",
+                          "type": "bool"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "function",
+                      "name": "approve",
+                      "stateMutability": "nonpayable",
+                      "inputs": [
+                        {
+                          "name": "spender",
+                          "type": "address"
+                        },
+                        {
+                          "name": "value",
+                          "type": "uint256"
+                        }
+                      ],
+                      "outputs": [
+                        {
+                          "name": "",
+                          "type": "bool"
+                        }
+                      ]
+                    }
+                  ],
+                  "operator": "lte",
+                  "value": "0xdf847580"
+                },
+                {
+                  "field_source": "reference",
+                  "field": "aggregation.{{aggregation_usdt.id}}",
+                  "operator": "lte",
+                  "value": "0xee89ac80"
                 }
               ]
             },
             {
-              "type": "function",
-              "name": "approve",
-              "stateMutability": "nonpayable",
-              "inputs": [
+              "name": "USDT approvals, capped",
+              "method": "eth_signTransaction",
+              "action": "ALLOW",
+              "conditions": [
                 {
-                  "name": "spender",
-                  "type": "address"
+                  "field_source": "ethereum_transaction",
+                  "field": "chain_id",
+                  "operator": "eq",
+                  "value": "8453"
                 },
                 {
-                  "name": "value",
-                  "type": "uint256"
-                }
-              ],
-              "outputs": [
+                  "field_source": "ethereum_transaction",
+                  "field": "to",
+                  "operator": "eq",
+                  "value": "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+                },
                 {
-                  "name": "",
-                  "type": "bool"
+                  "field_source": "ethereum_calldata",
+                  "field": "approve.spender",
+                  "abi": [
+                    {
+                      "type": "function",
+                      "name": "transfer",
+                      "stateMutability": "nonpayable",
+                      "inputs": [
+                        {
+                          "name": "to",
+                          "type": "address"
+                        },
+                        {
+                          "name": "value",
+                          "type": "uint256"
+                        }
+                      ],
+                      "outputs": [
+                        {
+                          "name": "",
+                          "type": "bool"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "function",
+                      "name": "approve",
+                      "stateMutability": "nonpayable",
+                      "inputs": [
+                        {
+                          "name": "spender",
+                          "type": "address"
+                        },
+                        {
+                          "name": "value",
+                          "type": "uint256"
+                        }
+                      ],
+                      "outputs": [
+                        {
+                          "name": "",
+                          "type": "bool"
+                        }
+                      ]
+                    }
+                  ],
+                  "operator": "in",
+                  "value": [
+                    "<Payroll>",
+                    "<Router>",
+                    "<Supplier A>",
+                    "<Supplier B>",
+                    "<Supplier C>"
+                  ]
+                },
+                {
+                  "field_source": "ethereum_calldata",
+                  "field": "approve.value",
+                  "abi": [
+                    {
+                      "type": "function",
+                      "name": "transfer",
+                      "stateMutability": "nonpayable",
+                      "inputs": [
+                        {
+                          "name": "to",
+                          "type": "address"
+                        },
+                        {
+                          "name": "value",
+                          "type": "uint256"
+                        }
+                      ],
+                      "outputs": [
+                        {
+                          "name": "",
+                          "type": "bool"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "function",
+                      "name": "approve",
+                      "stateMutability": "nonpayable",
+                      "inputs": [
+                        {
+                          "name": "spender",
+                          "type": "address"
+                        },
+                        {
+                          "name": "value",
+                          "type": "uint256"
+                        }
+                      ],
+                      "outputs": [
+                        {
+                          "name": "",
+                          "type": "bool"
+                        }
+                      ]
+                    }
+                  ],
+                  "operator": "lte",
+                  "value": "0x1dcd6500"
+                }
+              ]
+            },
+            {
+              "name": "calls on Router",
+              "method": "eth_signTransaction",
+              "action": "ALLOW",
+              "conditions": [
+                {
+                  "field_source": "ethereum_transaction",
+                  "field": "chain_id",
+                  "operator": "eq",
+                  "value": "8453"
+                },
+                {
+                  "field_source": "ethereum_transaction",
+                  "field": "to",
+                  "operator": "eq",
+                  "value": "<Router>"
+                },
+                {
+                  "field_source": "ethereum_transaction",
+                  "field": "value",
+                  "operator": "lte",
+                  "value": "0x0"
                 }
               ]
             }
-          ],
-          "operator": "in",
-          "value": [
-            "<Payroll>",
-            "<Router>",
-            "<Supplier A>",
-            "<Supplier B>",
-            "<Supplier C>"
           ]
-        },
-        {
-          "field_source": "ethereum_calldata",
-          "field": "approve.value",
-          "abi": [
-            {
-              "type": "function",
-              "name": "transfer",
-              "stateMutability": "nonpayable",
-              "inputs": [
-                {
-                  "name": "to",
-                  "type": "address"
-                },
-                {
-                  "name": "value",
-                  "type": "uint256"
-                }
-              ],
-              "outputs": [
-                {
-                  "name": "",
-                  "type": "bool"
-                }
-              ]
-            },
-            {
-              "type": "function",
-              "name": "approve",
-              "stateMutability": "nonpayable",
-              "inputs": [
-                {
-                  "name": "spender",
-                  "type": "address"
-                },
-                {
-                  "name": "value",
-                  "type": "uint256"
-                }
-              ],
-              "outputs": [
-                {
-                  "name": "",
-                  "type": "bool"
-                }
-              ]
-            }
-          ],
-          "operator": "lte",
-          "value": "0x1dcd6500"
         }
-      ]
+      }
     },
     {
-      "name": "Rein: calls on Router",
-      "method": "eth_sendTransaction",
-      "action": "ALLOW",
-      "conditions": [
-        {
-          "field_source": "ethereum_transaction",
-          "field": "to",
-          "operator": "eq",
-          "value": "<Router>"
-        },
-        {
-          "field_source": "ethereum_transaction",
-          "field": "value",
-          "operator": "lte",
-          "value": "0x0"
+      "step": "attach it to the agent's wallet (a wallet holds one policy, so this replaces any other)",
+      "request": {
+        "method": "PATCH",
+        "url": "https://api.privy.io/v1/wallets/{{privy_wallet_id}}",
+        "auth": "Basic <app id>:<app secret>, plus the privy-app-id header; a wallet with an owner also needs privy-authorization-signature",
+        "body": {
+          "policy_ids": [
+            "{{policy.id}}"
+          ]
         }
-      ],
-      "note": "functions allowed on chain: swapExact"
+      }
     }
-  ],
-  "default_action": "DENY"
+  ]
 }

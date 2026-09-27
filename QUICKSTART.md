@@ -139,8 +139,15 @@ From a terminal, with nothing installed but Node:
 npx github:let-the-dreamers-rise/rein scan 0xAgentWallet --out report
 ```
 
-The first run fetches Rein (about 30 seconds). To be told when the wallet does
-something its policy would not allow:
+The first run fetches Rein (about 30 seconds). If the wallet's key lives in
+Privy, put that policy on it (drop `--send` to see the requests first):
+
+```bash
+PRIVY_APP_ID=… PRIVY_APP_SECRET=… \
+npx github:let-the-dreamers-rise/rein apply report/export/privy.json --wallet <privy wallet id> --send
+```
+
+To be told when the wallet does something its policy would not allow:
 
 ```bash
 npx github:let-the-dreamers-rise/rein watch 0xAgentWallet --webhook "$SLACK_WEBHOOK_URL"

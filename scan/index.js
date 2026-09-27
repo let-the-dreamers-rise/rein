@@ -18,6 +18,7 @@ const { fetchHistory, toTrail, holdings, CHAINS, NO_CALLDATA } = require("./bloc
 const exporter = require("../v2/export");
 
 const DAY = 86400;
+const CHAIN_IDS = { Base: 8453, "Base Sepolia": 84532, Ethereum: 1 };
 const THIN_CALLS = 20;
 
 const round = (x, dp = 2) => (x == null ? null : Math.round(x * 10 ** dp) / 10 ** dp);
@@ -243,22 +244,23 @@ function withheldLines(withheld, name) {
   return out;
 }
 
-/// The policy in the JSON each wallet engine takes. Shapes as in v2/export.js,
-/// with the same caveat: schema-shaped, not yet run against the vendors' APIs.
-function exportPolicy(report) {
+/// The policy as the API requests that put it on each wallet engine, as in
+/// v2/export.js, with the same caveat: not yet run against the live APIs.
+function exportFacts(report) {
   if (!report.compiled) return null;
-  // A plain ETH send has no function to allowlist; the vendor engines bound
-  // it by value, which the native ceiling in the agent policy already says.
+  // A plain ETH send has no function to allowlist: the exporter writes it as
+  // a rule on the recipient and the native cap instead.
   const src = report.compiled.onchain;
+  const nativeTo = src.targets.filter((t) => (src.selectors[t] || []).includes(NO_CALLDATA));
   const selectors = Object.fromEntries(
     Object.entries(src.selectors)
       .map(([t, s]) => [t, s.filter((x) => x !== NO_CALLDATA)])
       .filter(([, s]) => s.length)
   );
-  const oc = { ...src, selectors, targets: src.targets.filter((t) => selectors[t]) };
-  // The vendors take native value in wei.
-  const wei = (eth) => ethers.parseEther(eth.toFixed(9)).toString();
-  oc.agent = { ...src.agent, maxNativePerCall: wei(src.agent.maxNativePerCall), maxNativePerWindow: wei(src.agent.maxNativePerWindow) };
+  const oc = { ...src, selectors, nativeTo, targets: src.targets.filter((t) => selectors[t]) };
+  // Native caps as exact decimal strings of ETH; the exporter converts to wei.
+  const eth = (x) => x.toFixed(9).replace(/\.?0+$/, "");
+  oc.agent = { ...src.agent, maxNativePerCall: eth(src.agent.maxNativePerCall), maxNativePerWindow: eth(src.agent.maxNativePerWindow) };
   const plain = (n) => (Number.isInteger(n) ? BigInt(n).toString() : n.toFixed(6).replace(/\.?0+$/, ""));
   const policy = {
     onchain: {
@@ -269,14 +271,40 @@ function exportPolicy(report) {
     },
   };
   const map = {};
-  for (const [address, t] of Object.entries(report.tokens)) map[address] = { address, decimals: t.decimals ?? 18 };
+  for (const [address, t] of Object.entries(report.tokens)) map[address] = { address, decimals: t.decimals ?? 18, symbol: t.symbol || null };
   for (const a of [...oc.targets, ...oc.payees]) map[a] ||= { address: a };
-  const f = exporter.facts(policy, map);
+  const f = exporter.facts({ ...policy, bounds: report.compiled.bounds, headroom: HEADROOM }, map);
+  const o = { chainId: CHAIN_IDS[report.chain], agent: report.address, smart: report.isContract };
+  return { f, o };
+}
+
+function exportPolicy(report) {
+  const x = exportFacts(report);
+  if (!x) return null;
+  const { f, o } = x;
   return {
-    turnkey: exporter.turnkey(f, "approvers.any(user, user.id == '<AGENT_USER_ID>')"),
-    coinbase: exporter.coinbase(f),
-    privy: exporter.privy(f),
+    turnkey: exporter.turnkey(f, "approvers.any(user, user.id == '{{turnkey_agent_user_id}}')", o),
+    coinbase: exporter.coinbase(f, o),
+    privy: exporter.privy(f, o),
   };
+}
+
+/// ONE Turnkey policy for a fleet: each agent's own limits, keyed by the
+/// address it signs from, joined into a single allow policy, so a platform
+/// with hundreds of agents stays under a small policy cap. Agents whose
+/// history compiled nothing are left out (and so stay denied).
+function exportFleet(reports) {
+  const agents = [];
+  let chainId;
+  for (const r of reports) {
+    const x = exportFacts(r);
+    if (!x) continue;
+    chainId ??= x.o.chainId;
+    if (x.o.chainId !== chainId) continue; // one chain per policy
+    agents.push({ address: r.address, facts: x.f });
+  }
+  if (!agents.length) return null;
+  return exporter.turnkey(null, "approvers.any(user, user.tags.contains('{{turnkey_agent_user_tag_id}}'))", { chainId }, agents);
 }
 
 async function scan(address, opts = {}) {
@@ -333,4 +361,4 @@ function namer(history, tokens) {
   return (a) => labelFor(a, labels, tokens);
 }
 
-module.exports = { scan, scanHistory, exportPolicy, markdown, summary, describe, namer, money, CHAINS };
+module.exports = { scan, scanHistory, exportPolicy, exportFleet, markdown, summary, describe, namer, money, CHAINS };
