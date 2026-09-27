@@ -114,8 +114,8 @@ compromised one gets the same refusal from `execute()`.
 
 The sandbox shows the contract refusing. The scanner shows what a policy would
 do for a wallet that exists today: paste any agent wallet on Base and get the
-policy its own history supports, what it could lose now, what it could lose
-under that policy, and how many of its recent calls the policy would have
+policy its own history supports, what it holds with no on-chain limit on
+where it can go, what it could lose under that policy, and how many of its recent calls the policy would have
 refused.
 
 In Claude, with any of the installs above:
@@ -134,7 +134,11 @@ git clone https://github.com/let-the-dreamers-rise/rein && cd rein && npm instal
 npm run scan -- 0xAgentWallet --out report
 ```
 
-It reads public data from Blockscout and signs nothing. More in
+It reads public data from Blockscout and signs nothing. A signing policy kept
+off chain (Privy, Turnkey, CDP) does not show up on chain, so the report says
+"no on-chain limit", not "can be drained". For many wallets at once,
+`npm run scan -- --batch wallets.csv --out reports` scans each one and ends
+with public totals and a private per-wallet CSV. More in
 [`scan/README.md`](scan/README.md).
 
 ## What the sandbox does not show

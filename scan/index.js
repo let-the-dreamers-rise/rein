@@ -106,14 +106,20 @@ function scanHistory(history, { robust = true, train = 0.8 } = {}) {
       : [],
   };
 
-  // -- today: whoever controls the key controls everything ----------------
+  // -- today: nothing on chain stands between the key and the balance -------
+  //
+  // Said as what the chain shows, not as what will happen. A wallet whose key
+  // lives in Privy, Turnkey or Coinbase CDP may have a signing policy in front
+  // of it that no explorer can see, and a report that claims otherwise is the
+  // report its first reader dismisses.
   report.exposureToday = {
-    to: "anyone",
+    to: "no on-chain limit",
     usd: priced.length ? round(sum(priced.map((h) => h.usd))) : null,
     unpriced: held.filter((h) => h.usd == null).map((h) => h.symbol || name(h.token)),
     sentence:
-      "With no policy in front of the key, one injected instruction the agent acts on can send every token it holds to any address, in one transaction each.",
+      "Nothing on chain limits where this wallet's holdings can go. If the agent acts on one injected instruction, every token it holds can be sent to any address, one transaction each, unless a signing policy kept off chain refuses it.",
   };
+  report.caveats.push("A signing policy held off chain (Privy, Turnkey, CDP) is invisible to this scan.");
 
   if (rows.length < 2) {
     report.verdict = "not enough history to compile a policy from";
@@ -193,7 +199,7 @@ function scanHistory(history, { robust = true, train = 0.8 } = {}) {
   report.caveats.push("Native coin leaving a contract wallet through internal transactions, and NFTs, are not read.");
 
   report.verdict =
-    `${report.exposureToday.usd != null ? `$${money(report.exposureToday.usd)}` : "Everything it holds"} can leave today to anyone. ` +
+    `${report.exposureToday.usd != null ? `$${money(report.exposureToday.usd)}` : "Everything it holds"} has no on-chain limit on where it can go. ` +
     `Under a policy compiled from its own history: ${report.exposureUnderPolicy.usdPerHour != null ? `$${money(report.exposureUnderPolicy.usdPerHour)} an hour` : "the ceilings below"}, ${report.exposureUnderPolicy.to}, ` +
     `and ${coverage.allowed} of its ${coverage.total} most recent calls would still have gone through.`;
 
@@ -283,7 +289,7 @@ function markdown(r) {
   L.push(`# Rein wallet report: ${r.address}${r.synthetic ? " (synthetic sample)" : ""}`, "");
   L.push(`${r.chain}${r.isContract ? ", contract wallet" : ""}. ${r.history.calls} calls and ${r.history.derivedOutflows} other outflows over ${r.history.days} day(s), ${r.history.from?.slice(0, 10) ?? "?"} to ${r.history.to?.slice(0, 10) ?? "?"}.`, "");
   L.push(`**${r.verdict}**`, "");
-  L.push("## Today, with no policy", "", r.exposureToday.sentence, "");
+  L.push("## Today: no on-chain limit", "", r.exposureToday.sentence, "");
   L.push("| holds | amount | USD |", "|---|---:|---:|");
   for (const h of r.holdings) L.push(`| ${h.symbol} | ${money(h.amount)} | ${h.usd != null ? money(round(h.usd)) : "?"} |`);
   if (!r.policy) {

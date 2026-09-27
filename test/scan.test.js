@@ -11,12 +11,14 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawnSync } = require("child_process");
+const { ethers } = require("ethers");
 const { compileTrail } = require("../scan/compile");
 const { evaluate } = require("../scan/evaluate");
 const { toTrail, fetchHistory } = require("../scan/blockscout");
 const { scanHistory, exportPolicy, markdown } = require("../scan");
 const { sampleHistory, sampleFetch, AGENT, PAYEES, USDC, ROUTER } = require("../scan/sample");
 const { callTool } = require("../mcp/rein-mcp");
+const { runBatch, readWallets } = require("../scan/cli");
 
 const ROOT = path.join(__dirname, "..");
 const V2_TRAIL = fs
@@ -170,12 +172,79 @@ describe("the wallet scanner", function () {
       expect(e.privy.default_action).to.equal("DENY");
     });
 
+    it("says what the chain shows, not what will happen, and names what it cannot see", () => {
+      expect(report.verdict).to.contain("has no on-chain limit on where it can go");
+      expect(report.exposureToday.to).to.equal("no on-chain limit");
+      expect(report.caveats).to.include("A signing policy held off chain (Privy, Turnkey, CDP) is invisible to this scan.");
+      expect(markdown(report)).to.contain("## Today: no on-chain limit").and.contain("invisible to this scan");
+    });
+
     it("declines to compile from a wallet with no history", () => {
       const empty = { ...sampleHistory(), transactions: [], tokenTransfers: [], synthetic: false };
       const r = scanHistory(empty);
       expect(r.policy).to.equal(undefined);
       expect(r.verdict).to.match(/not enough history/);
       expect(exportPolicy(r)).to.equal(null);
+    });
+  });
+
+  describe("a batch of wallets", () => {
+    // The sample's history, moved to another address and passed off as real.
+    const real = (address) => {
+      const moved = JSON.stringify(sampleHistory()).replace(new RegExp(AGENT.slice(2), "gi"), address.slice(2));
+      return scanHistory({ ...JSON.parse(moved), synthetic: false });
+    };
+    const [A, B, C] = ["a1", "b2", "c3"].map((x) => ethers.getAddress("0x" + x.repeat(20)));
+    let dir;
+    afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+    beforeEach(() => {
+      dir = fs.mkdtempSync(path.join(os.tmpdir(), "rein-batch-"));
+      fs.writeFileSync(
+        path.join(dir, "wallets.csv"),
+        `address,label,team,contact\n${A},ops agent,Team A,a@example.com\n\n${B},trader,Team B,\n${A},dup,,\nnot-an-address,x,,\n`
+      );
+    });
+
+    it("reads each address once, skipping the header and junk", () => {
+      expect(readWallets(path.join(dir, "wallets.csv"))).to.deep.equal([A, B]);
+    });
+
+    it("writes a folder per wallet, then public totals and a private CSV", async () => {
+      const out = path.join(dir, "reports");
+      const logs = [];
+      const res = await runBatch({ batch: path.join(dir, "wallets.csv"), out, pause: 0 }, { scanOne: async (a) => real(a), log: (l) => logs.push(l) });
+      expect(res).to.include({ wallets: 2, scanned: 2 });
+      for (const a of [A, B]) {
+        for (const f of ["report.md", "report.json", "trail.jsonl", "export/turnkey.json"]) expect(fs.existsSync(path.join(out, a.toLowerCase(), f)), f).to.equal(true);
+      }
+      const pub = fs.readFileSync(path.join(out, "summary.md"), "utf8");
+      expect(pub).to.contain("Wallets scanned: **2** real").and.contain("$58,000").and.not.contain(A.slice(2, 10).toLowerCase()).and.not.contain(A.slice(2, 10));
+      expect(res.totals.coverage).to.include({ allowed: 78, total: 80 });
+      const priv = fs.readFileSync(path.join(out, "summary-private.csv"), "utf8");
+      expect(priv).to.contain(`${A},ops agent,Team A,a@example.com`);
+      expect(JSON.parse(fs.readFileSync(path.join(out, "errors.json"), "utf8"))).to.deep.equal([]);
+    });
+
+    it("retries a failed wallet once, records one that fails twice, and carries on", async () => {
+      fs.appendFileSync(path.join(dir, "wallets.csv"), `${C},broken,,\n`);
+      const tries = {};
+      const scanOne = async (a) => {
+        tries[a] = (tries[a] || 0) + 1;
+        if (a === A && tries[a] === 1) throw new Error("429 too many requests");
+        if (a === C) throw new Error("explorer down");
+        return real(a);
+      };
+      const out = path.join(dir, "reports");
+      const res = await runBatch({ batch: path.join(dir, "wallets.csv"), out, pause: 0 }, { scanOne, log: () => {} });
+      expect(tries).to.deep.equal({ [A]: 2, [B]: 1, [C]: 2 });
+      expect(res.scanned).to.equal(2);
+      expect(res.errors).to.deep.equal([{ address: C, error: "explorer down" }]);
+    });
+
+    it("leaves the synthetic sample out of the totals", async () => {
+      const out = path.join(dir, "reports");
+      const res = await runBatch({ batch: path.join(dir, "wallets.csv"), out, pause: 0 }, { scanOne: async () => scanHistory(sampleHistory()), log: () => {} });
+      expect(res.totals).to.include({ real: 0, synthetic: 2 });
     });
   });
 

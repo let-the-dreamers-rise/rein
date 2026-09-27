@@ -103,7 +103,7 @@ const TOOLS = [
     name: "rein_scan_wallet",
     description:
       "Scan any agent wallet's public history and report the spending policy that history supports: who it pays, how much an hour, " +
-      "what one injected instruction could move from it today with no policy, what it could move under the compiled policy, and how many of its " +
+      "what it holds with no on-chain limit on where it can go, what it could move under the compiled policy, and how many of its " +
       "recent calls that policy would have refused. Read-only public chain data; it signs and spends nothing, and needs no Rein account. " +
       'Pass address "sample" for Rein\'s made-up example wallet, which needs no network.',
     inputSchema: {
