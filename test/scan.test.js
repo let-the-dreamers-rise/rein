@@ -163,15 +163,49 @@ describe("the wallet scanner", function () {
       expect(report.policy.onchain.payees).to.not.include(PAYEES.stranger.address);
     });
 
-    it("exports vendor policy JSON with no placeholders or rounding noise", () => {
+    it("exports each vendor's API requests with real addresses, no rounding noise, and only the owner's ids left to fill", () => {
       const e = exportPolicy(report);
-      const text = JSON.stringify(e);
-      // The one placeholder left is the approver id only the wallet's owner knows.
-      expect(text.replaceAll("<AGENT_USER_ID>", "")).to.not.match(/<[^>]+>/);
-      expect(text).to.not.contain("(none)");
-      expect(text).to.not.match(/e\+\d/);
-      expect(e.turnkey.some((p) => p.condition.includes(USDC.address))).to.equal(true);
-      expect(e.privy.default_action).to.equal("DENY");
+      const bodies = JSON.stringify(Object.values(e).flatMap((plan) => plan.steps.map((st) => st.request.body)));
+      expect(bodies).to.not.match(/<[^>]+>/);
+      expect(bodies).to.not.contain("(none)");
+      expect(bodies).to.not.match(/e\+\d/);
+      const holes = new Set([...bodies.matchAll(/\{\{([^}]+)\}\}/g)].map((m) => m[1]));
+      expect([...holes].sort()).to.deep.equal(["aggregation_usdc.id", "now_ms", "policy.id", "turnkey_agent_user_id", "turnkey_organization_id"]);
+      expect(e.turnkey.steps.at(-1).request.body.parameters.condition).to.contain(USDC.address.toLowerCase());
+      // The bounty is paid in plain ETH, so it gets a rule on recipient and value.
+      expect(e.turnkey.covers).to.include("ETH to known recipients");
+      expect(e.privy.steps.at(-2).request.body.rules.map((x) => x.name)).to.include("ETH to known recipients");
+    });
+
+    it("puts the policy on Privy in order, feeding each returned id to the next request", async () => {
+      const { apply } = require("../scan/apply");
+      const plan = exportPolicy(report).privy;
+      const sent = [];
+      const fetch = async (url, init) => {
+        sent.push({ url, method: init.method, headers: init.headers, body: JSON.parse(init.body) });
+        const id = url.endsWith("/aggregations") ? "agg_1" : url.endsWith("/policies") ? "pol_1" : "wal_1";
+        return { ok: true, status: 200, text: async () => JSON.stringify({ id }) };
+      };
+      const env = { PRIVY_APP_ID: "app", PRIVY_APP_SECRET: "secret" };
+      await expect(apply(plan, { send: true, env, fetch, log: () => {} })).to.be.rejectedWith(/missing --wallet-id/);
+      const ids = await apply(plan, { send: true, vars: { privy_wallet_id: "wal_1" }, env, fetch, log: () => {} });
+      expect(ids).to.deep.equal({ "aggregation_usdc.id": "agg_1", "policy.id": "pol_1" });
+      expect(sent.map((x) => `${x.method} ${x.url}`)).to.deep.equal([
+        "POST https://api.privy.io/v1/aggregations",
+        "POST https://api.privy.io/v1/policies",
+        "PATCH https://api.privy.io/v1/wallets/wal_1",
+      ]);
+      expect(sent[0].headers).to.include({ "privy-app-id": "app", authorization: `Basic ${Buffer.from("app:secret").toString("base64")}` });
+      expect(JSON.stringify(sent[1].body)).to.contain('"aggregation.agg_1"');
+      expect(sent[2].body).to.deep.equal({ policy_ids: ["pol_1"] });
+    });
+
+    it("prints, and refuses to send, the requests only a vendor SDK can sign", async () => {
+      const { apply } = require("../scan/apply");
+      const lines = [];
+      await apply(exportPolicy(report).turnkey, { log: (l) => lines.push(l) });
+      expect(lines.join("\n")).to.contain("create_policy").and.contain("X-Stamp");
+      await expect(apply(exportPolicy(report).coinbase, { send: true, log: () => {} })).to.be.rejectedWith(/signed by its SDK/);
     });
 
     it("says what the chain shows, not what will happen, and names what it cannot see", () => {
@@ -225,6 +259,13 @@ describe("the wallet scanner", function () {
       const priv = fs.readFileSync(path.join(out, "summary-private.csv"), "utf8");
       expect(priv).to.contain(`${A},ops agent,Team A,a@example.com`);
       expect(JSON.parse(fs.readFileSync(path.join(out, "errors.json"), "utf8"))).to.deep.equal([]);
+      // One Turnkey policy for the fleet, each agent's limits keyed by its own address.
+      const fleet = JSON.parse(fs.readFileSync(path.join(out, "turnkey-fleet.json"), "utf8"));
+      const create = fleet.steps.filter((st) => st.request.url.endsWith("/create_policy"));
+      expect(create).to.have.length(1);
+      const p = create[0].request.body.parameters;
+      expect(p.consensus).to.contain("user.tags.contains(");
+      for (const a of [A, B]) expect(p.condition).to.contain(`wallet_account.address == '${a.toLowerCase()}'`);
     });
 
     it("retries a failed wallet once, records one that fails twice, and carries on", async () => {

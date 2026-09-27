@@ -1,23 +1,53 @@
-[
-  {
-    "policyName": "Rein: approve on USDT",
-    "notes": "compiled from the agent's own trail by Rein v2; per-window totals are not expressible here",
-    "effect": "EFFECT_ALLOW",
-    "consensus": "approvers.any(user, user.id == '<AGENT_USER_ID>')",
-    "condition": "eth.tx.to == '0xdAC17F958D2ee523a2206206994597C13D831ec7' && eth.tx.data[0..4] == '0x095ea7b3' && eth.tx.contract_call_args['spender'] in ['<Payroll>', '<Router>', '<Supplier A>', '<Supplier B>', '<Supplier C>'] && eth.tx.contract_call_args['value'] <= 500000000 && eth.tx.value <= 0"
-  },
-  {
-    "policyName": "Rein: transfer on USDT",
-    "notes": "compiled from the agent's own trail by Rein v2; per-window totals are not expressible here",
-    "effect": "EFFECT_ALLOW",
-    "consensus": "approvers.any(user, user.id == '<AGENT_USER_ID>')",
-    "condition": "eth.tx.to == '0xdAC17F958D2ee523a2206206994597C13D831ec7' && eth.tx.data[0..4] == '0xa9059cbb' && eth.tx.contract_call_args['to'] in ['<Payroll>', '<Router>', '<Supplier A>', '<Supplier B>', '<Supplier C>'] && eth.tx.value <= 0"
-  },
-  {
-    "policyName": "Rein: swapExact on Router",
-    "notes": "compiled from the agent's own trail by Rein v2",
-    "effect": "EFFECT_ALLOW",
-    "consensus": "approvers.any(user, user.id == '<AGENT_USER_ID>')",
-    "condition": "eth.tx.to == '<Router>' && eth.tx.data[0..4] == 'swapExact' && eth.tx.value <= 0"
-  }
-]
+{
+  "vendor": "turnkey",
+  "covers": [
+    "approve on USDT",
+    "transfer on USDT",
+    "swapExact on Router"
+  ],
+  "fill": [
+    "turnkey_organization_id",
+    "now_ms"
+  ],
+  "steps": [
+    {
+      "step": "upload the ERC-20 interface for USDT, so the policy can read transfer and approve arguments",
+      "request": {
+        "method": "POST",
+        "url": "https://api.turnkey.com/public/v1/submit/create_smart_contract_interface",
+        "auth": "X-Stamp: the request body signed with your Turnkey API key (the Turnkey SDK or CLI does this)",
+        "body": {
+          "type": "ACTIVITY_TYPE_CREATE_SMART_CONTRACT_INTERFACE",
+          "timestampMs": "{{now_ms}}",
+          "organizationId": "{{turnkey_organization_id}}",
+          "parameters": {
+            "smartContractAddress": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+            "smartContractInterface": "[{\"type\":\"function\",\"name\":\"transfer\",\"stateMutability\":\"nonpayable\",\"inputs\":[{\"name\":\"to\",\"type\":\"address\"},{\"name\":\"value\",\"type\":\"uint256\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\"}]},{\"type\":\"function\",\"name\":\"approve\",\"stateMutability\":\"nonpayable\",\"inputs\":[{\"name\":\"spender\",\"type\":\"address\"},{\"name\":\"value\",\"type\":\"uint256\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\"}]},{\"type\":\"function\",\"name\":\"transferFrom\",\"stateMutability\":\"nonpayable\",\"inputs\":[{\"name\":\"from\",\"type\":\"address\"},{\"name\":\"to\",\"type\":\"address\"},{\"name\":\"value\",\"type\":\"uint256\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\"}]}]",
+            "type": "SMART_CONTRACT_INTERFACE_TYPE_ETHEREUM",
+            "label": "USDT (Rein)"
+          }
+        }
+      }
+    },
+    {
+      "step": "create one allow policy covering 3 kind(s) of call; anything it does not allow is denied",
+      "request": {
+        "method": "POST",
+        "url": "https://api.turnkey.com/public/v1/submit/create_policy",
+        "auth": "X-Stamp: the request body signed with your Turnkey API key (the Turnkey SDK or CLI does this)",
+        "body": {
+          "type": "ACTIVITY_TYPE_CREATE_POLICY_V3",
+          "timestampMs": "{{now_ms}}",
+          "organizationId": "{{turnkey_organization_id}}",
+          "parameters": {
+            "policyName": "Rein: compiled from the agent's history",
+            "effect": "EFFECT_ALLOW",
+            "notes": "Written by Rein from the agents' own transaction history. Turnkey holds per-transaction caps; hourly totals are not expressible here, so rein watch covers them.",
+            "consensus": "approvers.any(user, user.id == '{{turnkey_agent_user_id}}')",
+            "condition": "(eth.tx.chain_id == 8453 && eth.tx.to == '0xdac17f958d2ee523a2206206994597c13d831ec7' && eth.tx.data[0..10] == '0x095ea7b3' && eth.tx.value == 0 && eth.tx.contract_call_args['spender'] in ['<Payroll>', '<Router>', '<Supplier A>', '<Supplier B>', '<Supplier C>'] && eth.tx.contract_call_args['value'] <= 500000000) || (eth.tx.chain_id == 8453 && eth.tx.to == '0xdac17f958d2ee523a2206206994597c13d831ec7' && eth.tx.data[0..10] == '0xa9059cbb' && eth.tx.value == 0 && eth.tx.contract_call_args['to'] in ['<Payroll>', '<Router>', '<Supplier A>', '<Supplier B>', '<Supplier C>'] && eth.tx.contract_call_args['value'] <= 3750000000) || (eth.tx.chain_id == 8453 && eth.tx.to == '<Router>' && eth.tx.value <= 0)"
+          }
+        }
+      }
+    }
+  ]
+}

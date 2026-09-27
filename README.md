@@ -262,14 +262,18 @@ built, in the order it will be:
 - **A real trail.** The same command over a real agent's ledger, where the
   bounds will refuse honest exceptions and coverage below 100% is the honest
   number.
-- **Export, done in shape, not yet in anger.** `npm run v2:export` writes the
-  compiled bounds as Turnkey, Coinbase CDP and Privy policy JSON
-  ([`v2/out/export/`](v2/out/export/)), following each vendor's public policy
-  docs, with a table of what each engine can hold: all three take the
-  allowlists, payees and ceilings; only Privy can hold the rolling window;
-  none returns a refusal code to the agent or records the intent. The files
-  have not been submitted to the vendors' APIs yet, so the claim is
-  "schema-shaped", not "running".
+- **Export, checked against the vendors' specs, not yet run live.**
+  `npm run v2:export` writes the compiled bounds as the Turnkey, Coinbase CDP
+  and Privy API requests that create the policy and attach it
+  ([`v2/out/export/`](v2/out/export/)), with a table of what each engine can
+  hold: all three take the allowlists, payees and per-transaction caps; only
+  Privy can hold the rolling window; none returns a refusal code to the agent
+  or records the intent. Endpoints, field names and value formats were
+  checked against each vendor's SDK source and API spec in September 2026
+  (which caught a Turnkey selector slice that could never match, a Coinbase
+  description its API rejects, and a Privy window created in the wrong
+  place). `rein apply` sends the Privy requests; none has been run against a
+  live account yet, so the claim is "spec-checked", not "running".
 - **Habits in the contract.** Time of day and per-payee amounts are learned
   today and monitor-only; enforcing them needs new policy storage in
   `ReinAccount`.

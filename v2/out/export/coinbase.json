@@ -1,91 +1,274 @@
 {
-  "scope": "project",
-  "description": "Rein v2: compiled from the agent's own trail. Per-call ceilings stand in for per-window totals.",
-  "rules": [
+  "vendor": "coinbase",
+  "fill": [
+    "cdp_account_address"
+  ],
+  "limits": {
+    "rules": 6,
+    "maxRules": 100
+  },
+  "steps": [
     {
-      "action": "accept",
-      "operation": "signEvmTransaction",
-      "criteria": [
-        {
-          "type": "evmAddress",
-          "addresses": [
-            "0xdAC17F958D2ee523a2206206994597C13D831ec7"
-          ],
-          "operator": "in"
-        },
-        {
-          "type": "ethValue",
-          "ethValue": "0",
-          "operator": "<="
-        },
-        {
-          "type": "evmData",
-          "abi": "erc20",
-          "conditions": [
+      "step": "create an account policy with 6 accept rule(s); anything else is rejected",
+      "request": {
+        "method": "POST",
+        "url": "https://api.cdp.coinbase.com/platform/v2/policy-engine/policies",
+        "auth": "Authorization: Bearer <JWT signed with your CDP API key> (the CDP SDK does this)",
+        "body": {
+          "scope": "account",
+          "description": "Rein compiled policy",
+          "rules": [
             {
-              "function": "transfer",
-              "params": [
+              "action": "accept",
+              "operation": "signEvmTransaction",
+              "criteria": [
                 {
-                  "name": "to",
-                  "operator": "in",
-                  "values": [
-                    "<Payroll>",
-                    "<Router>",
-                    "<Supplier A>",
-                    "<Supplier B>",
-                    "<Supplier C>"
-                  ]
+                  "type": "evmAddress",
+                  "addresses": [
+                    "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+                  ],
+                  "operator": "in"
                 },
                 {
-                  "name": "value",
-                  "operator": "<=",
-                  "value": "4002000000"
+                  "type": "ethValue",
+                  "ethValue": "0",
+                  "operator": "<="
+                },
+                {
+                  "type": "evmData",
+                  "abi": "erc20",
+                  "conditions": [
+                    {
+                      "function": "approve",
+                      "params": [
+                        {
+                          "name": "spender",
+                          "operator": "in",
+                          "values": [
+                            "<Payroll>",
+                            "<Router>",
+                            "<Supplier A>",
+                            "<Supplier B>",
+                            "<Supplier C>"
+                          ]
+                        },
+                        {
+                          "name": "value",
+                          "operator": "<=",
+                          "value": "500000000"
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             },
             {
-              "function": "approve",
-              "params": [
+              "action": "accept",
+              "operation": "signEvmTransaction",
+              "criteria": [
                 {
-                  "name": "spender",
-                  "operator": "in",
-                  "values": [
-                    "<Payroll>",
-                    "<Router>",
-                    "<Supplier A>",
-                    "<Supplier B>",
-                    "<Supplier C>"
-                  ]
+                  "type": "evmAddress",
+                  "addresses": [
+                    "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+                  ],
+                  "operator": "in"
                 },
                 {
-                  "name": "value",
-                  "operator": "<=",
-                  "value": "500000000"
+                  "type": "ethValue",
+                  "ethValue": "0",
+                  "operator": "<="
+                },
+                {
+                  "type": "evmData",
+                  "abi": "erc20",
+                  "conditions": [
+                    {
+                      "function": "transfer",
+                      "params": [
+                        {
+                          "name": "to",
+                          "operator": "in",
+                          "values": [
+                            "<Payroll>",
+                            "<Router>",
+                            "<Supplier A>",
+                            "<Supplier B>",
+                            "<Supplier C>"
+                          ]
+                        },
+                        {
+                          "name": "value",
+                          "operator": "<=",
+                          "value": "3750000000"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "action": "accept",
+              "operation": "signEvmTransaction",
+              "criteria": [
+                {
+                  "type": "evmAddress",
+                  "addresses": [
+                    "<Router>"
+                  ],
+                  "operator": "in"
+                },
+                {
+                  "type": "ethValue",
+                  "ethValue": "0",
+                  "operator": "<="
+                }
+              ]
+            },
+            {
+              "action": "accept",
+              "operation": "sendEvmTransaction",
+              "criteria": [
+                {
+                  "type": "evmNetwork",
+                  "networks": [
+                    "base"
+                  ],
+                  "operator": "in"
+                },
+                {
+                  "type": "evmAddress",
+                  "addresses": [
+                    "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+                  ],
+                  "operator": "in"
+                },
+                {
+                  "type": "ethValue",
+                  "ethValue": "0",
+                  "operator": "<="
+                },
+                {
+                  "type": "evmData",
+                  "abi": "erc20",
+                  "conditions": [
+                    {
+                      "function": "approve",
+                      "params": [
+                        {
+                          "name": "spender",
+                          "operator": "in",
+                          "values": [
+                            "<Payroll>",
+                            "<Router>",
+                            "<Supplier A>",
+                            "<Supplier B>",
+                            "<Supplier C>"
+                          ]
+                        },
+                        {
+                          "name": "value",
+                          "operator": "<=",
+                          "value": "500000000"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "action": "accept",
+              "operation": "sendEvmTransaction",
+              "criteria": [
+                {
+                  "type": "evmNetwork",
+                  "networks": [
+                    "base"
+                  ],
+                  "operator": "in"
+                },
+                {
+                  "type": "evmAddress",
+                  "addresses": [
+                    "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+                  ],
+                  "operator": "in"
+                },
+                {
+                  "type": "ethValue",
+                  "ethValue": "0",
+                  "operator": "<="
+                },
+                {
+                  "type": "evmData",
+                  "abi": "erc20",
+                  "conditions": [
+                    {
+                      "function": "transfer",
+                      "params": [
+                        {
+                          "name": "to",
+                          "operator": "in",
+                          "values": [
+                            "<Payroll>",
+                            "<Router>",
+                            "<Supplier A>",
+                            "<Supplier B>",
+                            "<Supplier C>"
+                          ]
+                        },
+                        {
+                          "name": "value",
+                          "operator": "<=",
+                          "value": "3750000000"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "action": "accept",
+              "operation": "sendEvmTransaction",
+              "criteria": [
+                {
+                  "type": "evmNetwork",
+                  "networks": [
+                    "base"
+                  ],
+                  "operator": "in"
+                },
+                {
+                  "type": "evmAddress",
+                  "addresses": [
+                    "<Router>"
+                  ],
+                  "operator": "in"
+                },
+                {
+                  "type": "ethValue",
+                  "ethValue": "0",
+                  "operator": "<="
                 }
               ]
             }
           ]
         }
-      ]
+      }
     },
     {
-      "action": "accept",
-      "operation": "signEvmTransaction",
-      "criteria": [
-        {
-          "type": "evmAddress",
-          "addresses": [
-            "<Router>"
-          ],
-          "operator": "in"
-        },
-        {
-          "type": "ethValue",
-          "ethValue": "0",
-          "operator": "<="
+      "step": "attach it to the agent's account",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.cdp.coinbase.com/platform/v2/evm/accounts/{{cdp_account_address}}",
+        "auth": "Authorization: Bearer <JWT>; the SDK adds X-Wallet-Auth for account writes",
+        "body": {
+          "accountPolicy": "{{policy.id}}"
         }
-      ],
-      "note": "functions allowed on chain: swapExact; CDP criteria match the contract, not the selector, without an ABI"
+      }
     }
   ]
 }

@@ -45,6 +45,26 @@ history (Blockscout API v2, keyless)  ->  trail
 - **Amounts are compiled in millionths of a token**, so an ETH ceiling is not
   rounded up to a whole ETH.
 
+## Putting the policy on the wallet
+
+`--out report` writes `report/export/{privy,turnkey,coinbase}.json`: each is
+the ordered list of API requests that create the policy on that engine and
+attach it, with `{{placeholders}}` for your own ids.
+
+```bash
+rein apply report/export/privy.json --wallet <privy wallet id>          # prints the requests as curl
+PRIVY_APP_ID=… PRIVY_APP_SECRET=… \
+rein apply report/export/privy.json --wallet <privy wallet id> --send   # makes them
+```
+
+For Privy, `rein apply --send` creates the rolling spend window, then the
+policy that references it, then attaches the policy to the wallet (a Privy
+wallet holds one policy, so this replaces any other). Turnkey and Coinbase CDP
+sign every request with your API key, so for them `rein apply` prints the
+bodies to submit with their SDK or CLI. `--batch` also writes
+`turnkey-fleet.json`: one Turnkey policy holding every scanned agent's limits,
+keyed by the address it signs from, so a fleet fits under a small policy cap.
+
 ## Watching
 
 ```bash
@@ -91,8 +111,9 @@ reports --wallets wallets.csv --out summary` reruns the totals on their own.
   NFTs, are not read.
 - The coverage number is measured against the wallet's own recent calls. A
   first-time payee is refused on purpose: that is the policy asking a human.
-- Exported vendor JSON follows each vendor's public docs and has not been
-  submitted to their APIs.
+- The vendor exports are checked against each vendor's SDK source and API
+  spec, not yet against a live account. Privy's rules for smart wallets (user
+  operations) are the least certain part.
 
 ## The sample
 
