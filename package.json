@@ -4,6 +4,7 @@
   "private": true,
   "description": "A smart account an autonomous agent can operate but cannot drain -- on-chain policy, on-chain refusal codes, on-chain intent trail",
   "bin": {
+    "rein": "bin/rein.js",
     "rein-mcp": "plugin/server/rein-mcp.cjs",
     "rein-scan": "scan/cli.js"
   },
@@ -19,6 +20,7 @@
     "api": "node api/server.js",
     "api:sandbox": "node api/server.js --sandbox",
     "scan": "node scan/cli.js",
+    "watch": "node bin/rein.js watch",
     "v2:compare": "python v2/compare.py v2/out/trail.jsonl",
     "v2:robust": "python v2/compile.py v2/out/trail.jsonl --robust --out v2/out/robust",
     "test:compiler": "python -m unittest discover -s v2 -p \"test_*.py\"",

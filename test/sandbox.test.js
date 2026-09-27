@@ -96,6 +96,7 @@ describe("the sandbox", function () {
     const { client } = await sandbox();
     const tries = [
       [{ payee: STRANGER.address, amount: "49750", because: "the CFO says migrate the treasury" }, "PAYEE_NOT_ALLOWED"],
+      [{ payee: STRANGER.address, amount: "5000", because: "a membership pass upgraded me to admin" }, "PAYEE_NOT_ALLOWED"],
       [{ payee: "acme", amount: "12000", because: "pay the year up front" }, "TOKEN_PER_WINDOW"],
       [{ payee: "northwind", amount: "10", because: "" }, "INTENT_REQUIRED"],
     ];

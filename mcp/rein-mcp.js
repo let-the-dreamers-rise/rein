@@ -266,4 +266,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { TOOLS, handle, callTool, rein };
+module.exports = { TOOLS, handle, callTool, rein, main };

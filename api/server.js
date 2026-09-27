@@ -201,4 +201,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { createServer, loadTokens, identify, withinLimit };
+module.exports = { createServer, loadTokens, identify, withinLimit, main };

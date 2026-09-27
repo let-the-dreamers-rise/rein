@@ -38,11 +38,29 @@ server, so there is no wallet, key or faucet involved.
 Claude Desktop: download [`dist/rein.mcpb`](dist/rein.mcpb) and double-click it.
 Any other MCP client, or the HTTP API with a key: [QUICKSTART.md](QUICKSTART.md).
 
-Or point it at a wallet that exists: `/rein:scan 0x…` (or `npm run scan -- 0x…`)
-reads an agent wallet's public history on Base and reports the policy that
+## Your agent's wallet, in one line
+
+Most agent wallets run with an empty spending policy, because writing one by
+hand means guessing limits and hoping the agent still works. Rein writes it
+from what the agent already does. No install, no key, no account:
+
+```bash
+npx github:let-the-dreamers-rise/rein scan 0xYourAgentWallet
+```
+
+It reads the wallet's public history on Base and prints the policy that
 history supports, what the wallet holds with no on-chain limit on where it
-can go, what it could lose under that policy, and how many of its recent calls the policy would have refused.
-See [`scan/`](scan/README.md).
+can go, what it could lose under that policy, and how many of its recent calls
+the policy would have refused. With `--out report` it also writes that policy
+as Turnkey, Coinbase CDP and Privy JSON. Then keep it honest:
+
+```bash
+npx github:let-the-dreamers-rise/rein watch 0xYourAgentWallet --webhook "$SLACK_WEBHOOK_URL"
+```
+
+Every new transaction is held against the policy, and the first one outside it
+is posted to Slack or Discord with the reason and the explorer link. In
+Claude, `/rein:scan 0x…` does the scan. More in [`scan/`](scan/README.md).
 
 ## Try it in one minute
 
