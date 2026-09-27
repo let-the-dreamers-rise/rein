@@ -38,6 +38,12 @@ server, so there is no wallet, key or faucet involved.
 Claude Desktop: download [`dist/rein.mcpb`](dist/rein.mcpb) and double-click it.
 Any other MCP client, or the HTTP API with a key: [QUICKSTART.md](QUICKSTART.md).
 
+Or point it at a wallet that exists: `/rein:scan 0x…` (or `npm run scan -- 0x…`)
+reads an agent wallet's public history on Base and reports the policy that
+history supports, what the wallet could lose today, what it could lose under
+that policy, and how many of its recent calls the policy would have refused.
+See [`scan/`](scan/README.md).
+
 ## Try it in one minute
 
 ```bash
@@ -346,6 +352,7 @@ client/rein.js                  simulate-then-execute for your agent, refusals i
 mcp/rein-mcp.js                 the MCP server; --sandbox runs it against a funded account on an in-process chain
 mcp/sandbox/                    that chain (@ethereumjs/vm behind JSON-RPC) and the account it deploys
 api/server.js                   the same tools over HTTP with a bearer key
+scan/                           rein-scan: a wallet's public history in, compiled policy and drain exposure out
 plugin/                         the MCP server as one file, packaged as a Claude Code plugin
 dist/rein.mcpb                  the same file as a Claude Desktop extension
 client/monitor.js               the guardian's evaluator for learned habits, same bands as the compiler

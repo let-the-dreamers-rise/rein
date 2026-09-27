@@ -4,7 +4,8 @@
   "private": true,
   "description": "A smart account an autonomous agent can operate but cannot drain -- on-chain policy, on-chain refusal codes, on-chain intent trail",
   "bin": {
-    "rein-mcp": "plugin/server/rein-mcp.cjs"
+    "rein-mcp": "plugin/server/rein-mcp.cjs",
+    "rein-scan": "scan/cli.js"
   },
   "scripts": {
     "build": "hardhat compile",
@@ -17,6 +18,7 @@
     "sandbox": "node mcp/rein-mcp.js --sandbox",
     "api": "node api/server.js",
     "api:sandbox": "node api/server.js --sandbox",
+    "scan": "node scan/cli.js",
     "v2:compare": "python v2/compare.py v2/out/trail.jsonl",
     "v2:robust": "python v2/compile.py v2/out/trail.jsonl --robust --out v2/out/robust",
     "test:compiler": "python -m unittest discover -s v2 -p \"test_*.py\"",

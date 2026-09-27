@@ -23,6 +23,10 @@ jobs:
           python-version: "3.12"
       - run: npm ci
       - run: npm test
+        env:
+          # lets the scanner's compiler port be checked against compile.py --robust
+          NYAYA_PATH: ${{ github.workspace }}/nyaya
+          PYTHON: python3
       - name: the plugin and the Desktop bundle must be what mcp/ builds, byte for byte
         run: |
           node scripts/build-bundle.js

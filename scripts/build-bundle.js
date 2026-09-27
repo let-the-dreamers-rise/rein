@@ -81,6 +81,7 @@ function manifest() {
       { name: "rein_pay", description: "Pay, recording the instruction behind it. Refuses rather than failing." },
       { name: "rein_budget", description: "What is still spendable this window." },
       { name: "rein_policy", description: "The policy in force, in words." },
+      { name: "rein_scan_wallet", description: "Any agent wallet's public history in, its compiled policy and drain exposure out." },
       { name: "rein_explain_refusal", description: "A refusal code in plain English." },
     ],
     compatibility: { runtimes: { node: ">=18.0.0" } },

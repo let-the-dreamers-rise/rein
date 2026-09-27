@@ -100,6 +100,22 @@ const TOOLS = [
     inputSchema: { type: "object", properties: {} },
   },
   {
+    name: "rein_scan_wallet",
+    description:
+      "Scan any agent wallet's public history and report the spending policy that history supports: who it pays, how much an hour, " +
+      "what one injected instruction could move from it today with no policy, what it could move under the compiled policy, and how many of its " +
+      "recent calls that policy would have refused. Read-only public chain data; it signs and spends nothing, and needs no Rein account. " +
+      'Pass address "sample" for Rein\'s made-up example wallet, which needs no network.',
+    inputSchema: {
+      type: "object",
+      properties: {
+        address: { type: "string", description: 'The wallet address (0x...), or "sample".' },
+        chain: { type: "string", enum: ["base", "base-sepolia", "ethereum"], description: "Default base." },
+      },
+      required: ["address"],
+    },
+  },
+  {
     name: "rein_explain_refusal",
     description:
       "Turn a Rein refusal code or name into plain words. Useful when another tool surfaced a raw code and you want to explain it to a person.",
@@ -138,6 +154,17 @@ async function callTool(name, args) {
       return (await rein()).client.budget();
     case "rein_policy":
       return (await rein()).client.policy();
+    case "rein_scan_wallet": {
+      // Required here rather than at the top: the scanner is not needed to
+      // answer any other tool, and a server that only pays should not load it.
+      const { scan, scanHistory, markdown } = require("../scan");
+      const addr = String(args.address || "").trim();
+      const report =
+        addr.toLowerCase() === "sample"
+          ? scanHistory(require("../scan/sample").sampleHistory())
+          : await scan(addr, { chain: args.chain || "base" });
+      return markdown(report);
+    }
     case "rein_explain_refusal": {
       const raw = String(args.code).trim();
       const code = /^\d+$/.test(raw) ? Number(raw) : NAMES.indexOf(raw.toUpperCase());
@@ -190,7 +217,7 @@ async function handle(msg) {
       try {
         const result = await callTool(toolName, params?.arguments || {});
         return reply(id, {
-          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          content: [{ type: "text", text: typeof result === "string" ? result : JSON.stringify(result, null, 2) }],
           isError: false,
         });
       } catch (err) {
