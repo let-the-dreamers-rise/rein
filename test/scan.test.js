@@ -16,9 +16,11 @@ const { compileTrail } = require("../scan/compile");
 const { evaluate } = require("../scan/evaluate");
 const { toTrail, fetchHistory } = require("../scan/blockscout");
 const { scanHistory, exportPolicy, markdown } = require("../scan");
-const { sampleHistory, sampleFetch, AGENT, PAYEES, USDC, ROUTER } = require("../scan/sample");
+const { sampleHistory, sampleFetch, AGENT, PAYEES, USDC, ROUTER, START } = require("../scan/sample");
 const { callTool } = require("../mcp/rein-mcp");
 const { runBatch, readWallets } = require("../scan/cli");
+const { watch, policyFrom } = require("../scan/watch");
+const rein = require("../bin/rein");
 
 const ROOT = path.join(__dirname, "..");
 const V2_TRAIL = fs
@@ -248,7 +250,69 @@ describe("the wallet scanner", function () {
     });
   });
 
+  describe("watching a wallet", () => {
+    const DAY = 86400;
+    const policy = scanHistory(sampleHistory()).policy.onchain;
+
+    // The explorer shows the wallet up to day 50; each poll moves time on.
+    function growing(days) {
+      let now = START + days[0] * DAY;
+      const steps = days.slice(1);
+      return { fetch: sampleFetch({ asOf: () => now }), sleep: async () => { now = START + steps.shift() * DAY; } };
+    }
+
+    it("alerts on the one payment outside the policy, once, and posts it to the webhook", async () => {
+      const { fetch: explorer, sleep } = growing([50, 52, 53]);
+      const posted = [];
+      const fetch = async (url, init) => {
+        if (String(url).startsWith("https://hooks.example")) {
+          posted.push(JSON.parse(init.body));
+          return { ok: true, status: 200 };
+        }
+        return explorer(url, init);
+      };
+      const { alerts } = await watch(AGENT, { policy, fetch, sleep, polls: 2, pause: 0, webhook: "https://hooks.example/x", log: () => {} });
+      expect(alerts.map((a) => a.reason)).to.deep.equal(["PAYEE_NOT_ALLOWED"]);
+      expect(alerts[0].text).to.contain("pay 180 USDC").and.contain("base.blockscout.com/tx/0x");
+      expect(posted).to.have.length(1);
+      expect(posted[0].text).to.equal(alerts[0].text).and.equal(posted[0].content);
+    });
+
+    it("stays quiet while the wallet does what its policy was compiled from", async () => {
+      // The raw-maximum policy admits every call it was compiled from, so
+      // replaying days the compiler saw must raise nothing.
+      const naive = scanHistory(sampleHistory(), { robust: false }).policy.onchain;
+      const { fetch, sleep } = growing([10, 20, 30, 40]);
+      const { alerts } = await watch(AGENT, { policy: naive, fetch, sleep, polls: 3, pause: 0, log: () => {} });
+      expect(alerts).to.deep.equal([]);
+    });
+
+    it("compiles the policy itself when given none", async () => {
+      const { fetch, sleep } = growing([50, 52]);
+      const lines = [];
+      const { alerts, policy: compiled } = await watch(AGENT, { fetch, sleep, polls: 1, pause: 0, log: (l) => lines.push(l) });
+      expect(lines[0]).to.match(/^compiled a policy from \d+ calls/);
+      expect(compiled.payees).to.not.include(PAYEES.stranger.address);
+      expect(alerts.map((a) => a.reason)).to.include("PAYEE_NOT_ALLOWED");
+    });
+
+    it("reads the policy out of a saved report", () => {
+      const saved = JSON.parse(JSON.stringify(scanHistory(sampleHistory())));
+      expect(policyFrom(saved)).to.deep.equal(policy);
+      expect(() => policyFrom({ verdict: "x" })).to.throw(/no compiled policy/);
+    });
+  });
+
   describe("the ways in", () => {
+    it("answers `rein` with what it can do, and `rein 0x…` with a scan", async () => {
+      const run = spawnSync(process.execPath, [path.join(ROOT, "bin", "rein.js"), "help"], { encoding: "utf8" });
+      expect(run.status).to.equal(0);
+      expect(run.stderr).to.contain("rein scan").and.contain("rein watch").and.contain("rein mcp --sandbox");
+      const sample = spawnSync(process.execPath, [path.join(ROOT, "bin", "rein.js"), "scan", "--sample", "--json"], { encoding: "utf8" });
+      expect(JSON.parse(sample.stdout).coverage.total).to.equal(40);
+      expect(rein.parseWatch(["0xabc", "--every", "30", "--webhook", "https://h"])).to.include({ address: "0xabc", every: 30, webhook: "https://h" });
+    });
+
     it("runs from the command line on the sample, with nothing on the network", () => {
       const run = spawnSync(process.execPath, [path.join(ROOT, "scan", "cli.js"), "--sample", "--json"], { encoding: "utf8" });
       expect(run.status, run.stderr).to.equal(0);

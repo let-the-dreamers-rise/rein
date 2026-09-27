@@ -5,6 +5,9 @@ supports, what one injected instruction could move from it today, what it
 could move under that policy, and how much of its recent honest work the
 policy would have refused.
 
+With nothing installed: `npx github:let-the-dreamers-rise/rein scan 0xAgentWallet`.
+From a clone:
+
 ```bash
 node scan/cli.js 0xAgentWallet                 # Base
 node scan/cli.js 0xAgentWallet --chain ethereum
@@ -41,6 +44,22 @@ history (Blockscout API v2, keyless)  ->  trail
   call and its recipient does not become a payee.
 - **Amounts are compiled in millionths of a token**, so an ETH ceiling is not
   rounded up to a whole ETH.
+
+## Watching
+
+```bash
+rein watch 0xAgentWallet                          # compiles the policy, then polls every minute
+rein watch 0xAgentWallet --policy report/report.json --webhook "$SLACK_WEBHOOK_URL"
+```
+
+[`watch.js`](watch.js) reads the newest page of the wallet's history on every
+poll, replays everything seen so far through the policy with the contract's
+window arithmetic, and alerts on each new transaction the policy would have
+refused: to the terminal, and as `{"text", "content"}` to a Slack or Discord
+webhook (`--webhook` or `REIN_WEBHOOK`). Only transactions after the watch
+started are reported. It works for a wallet on any engine; nothing moves to
+Rein and nothing is signed. On a wallet that already runs Rein, the contract
+refuses these calls instead; the watch is for the wallets that do not yet.
 
 ## Many wallets
 

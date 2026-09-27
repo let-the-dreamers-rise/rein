@@ -132,9 +132,16 @@ function sampleHistory() {
 }
 
 /// A fetch() that serves the sample as a Blockscout instance would, pages and
-/// all, so the network half of the scanner is exercised too.
-function sampleFetch({ pageSize = 50 } = {}) {
-  const b = build();
+/// all, so the network half of the scanner is exercised too. `asOf`, if
+/// given, is called on every request and hides anything later than the time
+/// it returns, so a test can let the wallet's history grow between polls.
+function sampleFetch({ pageSize = 50, asOf = null } = {}) {
+  const all = build();
+  const visible = () => {
+    if (!asOf) return all;
+    const cutoff = new Date(asOf() * 1000).toISOString();
+    return { ...all, transactions: all.transactions.filter((t) => t.timestamp <= cutoff), tokenTransfers: all.tokenTransfers.filter((t) => t.timestamp <= cutoff) };
+  };
   const page = (items, url) => {
     const start = Number(url.searchParams.get("items_count") || 0);
     const slice = items.slice(start, start + pageSize);
@@ -143,6 +150,7 @@ function sampleFetch({ pageSize = 50 } = {}) {
   };
   return async (href) => {
     const url = new URL(href);
+    const b = visible();
     const path = url.pathname.replace(/^\/api\/v2/, "");
     const json = (body) => ({ ok: true, status: 200, json: async () => body });
     if (path === `/addresses/${AGENT}`) return json(b.info);
@@ -153,4 +161,4 @@ function sampleFetch({ pageSize = 50 } = {}) {
   };
 }
 
-module.exports = { sampleHistory, sampleFetch, AGENT, PAYEES, USDC, WETH, ROUTER, POOL };
+module.exports = { sampleHistory, sampleFetch, AGENT, PAYEES, USDC, WETH, ROUTER, POOL, START };

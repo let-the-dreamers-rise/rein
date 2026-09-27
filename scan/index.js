@@ -326,4 +326,11 @@ function summary(r) {
   return rest;
 }
 
-module.exports = { scan, scanHistory, exportPolicy, markdown, summary, CHAINS };
+/// A function naming an address the way the report does: token symbol,
+/// explorer label, or a shortened address.
+function namer(history, tokens) {
+  const labels = collectLabels(history);
+  return (a) => labelFor(a, labels, tokens);
+}
+
+module.exports = { scan, scanHistory, exportPolicy, markdown, summary, describe, namer, money, CHAINS };
