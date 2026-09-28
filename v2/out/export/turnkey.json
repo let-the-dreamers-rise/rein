@@ -15,7 +15,7 @@
       "request": {
         "method": "POST",
         "url": "https://api.turnkey.com/public/v1/submit/create_smart_contract_interface",
-        "auth": "X-Stamp: the request body signed with your Turnkey API key (the Turnkey SDK or CLI does this)",
+        "auth": "X-Stamp: the request body signed with your Turnkey API key (rein apply does this)",
         "body": {
           "type": "ACTIVITY_TYPE_CREATE_SMART_CONTRACT_INTERFACE",
           "timestampMs": "{{now_ms}}",
@@ -31,10 +31,11 @@
     },
     {
       "step": "create one allow policy covering 3 kind(s) of call; anything it does not allow is denied",
+      "returns": "policy",
       "request": {
         "method": "POST",
         "url": "https://api.turnkey.com/public/v1/submit/create_policy",
-        "auth": "X-Stamp: the request body signed with your Turnkey API key (the Turnkey SDK or CLI does this)",
+        "auth": "X-Stamp: the request body signed with your Turnkey API key (rein apply does this)",
         "body": {
           "type": "ACTIVITY_TYPE_CREATE_POLICY_V3",
           "timestampMs": "{{now_ms}}",

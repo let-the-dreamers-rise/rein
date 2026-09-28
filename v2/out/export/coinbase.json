@@ -10,10 +10,11 @@
   "steps": [
     {
       "step": "create an account policy with 6 accept rule(s); anything else is rejected",
+      "returns": "policy",
       "request": {
         "method": "POST",
         "url": "https://api.cdp.coinbase.com/platform/v2/policy-engine/policies",
-        "auth": "Authorization: Bearer <JWT signed with your CDP API key> (the CDP SDK does this)",
+        "auth": "Authorization: Bearer <JWT signed with your CDP API key> (rein apply does this)",
         "body": {
           "scope": "account",
           "description": "Rein compiled policy",
@@ -264,7 +265,7 @@
       "request": {
         "method": "PUT",
         "url": "https://api.cdp.coinbase.com/platform/v2/evm/accounts/{{cdp_account_address}}",
-        "auth": "Authorization: Bearer <JWT>; the SDK adds X-Wallet-Auth for account writes",
+        "auth": "Authorization: Bearer <JWT>, plus X-Wallet-Auth from your Wallet Secret (rein apply does this)",
         "body": {
           "accountPolicy": "{{policy.id}}"
         }

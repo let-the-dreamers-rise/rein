@@ -139,12 +139,19 @@ From a terminal, with nothing installed but Node:
 npx github:let-the-dreamers-rise/rein scan 0xAgentWallet --out report
 ```
 
-The first run fetches Rein (about 30 seconds). If the wallet's key lives in
-Privy, put that policy on it (drop `--send` to see the requests first):
+The first run fetches Rein (about 30 seconds). Then put that policy on the
+wallet engine the key lives in (drop `--send` to see the requests first):
 
 ```bash
+# Privy
 PRIVY_APP_ID=… PRIVY_APP_SECRET=… \
 npx github:let-the-dreamers-rise/rein apply report/export/privy.json --wallet <privy wallet id> --send
+# Turnkey
+TURNKEY_API_PUBLIC_KEY=… TURNKEY_API_PRIVATE_KEY=… \
+npx github:let-the-dreamers-rise/rein apply report/export/turnkey.json --organization <org id> --agent-user <user id> --send
+# Coinbase CDP
+CDP_API_KEY_ID=… CDP_API_KEY_SECRET=… CDP_WALLET_SECRET=… \
+npx github:let-the-dreamers-rise/rein apply report/export/coinbase.json --send
 ```
 
 To be told when the wallet does something its policy would not allow:
