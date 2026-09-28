@@ -13,6 +13,12 @@
 // through the policy with the contract's own window arithmetic, so a burst
 // that crosses the hourly ceiling is caught on the call that crosses it.
 // Only rows that arrived after the watch started are reported.
+//
+// With `since` (unix seconds) it runs once instead, for a schedule with no
+// server: the policy is compiled from history before `since`, every row is
+// replayed for window state, and each row at or after `since` that falls
+// outside the policy is reported. `rein watch 0x… --since 20m --fail-on-alert`
+// in a scheduled GitHub Action is a watcher nobody has to host.
 const { fetchHistory, toTrail, CHAINS } = require("./blockscout");
 const { evaluate } = require("./evaluate");
 const { scanHistory, describe, namer } = require("./index");
@@ -67,13 +73,33 @@ async function watch(address, opts = {}) {
   const chainName = c ? c.name : api || chain;
   const explorer = c ? c.explorer : api ? api.replace(/\/$/, "") : null;
 
-  const first = await fetchHistory(address, { chain, api, fetch: fetchImpl, maxPages: given ? 2 : opts.maxPages ?? 20, pause: opts.pause ?? 200 });
+  const since = opts.since ?? null;
+  const first = await fetchHistory(address, { chain, api, fetch: fetchImpl, maxPages: given && since == null ? 2 : opts.maxPages ?? 20, pause: opts.pause ?? 200 });
   let policy = given;
   if (!policy) {
-    const report = scanHistory(first);
+    const before = (t) => since == null || Date.parse(t.timestamp) / 1000 < since;
+    const report = scanHistory({ ...first, transactions: first.transactions.filter(before), tokenTransfers: first.tokenTransfers.filter(before) });
     if (!report.policy) throw new Error(`${address} has ${report.verdict}; nothing to watch against yet`);
     policy = report.policy.onchain;
     log(`compiled a policy from ${report.history.calls} calls over ${report.history.days} day(s): ${report.policy.sentences.join("; ")}.`);
+  }
+
+  const alerts = [];
+  const raise = async (result, name) => {
+    const text = alertText(result, { address: first.address, chainName, explorer, name });
+    alerts.push({ reason: result.reason, tx: result.row.tx, ts: result.row.ts, text });
+    log(`ALERT  ${text}`);
+    if (onAlert) onAlert(text, result);
+    if (webhook) await post(webhook, text, fetchImpl).catch((err) => log(`could not post the alert: ${err.message}`));
+  };
+
+  if (since != null) {
+    const trail = toTrail(first);
+    const name = namer(first, trail.tokens);
+    const results = evaluate(policy, trail.rows).results.filter((r) => r.row.ts >= since);
+    for (const result of results) if (result.reason !== "OK") await raise(result, name);
+    log(`checked ${results.length} row(s) since ${new Date(since * 1000).toISOString()}: ${alerts.length ? `${alerts.length} outside the policy` : "all inside the policy"}.`);
+    return { policy, alerts };
   }
 
   let rows = toTrail(first).rows;
@@ -84,7 +110,6 @@ async function watch(address, opts = {}) {
   const calls = new Set(rows.filter((r) => !r.derived).map((r) => r.tx));
   let tokens = toTrail(first).tokens;
   let history = first;
-  const alerts = [];
   log(`watching ${first.address} on ${chainName}${webhook ? ", alerts to the webhook" : ""}. ${rows.length} past row(s) loaded for window state.`);
 
   for (let n = 0; n < polls; n++) {
@@ -113,14 +138,20 @@ async function watch(address, opts = {}) {
         log(`ok  ${describe(result.row, name)}`);
         continue;
       }
-      const text = alertText(result, { address: first.address, chainName, explorer, name });
-      alerts.push({ reason: result.reason, tx: result.row.tx, text });
-      log(`ALERT  ${text}`);
-      if (onAlert) onAlert(text, result);
-      if (webhook) await post(webhook, text, fetchImpl).catch((err) => log(`could not post the alert: ${err.message}`));
+      await raise(result, name);
     }
   }
   return { policy, alerts };
 }
 
-module.exports = { watch, policyFrom, alertText };
+/// "20m", "6h", "2d", unix seconds, or an ISO date, as unix seconds.
+function parseSince(v, now = Date.now() / 1000) {
+  const m = /^(\d+(?:\.\d+)?)([smhd])$/.exec(String(v).trim());
+  if (m) return Math.floor(now - Number(m[1]) * { s: 1, m: 60, h: 3600, d: 86400 }[m[2]]);
+  if (/^\d{9,}$/.test(v)) return Number(v);
+  const t = Date.parse(v);
+  if (Number.isNaN(t)) throw new Error(`--since takes 20m, 6h, 2d, unix seconds or a date; got "${v}"`);
+  return Math.floor(t / 1000);
+}
+
+module.exports = { watch, policyFrom, alertText, parseSince };

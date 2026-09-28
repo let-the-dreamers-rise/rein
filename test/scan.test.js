@@ -19,7 +19,7 @@ const { scanHistory, exportPolicy, markdown } = require("../scan");
 const { sampleHistory, sampleFetch, AGENT, PAYEES, USDC, ROUTER, START } = require("../scan/sample");
 const { callTool } = require("../mcp/rein-mcp");
 const { runBatch, readWallets } = require("../scan/cli");
-const { watch, policyFrom } = require("../scan/watch");
+const { watch, policyFrom, parseSince } = require("../scan/watch");
 const rein = require("../bin/rein");
 
 const ROOT = path.join(__dirname, "..");
@@ -406,6 +406,28 @@ describe("the wallet scanner", function () {
       expect(alerts.map((a) => a.reason)).to.include("PAYEE_NOT_ALLOWED");
     });
 
+    it("checks once from a schedule: compiles from before --since and reports only what came after", async () => {
+      const fetch = sampleFetch({ asOf: () => START + 53 * DAY });
+      const lines = [];
+      const { alerts, policy: compiled } = await watch(AGENT, { since: START + 51 * DAY, fetch, pause: 0, log: (l) => lines.push(l) });
+      expect(compiled.payees).to.not.include(PAYEES.stranger.address);
+      expect(alerts.map((a) => a.reason)).to.deep.equal(["PAYEE_NOT_ALLOWED"]);
+      expect(alerts[0].text).to.contain("pay 180 USDC");
+      expect(lines.at(-1)).to.match(/^checked \d+ row\(s\) since 2026-08-21T00:00:00.000Z: 1 outside the policy\.$/);
+
+      const quiet = await watch(AGENT, { since: START + 52 * DAY, policy, fetch, pause: 0, log: () => {} });
+      expect(quiet.alerts).to.deep.equal([]);
+    });
+
+    it("reads --since as a duration, unix seconds or a date", () => {
+      const now = 1_800_000_000;
+      expect(parseSince("20m", now)).to.equal(now - 1200);
+      expect(parseSince("2d", now)).to.equal(now - 172800);
+      expect(parseSince("1790000000", now)).to.equal(1790000000);
+      expect(parseSince("2026-09-01T00:00:00Z", now)).to.equal(Date.UTC(2026, 8, 1) / 1000);
+      expect(() => parseSince("soon", now)).to.throw(/--since takes/);
+    });
+
     it("reads the policy out of a saved report", () => {
       const saved = JSON.parse(JSON.stringify(scanHistory(sampleHistory())));
       expect(policyFrom(saved)).to.deep.equal(policy);
@@ -421,6 +443,7 @@ describe("the wallet scanner", function () {
       const sample = spawnSync(process.execPath, [path.join(ROOT, "bin", "rein.js"), "scan", "--sample", "--json"], { encoding: "utf8" });
       expect(JSON.parse(sample.stdout).coverage.total).to.equal(40);
       expect(rein.parseWatch(["0xabc", "--every", "30", "--webhook", "https://h"])).to.include({ address: "0xabc", every: 30, webhook: "https://h" });
+      expect(rein.parseWatch(["0xabc", "--since", "20m", "--fail-on-alert"])).to.include({ since: "20m", failOnAlert: true });
     });
 
     it("runs from the command line on the sample, with nothing on the network", () => {

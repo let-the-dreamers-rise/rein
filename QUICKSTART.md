@@ -160,6 +160,10 @@ To be told when the wallet does something its policy would not allow:
 npx github:let-the-dreamers-rise/rein watch 0xAgentWallet --webhook "$SLACK_WEBHOOK_URL"
 ```
 
+Or, with nothing left running, copy [`scan/watch-action.yml`](scan/watch-action.yml)
+into `.github/workflows/` of any repository you own: it checks the wallet every
+15 minutes with `watch --since 30m --fail-on-alert` and posts to the webhook.
+
 It reads public data from Blockscout and signs nothing. A signing policy kept
 off chain (Privy, Turnkey, CDP) does not show up on chain, so the report says
 "no on-chain limit", not "can be drained". For many wallets at once,

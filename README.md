@@ -59,7 +59,9 @@ npx github:let-the-dreamers-rise/rein watch 0xYourAgentWallet --webhook "$SLACK_
 ```
 
 Every new transaction is held against the policy, and the first one outside it
-is posted to Slack or Discord with the reason and the explorer link. In
+is posted to Slack or Discord with the reason and the explorer link. To run
+it with no server, copy [`scan/watch-action.yml`](scan/watch-action.yml) into
+any repository's `.github/workflows/`. In
 Claude, `/rein:scan 0x…` does the scan. More in [`scan/`](scan/README.md).
 
 ## Try it in one minute

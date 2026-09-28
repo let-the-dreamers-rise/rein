@@ -23,7 +23,9 @@ const USAGE = `rein: a wallet your agent can operate and cannot drain.
   rein watch <address> [--chain ...] [--policy report.json] [--webhook URL] [--every seconds]
       Holds every new transaction the wallet sends against that policy and
       alerts (to the terminal, and to a Slack or Discord webhook) the moment one
-      falls outside it.
+      falls outside it. With --since 20m it checks once and exits instead (1 with
+      --fail-on-alert if anything fell outside), for cron or a scheduled
+      GitHub Action, so nothing has to stay running.
 
   rein apply <report>/export/<privy|turnkey|coinbase>.json [ids] [--send]
       Puts the scanned policy on the wallet engine it was written for, in
@@ -45,7 +47,7 @@ Nothing here signs or spends unless you give it an agent key.
 More: github.com/let-the-dreamers-rise/rein/blob/main/QUICKSTART.md`;
 
 function parseWatch(argv) {
-  const o = { address: null, chain: "base", api: null, policyFile: null, webhook: process.env.REIN_WEBHOOK || null, every: 60, once: false };
+  const o = { address: null, chain: "base", api: null, policyFile: null, webhook: process.env.REIN_WEBHOOK || null, every: 60, once: false, since: null, failOnAlert: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--chain") o.chain = argv[++i];
@@ -54,6 +56,8 @@ function parseWatch(argv) {
     else if (a === "--webhook") o.webhook = argv[++i];
     else if (a === "--every") o.every = Number(argv[++i]);
     else if (a === "--once") o.once = true;
+    else if (a === "--since") o.since = argv[++i];
+    else if (a === "--fail-on-alert") o.failOnAlert = true;
     else if (a === "-h" || a === "--help") o.help = true;
     else if (!a.startsWith("-")) o.address = a;
     else throw new Error(`unknown flag ${a}`);
@@ -90,13 +94,14 @@ async function main(argv) {
     case "watch": {
       const o = parseWatch(rest);
       if (o.help || !o.address) {
-        console.error("usage: rein watch <address> [--chain base] [--policy report.json] [--webhook URL] [--every seconds]");
+        console.error("usage: rein watch <address> [--chain base] [--policy report.json] [--webhook URL] [--every seconds | --since 20m] [--fail-on-alert]");
         return o.help ? 0 : 2;
       }
-      const { watch, policyFrom } = require("../scan/watch");
+      const { watch, policyFrom, parseSince } = require("../scan/watch");
       const policy = o.policyFile ? policyFrom(JSON.parse(require("fs").readFileSync(o.policyFile, "utf8"))) : undefined;
-      await watch(o.address, { chain: o.chain, api: o.api, policy, webhook: o.webhook, interval: o.every * 1000, polls: o.once ? 1 : Infinity });
-      return 0;
+      const since = o.since != null ? parseSince(o.since) : undefined;
+      const { alerts } = await watch(o.address, { chain: o.chain, api: o.api, policy, webhook: o.webhook, interval: o.every * 1000, polls: o.once ? 1 : Infinity, since });
+      return o.failOnAlert && alerts.length ? 1 : 0;
     }
     case "apply": {
       const o = parseApply(rest);
