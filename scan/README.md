@@ -100,6 +100,19 @@ started are reported. It works for a wallet on any engine; nothing moves to
 Rein and nothing is signed. On a wallet that already runs Rein, the contract
 refuses these calls instead; the watch is for the wallets that do not yet.
 
+Nothing has to stay running. `--since 30m` checks once and exits: it compiles
+the policy from the history before that window, replays everything for window
+state, and reports each transaction inside the window the policy would have
+refused. `--fail-on-alert` makes the exit code 1 when there was one, so cron
+or a CI schedule notices. [`watch-action.yml`](watch-action.yml) is a
+GitHub Action that runs it every 15 minutes: copy it into
+`.github/workflows/` of any repository, set `AGENT_WALLET` and, if you want
+Slack or Discord, `REIN_WEBHOOK`, and a failed run also emails you.
+
+```bash
+rein watch 0xAgentWallet --since 30m --fail-on-alert   # once, for cron
+```
+
 ## Many wallets
 
 `--batch wallets.csv --out reports` scans every address in a CSV with columns

@@ -1,0 +1,34 @@
+# A Rein watch that nobody has to host. Copy this file to
+# .github/workflows/rein-watch.yml in any repository you own, then in that
+# repository's Settings > Secrets and variables > Actions:
+#
+#   variable  AGENT_WALLET   the agent wallet's address
+#   secret    REIN_WEBHOOK   a Slack or Discord incoming webhook (optional)
+#
+# Every 15 minutes it checks the last 30 minutes of the wallet's transactions
+# against the policy its earlier history supports. Anything outside it is
+# posted to the webhook, and the run fails, so GitHub also emails you.
+# GitHub can start a scheduled run late, so the window overlaps the schedule:
+# an alert can repeat once rather than be missed. Nothing here signs or
+# spends; it reads public data from Blockscout.
+name: rein watch
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check the wallet against its policy
+        env:
+          AGENT_WALLET: ${{ vars.AGENT_WALLET }}
+          REIN_WEBHOOK: ${{ secrets.REIN_WEBHOOK }}
+        # Add --chain base-sepolia or --chain ethereum for another chain, and
+        # --policy report.json (committed from `rein scan --out`) to hold the
+        # wallet to a policy you reviewed rather than one compiled each run.
+        run: npx -y github:let-the-dreamers-rise/rein watch "$AGENT_WALLET" --since 30m --fail-on-alert
