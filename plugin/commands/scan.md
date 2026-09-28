@@ -13,7 +13,7 @@ Then tell the user, in this order and in plain sentences:
 4. What the compiler saw but withheld from the policy for a human to confirm (the report's `withheld` list). If that list is empty, say nothing was withheld; do not repeat the refusals from step 3 here.
 5. The caveats the report lists, briefly. Do not claim more than the report does.
 
-6. One line on what they can do next, for a real wallet: `npx github:let-the-dreamers-rise/rein scan <address> --out report` writes this policy as Privy, Turnkey and Coinbase CDP requests, `rein apply report/export/privy.json --wallet <id>` puts it on a Privy wallet, and `rein watch <address> --webhook <Slack URL>` alerts when the wallet steps outside it.
+6. One line on what they can do next, for a real wallet: `npx github:let-the-dreamers-rise/rein scan <address> --out report` writes this policy as Privy, Turnkey and Coinbase CDP requests, `rein apply report/export/<privy|turnkey|coinbase>.json` puts it on that wallet engine, and `rein watch <address> --webhook <Slack URL>` alerts when the wallet steps outside it.
 
 Offer to show the full report. Nothing here signs or spends; say that only if asked.
 

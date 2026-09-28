@@ -52,16 +52,35 @@ the ordered list of API requests that create the policy on that engine and
 attach it, with `{{placeholders}}` for your own ids.
 
 ```bash
-rein apply report/export/privy.json --wallet <privy wallet id>          # prints the requests as curl
+rein apply report/export/privy.json --wallet <privy wallet id>          # prints the requests
 PRIVY_APP_ID=… PRIVY_APP_SECRET=… \
 rein apply report/export/privy.json --wallet <privy wallet id> --send   # makes them
+
+TURNKEY_API_PUBLIC_KEY=… TURNKEY_API_PRIVATE_KEY=… \
+rein apply report/export/turnkey.json --organization <org id> --agent-user <agent's API user id> --send
+
+CDP_API_KEY_ID=… CDP_API_KEY_SECRET=… CDP_WALLET_SECRET=… \
+rein apply report/export/coinbase.json --send
 ```
 
-For Privy, `rein apply --send` creates the rolling spend window, then the
-policy that references it, then attaches the policy to the wallet (a Privy
-wallet holds one policy, so this replaces any other). Turnkey and Coinbase CDP
-sign every request with your API key, so for them `rein apply` prints the
-bodies to submit with their SDK or CLI. `--batch` also writes
+Without `--send` nothing leaves the machine. With it, each request goes in
+order and the id it creates feeds the next:
+
+- **Privy:** the rolling spend window, then the policy that references it,
+  then the attach to the wallet (a Privy wallet holds one policy, so this
+  replaces any other).
+- **Turnkey:** the ERC-20 interface upload, so the policy can read transfer
+  arguments, then the policy. Each request is stamped with your API key,
+  as Turnkey's SDK stamps it. If your organization needs more approvers,
+  `rein apply` stops and names the activity to approve.
+- **Coinbase CDP:** the account policy, then the attach to the scanned
+  account. Each request carries a JWT from your API key, and the attach a
+  second one from your Wallet Secret over the body, as the CDP SDK does.
+
+[`sign.js`](sign.js) holds the signing; `test/scan.test.js` checks it the way
+the vendors verify it, and it was checked against both SDKs' own output.
+Credentials are read from the environment and only ever leave as a signed
+request. `--batch` also writes
 `turnkey-fleet.json`: one Turnkey policy holding every scanned agent's limits,
 keyed by the address it signs from, so a fleet fits under a small policy cap.
 

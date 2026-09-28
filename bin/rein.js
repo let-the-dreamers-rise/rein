@@ -6,8 +6,8 @@
 //   rein scan 0x…            the policy a wallet's history supports, and what it
 //                            holds with no on-chain limit (scan/cli.js)
 //   rein watch 0x…           alert when that wallet steps outside the policy
-//   rein apply plan.json     put an exported policy on Privy (or print it for
-//                            Turnkey and Coinbase CDP)
+//   rein apply plan.json     put an exported policy on Privy, Turnkey or
+//                            Coinbase CDP
 //   rein mcp [--sandbox]     the MCP server, for Claude and any MCP client
 //   rein api [--sandbox]     the HTTP API
 //
@@ -25,12 +25,14 @@ const USAGE = `rein: a wallet your agent can operate and cannot drain.
       alerts (to the terminal, and to a Slack or Discord webhook) the moment one
       falls outside it.
 
-  rein apply <report>/export/privy.json --wallet <privy wallet id> [--send]
-      Puts the scanned policy on the wallet engine it was written for: creates
-      the spend window, the policy, and attaches it. Prints the requests
-      unless --send (Privy: PRIVY_APP_ID and PRIVY_APP_SECRET). For Turnkey
-      (--organization, --agent-user) and Coinbase CDP (--account) it prints
-      the bodies to submit with their SDK.
+  rein apply <report>/export/<privy|turnkey|coinbase>.json [ids] [--send]
+      Puts the scanned policy on the wallet engine it was written for, in
+      order, feeding each created id to the next request. Prints the requests
+      unless --send. Ids and credentials, by engine:
+        privy     --wallet <wallet id>        PRIVY_APP_ID, PRIVY_APP_SECRET
+        turnkey   --organization <org id>     TURNKEY_API_PUBLIC_KEY, TURNKEY_API_PRIVATE_KEY
+                  --agent-user <user id>      (or --agent-tag <tag id> for turnkey-fleet.json)
+        coinbase  (the scanned address)       CDP_API_KEY_ID, CDP_API_KEY_SECRET, CDP_WALLET_SECRET
 
   rein mcp --sandbox
       The MCP server with a funded sandbox account. Without --sandbox it reads
@@ -99,14 +101,14 @@ async function main(argv) {
     case "apply": {
       const o = parseApply(rest);
       if (o.help || !o.file) {
-        console.error("usage: rein apply <report>/export/privy.json --wallet <id> [--send]");
+        console.error("usage: rein apply <report>/export/<privy|turnkey|coinbase>.json [--wallet id | --organization id --agent-user id] [--send]");
         return o.help ? 0 : 2;
       }
       const plan = JSON.parse(require("fs").readFileSync(o.file, "utf8"));
       if (!plan.steps) throw new Error(`${o.file} is not an export from this version of rein scan; scan again`);
       const ids = await require("../scan/apply").apply(plan, { vars: o.vars, send: o.send });
       if (o.send) console.error(`\nThe policy is on the wallet. ${Object.entries(ids).map(([k, v]) => `${k.replace(/\.id$/, "")}: ${v}`).join(", ")}`);
-      else console.error(`\nNothing was sent. ${plan.vendor === "privy" ? "Add --send to make these requests." : "Submit these with the vendor's SDK or CLI."}`);
+      else console.error("\nNothing was sent. Add --send to make these requests.");
       return 0;
     }
     case "mcp":

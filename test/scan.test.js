@@ -187,7 +187,7 @@ describe("the wallet scanner", function () {
         return { ok: true, status: 200, text: async () => JSON.stringify({ id }) };
       };
       const env = { PRIVY_APP_ID: "app", PRIVY_APP_SECRET: "secret" };
-      await expect(apply(plan, { send: true, env, fetch, log: () => {} })).to.be.rejectedWith(/missing --wallet-id/);
+      await expect(apply(plan, { send: true, env, fetch, log: () => {} })).to.be.rejectedWith(/missing --wallet$/);
       const ids = await apply(plan, { send: true, vars: { privy_wallet_id: "wal_1" }, env, fetch, log: () => {} });
       expect(ids).to.deep.equal({ "aggregation_usdc.id": "agg_1", "policy.id": "pol_1" });
       expect(sent.map((x) => `${x.method} ${x.url}`)).to.deep.equal([
@@ -200,12 +200,81 @@ describe("the wallet scanner", function () {
       expect(sent[2].body).to.deep.equal({ policy_ids: ["pol_1"] });
     });
 
-    it("prints, and refuses to send, the requests only a vendor SDK can sign", async () => {
+    // A fake vendor API that records each request and answers with an id.
+    function vendorApi(answer) {
+      const sent = [];
+      const fetch = async (url, init) => {
+        const body = JSON.parse(init.body);
+        sent.push({ url, method: init.method, headers: init.headers, raw: init.body, body });
+        return { ok: true, status: 200, text: async () => JSON.stringify(answer(url, body)) };
+      };
+      return { sent, fetch };
+    }
+
+    it("stamps every Turnkey request with the API key, over the exact body sent", async () => {
       const { apply } = require("../scan/apply");
-      const lines = [];
-      await apply(exportPolicy(report).turnkey, { log: (l) => lines.push(l) });
-      expect(lines.join("\n")).to.contain("create_policy").and.contain("X-Stamp");
-      await expect(apply(exportPolicy(report).coinbase, { send: true, log: () => {} })).to.be.rejectedWith(/signed by its SDK/);
+      const crypto = require("crypto");
+      const ecdh = crypto.createECDH("prime256v1");
+      ecdh.generateKeys();
+      const env = { TURNKEY_API_PUBLIC_KEY: ecdh.getPublicKey("hex", "compressed"), TURNKEY_API_PRIVATE_KEY: ecdh.getPrivateKey("hex") };
+      const api = vendorApi((url) => ({ activity: { id: "act", status: "ACTIVITY_STATUS_COMPLETED", result: url.endsWith("/create_policy") ? { createPolicyResult: { policyId: "tk_pol" } } : { createSmartContractInterfaceResult: { smartContractInterfaceId: "sci" } } } }));
+      const plan = exportPolicy(report).turnkey;
+      await expect(apply(plan, { send: true, env, fetch: api.fetch, log: () => {} })).to.be.rejectedWith(/missing --organization, --agent-user/);
+      const ids = await apply(plan, { send: true, vars: { turnkey_organization_id: "org", turnkey_agent_user_id: "usr" }, env, fetch: api.fetch, log: () => {} });
+      expect(ids).to.deep.equal({ "policy.id": "tk_pol" });
+      expect(api.sent.map((x) => x.url.split("/").pop())).to.deep.equal(["create_smart_contract_interface", "create_policy"]);
+      const pub = crypto.createPublicKey({ key: Buffer.concat([Buffer.from("3039301306072a8648ce3d020106082a8648ce3d030107032200", "hex"), ecdh.getPublicKey(null, "compressed")]), format: "der", type: "spki" });
+      for (const x of api.sent) {
+        const stamp = JSON.parse(Buffer.from(x.headers["X-Stamp"], "base64url"));
+        expect(stamp.scheme).to.equal("SIGNATURE_SCHEME_TK_API_P256");
+        expect(crypto.verify("sha256", Buffer.from(x.raw), pub, Buffer.from(stamp.signature, "hex"))).to.equal(true);
+        expect(Number(x.body.timestampMs)).to.be.closeTo(Date.now(), 60_000);
+        expect(x.body.organizationId).to.equal("org");
+      }
+      expect(api.sent[1].body.parameters.consensus).to.contain("user.id == 'usr'");
+    });
+
+    it("stops, and says so, when Turnkey holds a policy for more approvers", async () => {
+      const { apply } = require("../scan/apply");
+      const crypto = require("crypto");
+      const ecdh = crypto.createECDH("prime256v1");
+      ecdh.generateKeys();
+      const env = { TURNKEY_API_PUBLIC_KEY: ecdh.getPublicKey("hex", "compressed"), TURNKEY_API_PRIVATE_KEY: ecdh.getPrivateKey("hex") };
+      const api = vendorApi(() => ({ activity: { id: "act_9", status: "ACTIVITY_STATUS_CONSENSUS_NEEDED" } }));
+      await expect(apply(exportPolicy(report).turnkey, { send: true, vars: { turnkey_organization_id: "o", turnkey_agent_user_id: "u" }, env, fetch: api.fetch, log: () => {} }))
+        .to.be.rejectedWith(/waiting for approval in turnkey .*act_9/);
+    });
+
+    it("signs CDP requests with the API key, and the attach with the Wallet Secret over the body", async () => {
+      const { apply } = require("../scan/apply");
+      const crypto = require("crypto");
+      const apiKey = crypto.generateKeyPairSync("ec", { namedCurve: "P-256" });
+      const wallet = crypto.generateKeyPairSync("ec", { namedCurve: "P-256" });
+      const env = {
+        CDP_API_KEY_ID: "key-1",
+        CDP_API_KEY_SECRET: apiKey.privateKey.export({ type: "pkcs8", format: "pem" }),
+        CDP_WALLET_SECRET: wallet.privateKey.export({ type: "pkcs8", format: "der" }).toString("base64"),
+      };
+      const api = vendorApi(() => ({ id: "cdp_pol" }));
+      const ids = await apply(exportPolicy(report).coinbase, { send: true, env, fetch: api.fetch, log: () => {} });
+      expect(ids).to.deep.equal({ "policy.id": "cdp_pol" });
+      const [create, attach] = api.sent;
+      expect(`${attach.method} ${attach.url}`).to.equal(`PUT https://api.cdp.coinbase.com/platform/v2/evm/accounts/${AGENT}`);
+      expect(attach.body).to.deep.equal({ accountPolicy: "cdp_pol" });
+      const claims = (jwt) => JSON.parse(Buffer.from(jwt.split(".")[1], "base64url"));
+      const verify = (jwt, key) => {
+        const [h, c, sig] = jwt.split(".");
+        return crypto.verify("sha256", Buffer.from(`${h}.${c}`), { key, dsaEncoding: "ieee-p1363" }, Buffer.from(sig, "base64url"));
+      };
+      const bearer = create.headers.authorization.replace(/^Bearer /, "");
+      expect(verify(bearer, apiKey.publicKey)).to.equal(true);
+      expect(claims(bearer)).to.include({ sub: "key-1", iss: "cdp" });
+      expect(claims(bearer).uris).to.deep.equal(["POST api.cdp.coinbase.com/platform/v2/policy-engine/policies"]);
+      expect(create.headers).to.not.have.property("X-Wallet-Auth");
+      const walletAuth = attach.headers["X-Wallet-Auth"];
+      expect(verify(walletAuth, wallet.publicKey)).to.equal(true);
+      expect(claims(walletAuth).reqHash).to.equal(crypto.createHash("sha256").update(JSON.stringify({ accountPolicy: "cdp_pol" })).digest("hex"));
+      await expect(apply(exportPolicy(report).coinbase, { send: true, env: { ...env, CDP_WALLET_SECRET: "" }, fetch: api.fetch, log: () => {} })).to.be.rejectedWith(/CDP_WALLET_SECRET/);
     });
 
     it("says what the chain shows, not what will happen, and names what it cannot see", () => {

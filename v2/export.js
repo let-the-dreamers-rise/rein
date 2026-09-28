@@ -121,7 +121,7 @@ const ERC20_ABI_JSON = JSON.stringify(ERC20_ABI.concat([
 ]));
 
 function turnkeyActivity(type, path, parameters) {
-  return { method: "POST", url: `https://api.turnkey.com/public/v1/submit/${path}`, auth: "X-Stamp: the request body signed with your Turnkey API key (the Turnkey SDK or CLI does this)",
+  return { method: "POST", url: `https://api.turnkey.com/public/v1/submit/${path}`, auth: "X-Stamp: the request body signed with your Turnkey API key (rein apply does this)",
     body: { type, timestampMs: fill("now_ms"), organizationId: fill("turnkey_organization_id"), parameters } };
 }
 
@@ -146,6 +146,7 @@ function turnkey(f, consensus, o = {}, agents = null) {
   }));
   steps.push({
     step: `create one allow policy covering ${branches.length} kind(s) of call${fleet.length > 1 ? ` for ${fleet.length} agents` : ""}; anything it does not allow is denied`,
+    returns: "policy",
     request: turnkeyActivity("ACTIVITY_TYPE_CREATE_POLICY_V3", "create_policy", {
       policyName: fleet.length > 1 ? `Rein: ${fleet.length} agents, compiled` : "Rein: compiled from the agent's history",
       effect: "EFFECT_ALLOW",
@@ -200,11 +201,11 @@ function coinbase(f, o = {}) {
     fill: t.agent ? [] : ["cdp_account_address"],
     limits: { rules: rules.length, maxRules: 100 },
     steps: [
-      { step: `create an account policy with ${rules.length} accept rule(s); anything else is rejected`,
-        request: { method: "POST", url: "https://api.cdp.coinbase.com/platform/v2/policy-engine/policies", auth: "Authorization: Bearer <JWT signed with your CDP API key> (the CDP SDK does this)",
+      { step: `create an account policy with ${rules.length} accept rule(s); anything else is rejected`, returns: "policy",
+        request: { method: "POST", url: "https://api.cdp.coinbase.com/platform/v2/policy-engine/policies", auth: "Authorization: Bearer <JWT signed with your CDP API key> (rein apply does this)",
           body: { scope: "account", description: "Rein compiled policy", rules } } },
       { step: "attach it to the agent's account",
-        request: { method: "PUT", url: `https://api.cdp.coinbase.com/platform/v2/evm/accounts/${agent}`, auth: "Authorization: Bearer <JWT>; the SDK adds X-Wallet-Auth for account writes",
+        request: { method: "PUT", url: `https://api.cdp.coinbase.com/platform/v2/evm/accounts/${agent}`, auth: "Authorization: Bearer <JWT>, plus X-Wallet-Auth from your Wallet Secret (rein apply does this)",
           body: { accountPolicy: fill("policy.id") } } },
     ],
   };

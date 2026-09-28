@@ -272,7 +272,8 @@ built, in the order it will be:
   checked against each vendor's SDK source and API spec in September 2026
   (which caught a Turnkey selector slice that could never match, a Coinbase
   description its API rejects, and a Privy window created in the wrong
-  place). `rein apply` sends the Privy requests; none has been run against a
+  place). `rein apply` signs and sends them for all three, checked against
+  each vendor's SDK; none has been run against a
   live account yet, so the claim is "spec-checked", not "running".
 - **Habits in the contract.** Time of day and per-payee amounts are learned
   today and monitor-only; enforcing them needs new policy storage in
