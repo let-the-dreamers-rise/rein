@@ -1,13 +1,53 @@
 {
-  "name": "rein",
+  "name": "rein-wallet",
   "version": "0.1.0",
-  "private": true,
-  "description": "A smart account an autonomous agent can operate but cannot drain -- on-chain policy, on-chain refusal codes, on-chain intent trail",
+  "description": "Scan an AI agent's wallet for the spending policy its own history supports, put that policy on Privy, Turnkey or Coinbase CDP, and watch for anything outside it. Plus a smart account an agent can operate and cannot drain.",
+  "mcpName": "io.github.let-the-dreamers-rise/rein",
+  "keywords": [
+    "ai-agent",
+    "agent-wallet",
+    "wallet-policy",
+    "mcp",
+    "mcp-server",
+    "privy",
+    "turnkey",
+    "coinbase-cdp",
+    "smart-account",
+    "base",
+    "ethereum",
+    "security"
+  ],
+  "homepage": "https://github.com/let-the-dreamers-rise/rein#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/let-the-dreamers-rise/rein.git"
+  },
+  "bugs": {
+    "url": "https://github.com/let-the-dreamers-rise/rein/issues"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
   "bin": {
+    "rein-wallet": "bin/rein.js",
     "rein": "bin/rein.js",
-    "rein-mcp": "plugin/server/rein-mcp.cjs",
+    "rein-mcp": "mcp/rein-mcp.js",
     "rein-scan": "scan/cli.js"
   },
+  "files": [
+    "bin/",
+    "scan/*.js",
+    "scan/README.md",
+    "scan/watch-action.yml",
+    "mcp/rein-mcp.js",
+    "mcp/lib/",
+    "mcp/sandbox/",
+    "api/server.js",
+    "scripts/codes.js",
+    "v2/export.js",
+    "QUICKSTART.md"
+  ],
   "scripts": {
     "build": "hardhat compile",
     "test": "hardhat test",

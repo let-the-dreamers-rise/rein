@@ -446,6 +446,37 @@ describe("the wallet scanner", function () {
       expect(rein.parseWatch(["0xabc", "--since", "20m", "--fail-on-alert"])).to.include({ since: "20m", failOnAlert: true });
     });
 
+    it("`rein try` runs the gauntlet in a terminal: one payment through, every drain refused by the contract", async () => {
+      const { runTry } = require("../bin/try");
+      const lines = [];
+      const { rows, left, stranger } = await runTry({ log: (l) => lines.push(l) });
+      expect(rows.map((r) => (r.last.paid ? "paid" : r.last.reason))).to.deep.equal([
+        "paid",
+        "PAYEE_NOT_ALLOWED",
+        "PAYEE_NOT_ALLOWED",
+        "TOKEN_PER_WINDOW",
+        "INTENT_REQUIRED",
+        "TOKEN_PER_WINDOW",
+      ]);
+      expect(left).to.equal(250);
+      expect(stranger).to.equal(0);
+      expect(lines.join("\n")).to.contain("What this does not stop");
+    });
+
+    it("publishes every file the commands load, and nothing it does not need", async () => {
+      const pkg = require("../package.json");
+      const esbuild = require("esbuild");
+      const entries = [...new Set(Object.values(pkg.bin))].map((b) => path.join(ROOT, b));
+      const { metafile } = await esbuild.build({ entryPoints: entries, bundle: true, platform: "node", write: false, outdir: os.tmpdir(), metafile: true, logLevel: "silent" });
+      const local = Object.keys(metafile.inputs).filter((f) => !f.includes("node_modules"));
+      const shipped = (f) => pkg.files.some((p) => (p.endsWith("/") ? f.startsWith(p) : p.includes("*") ? f.startsWith(p.split("*")[0]) && !f.slice(p.split("*")[0].length).includes("/") : f === p));
+      expect(local.filter((f) => !shipped(f))).to.deep.equal([]);
+      expect(pkg.private).to.equal(undefined);
+      expect(pkg.bin[pkg.name]).to.equal("bin/rein.js"); // so `npx rein-wallet` knows what to run
+      expect(require("../server.json").packages[0].identifier).to.equal(pkg.name);
+      expect(require("../server.json").name).to.equal(pkg.mcpName);
+    });
+
     it("runs from the command line on the sample, with nothing on the network", () => {
       const run = spawnSync(process.execPath, [path.join(ROOT, "scan", "cli.js"), "--sample", "--json"], { encoding: "utf8" });
       expect(run.status, run.stderr).to.equal(0);

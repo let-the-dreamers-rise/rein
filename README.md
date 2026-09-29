@@ -35,6 +35,12 @@ server, so there is no wallet, key or faucet involved.
 /rein:try                                              # one honest payment, five drain attempts
 ```
 
+No Claude? The same gauntlet runs in a terminal:
+
+```bash
+npx rein-wallet try
+```
+
 Claude Desktop: download [`dist/rein.mcpb`](dist/rein.mcpb) and double-click it.
 Any other MCP client, or the HTTP API with a key: [QUICKSTART.md](QUICKSTART.md).
 
@@ -42,10 +48,12 @@ Any other MCP client, or the HTTP API with a key: [QUICKSTART.md](QUICKSTART.md)
 
 Most agent wallets run with an empty spending policy, because writing one by
 hand means guessing limits and hoping the agent still works. Rein writes it
-from what the agent already does. No install, no key, no account:
+from what the agent already does. Paste the address at
+[rein-nine.vercel.app/scan](https://rein-nine.vercel.app/scan/), or, with no
+install, key or account:
 
 ```bash
-npx github:let-the-dreamers-rise/rein scan 0xYourAgentWallet
+npx rein-wallet scan 0xYourAgentWallet
 ```
 
 It reads the wallet's public history on Base and prints the policy that
@@ -55,7 +63,7 @@ the policy would have refused. With `--out report` it also writes that policy
 as Turnkey, Coinbase CDP and Privy JSON. Then keep it honest:
 
 ```bash
-npx github:let-the-dreamers-rise/rein watch 0xYourAgentWallet --webhook "$SLACK_WEBHOOK_URL"
+npx rein-wallet watch 0xYourAgentWallet --webhook "$SLACK_WEBHOOK_URL"
 ```
 
 Every new transaction is held against the policy, and the first one outside it

@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 // One command for everything Rein does from a terminal.
 //
-//   npx github:let-the-dreamers-rise/rein scan 0xAgentWallet
+//   npx rein-wallet scan 0xAgentWallet
 //
+//   rein try                 a hijacked agent against a real Rein account, in a
+//                            sandbox inside this process
 //   rein scan 0x…            the policy a wallet's history supports, and what it
 //                            holds with no on-chain limit (scan/cli.js)
 //   rein watch 0x…           alert when that wallet steps outside the policy
@@ -13,6 +15,10 @@
 //
 // Reading and watching sign nothing and need no key.
 const USAGE = `rein: a wallet your agent can operate and cannot drain.
+
+  rein try
+      A hijacked agent against a real Rein account on a private chain inside
+      this process: one honest payment, then five ways to drain it. No keys.
 
   rein scan <address> [--chain base|base-sepolia|ethereum] [--out dir]
       The spending policy the wallet's own history supports, what it holds with
@@ -89,6 +95,9 @@ function parseApply(argv) {
 async function main(argv) {
   const [cmd, ...rest] = argv;
   switch (cmd) {
+    case "try":
+      await require("./try").runTry();
+      return 0;
     case "scan":
       return require("../scan/cli").main(rest);
     case "watch": {

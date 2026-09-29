@@ -31,4 +31,4 @@ jobs:
         # Add --chain base-sepolia or --chain ethereum for another chain, and
         # --policy report.json (committed from `rein scan --out`) to hold the
         # wallet to a policy you reviewed rather than one compiled each run.
-        run: npx -y github:let-the-dreamers-rise/rein watch "$AGENT_WALLET" --since 30m --fail-on-alert
+        run: npx -y rein-wallet watch "$AGENT_WALLET" --since 30m --fail-on-alert
