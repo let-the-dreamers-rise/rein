@@ -7,7 +7,7 @@ A smart account an autonomous agent can operate and cannot drain.
 **Live on two public EVM testnets, same bytecode, same result.** Chain-agnostic
 Solidity (`evmVersion: paris`, no PUSH0), so the account deploys wherever the
 agent's money already is. Demo page with the on-chain run and a 90-second
-video: [rein-nine.vercel.app](https://rein-nine.vercel.app).
+video: [rein-nine.vercel.app/account](https://rein-nine.vercel.app/account/).
 
 | | Base Sepolia (84532) | Whitechain Sepolia (1874) | GOAT Testnet3 (48816) |
 |---|---|---|---|
@@ -395,7 +395,9 @@ scripts/explain-error.js        the three failures a first live run hits, in wor
 scripts/v2/demo.js              Rein v2 end to end: shadow, export, compile, apply, measure
 v2/compile.py                   the compiler: bounds plus nyaya-learned habits, readable policy out
 web/v2/index.html               the compiled policy with every rule switchable, at rein-nine.vercel.app/v2
-web/index.html                  the demo page and video, deployed at rein-nine.vercel.app
+web/index.html                  the product site: scan, apply, watch, pricing, at rein-nine.vercel.app
+web/scan/                       the wallet scanner in the browser, at rein-nine.vercel.app/scan
+web/account/index.html          the smart-account demo page and video, at rein-nine.vercel.app/account
 ```
 
 ## Running it
