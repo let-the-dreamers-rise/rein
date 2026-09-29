@@ -466,7 +466,7 @@ describe("the wallet scanner", function () {
     it("publishes every file the commands load, and nothing it does not need", async () => {
       const pkg = require("../package.json");
       const esbuild = require("esbuild");
-      const entries = [...new Set(Object.values(pkg.bin))].map((b) => path.join(ROOT, b));
+      const entries = [...new Set([...Object.values(pkg.bin), pkg.main])].map((b) => path.join(ROOT, b));
       const { metafile } = await esbuild.build({ entryPoints: entries, bundle: true, platform: "node", write: false, outdir: os.tmpdir(), metafile: true, logLevel: "silent" });
       const local = Object.keys(metafile.inputs).filter((f) => !f.includes("node_modules"));
       const shipped = (f) => pkg.files.some((p) => (p.endsWith("/") ? f.startsWith(p) : p.includes("*") ? f.startsWith(p.split("*")[0]) && !f.slice(p.split("*")[0].length).includes("/") : f === p));

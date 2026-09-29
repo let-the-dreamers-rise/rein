@@ -52,7 +52,7 @@ const TOOLS = [
   {
     name: "rein_check_payment",
     description:
-      "Ask whether a payment would be allowed, WITHOUT making it. This is free: it is an on-chain view call, it costs no gas, it cannot fail, and it leaves no trace. " +
+      "Ask whether a payment would be allowed, WITHOUT making it. This is free: a read-only check that costs no gas and moves nothing. " +
       "Always call this before rein_pay. If it refuses, you get the exact reason (for example PAYEE_NOT_ALLOWED or TOKEN_PER_WINDOW) and how much budget is left, " +
       "so you can pay a smaller amount, wait for the window to roll, or tell the person why you are not going to do it. Do not retry a refused payment unchanged, and do not look for another route around it: the refusal is the owner's decision, not an obstacle.",
     inputSchema: {

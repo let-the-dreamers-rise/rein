@@ -18,6 +18,26 @@ The policy the agent runs under:
 | must say why | every payment carries a hash of the instruction behind it |
 | account holds | 50,000 USDC |
 
+## Guarding a real wallet instead
+
+```bash
+npx rein-wallet guard 0xYourAgentWallet            # add --chain base-sepolia or ethereum
+```
+
+It learns the wallet's payees and hourly limits from its own history, prints
+what they would have allowed over the last 30 days, and saves them to
+`~/.rein/guards/`. Then, before the agent signs:
+
+```js
+const verdict = require("rein-wallet").check(tx);  // tx, or an x402 { payTo, asset, amount }
+```
+
+For an MCP agent, `npx rein-wallet mcp --guard 0xYourAgentWallet` answers
+`rein_check_payment` from those limits; the agent's own wallet still signs. Try
+it with nothing real: `npx rein-wallet guard --sample`.
+
+The rest of this page is the sandbox.
+
 ## Pick one
 
 ### A terminal, nothing else

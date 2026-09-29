@@ -3,6 +3,8 @@
 //
 //   npx rein-wallet scan 0xAgentWallet
 //
+//   rein guard 0x…           learn the wallet's limits from its history and
+//                            hold every payment to them with rein.check(tx)
 //   rein try                 a hijacked agent against a real Rein account, in a
 //                            sandbox inside this process
 //   rein scan 0x…            the policy a wallet's history supports, and what it
@@ -15,6 +17,14 @@
 //
 // Reading and watching sign nothing and need no key.
 const USAGE = `rein: a wallet your agent can operate and cannot drain.
+
+  rein guard <address> [--chain base|base-sepolia|ethereum] [--webhook URL]
+      Learns the wallet's payees and hourly limits from its own history, shows
+      what they would have allowed over the last 30 days, and saves them. Then
+      one line before your agent signs holds every payment to them:
+        const verdict = require("rein-wallet").check(tx)   // { allow, reason }
+      Run it again to keep the limits current: they tighten on their own, and
+      anything wider waits for rein guard <address> --approve.
 
   rein try
       A hijacked agent against a real Rein account on a private chain inside
@@ -95,6 +105,8 @@ function parseApply(argv) {
 async function main(argv) {
   const [cmd, ...rest] = argv;
   switch (cmd) {
+    case "guard":
+      return require("../scan/guard").main(rest);
     case "try":
       await require("./try").runTry();
       return 0;

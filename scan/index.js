@@ -79,8 +79,8 @@ function unscale(compiled, scale) {
 
 /// Everything below works on a history already fetched, so it is the same
 /// code whether the history came from the network or from a saved file.
-function scanHistory(history, { robust = true, train = 0.8 } = {}) {
-  const { rows, tokens, unknownDecimals } = toTrail(history);
+function scanHistory(history, { robust = true, train = 0.8, trail, expiryDays } = {}) {
+  const { rows, tokens, unknownDecimals } = toTrail(history, trail);
   const labels = collectLabels(history);
   const name = (a) => labelFor(a, labels, tokens);
   const held = holdings(history);
@@ -135,7 +135,7 @@ function scanHistory(history, { robust = true, train = 0.8 } = {}) {
   // token, and the results come back in whole tokens.
   const scale = (token) => (token ? 10 ** Math.min(6, token === NATIVE ? 18 : tokens[token]?.decimals ?? 18) : 1);
   const scaled = rows.map((r) => ({ ...r, amount: Number(r.amount || 0) * scale(r.token), orig: r }));
-  const compiled = compileTrail(scaled, { robust, train });
+  const compiled = compileTrail(scaled, { robust, train, expiryDays });
   const coverage = evaluate(nativeToAgent(compiled.onchain), compiled.heldout);
   for (const x of coverage.refused) x.row = x.row.orig;
   unscale(compiled, scale);

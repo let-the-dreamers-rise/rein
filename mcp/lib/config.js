@@ -38,8 +38,18 @@ function fromEnv(env = process.env) {
   };
 }
 
+/// `--guard 0x…`, REIN_GUARD=0x… or REIN_GUARD_FILE=path: a wallet guarded
+/// with `rein guard`, checked against its saved limits (scan/guard.js).
+function wantsGuard(argv = process.argv, env = process.env) {
+  const i = argv.indexOf("--guard");
+  if (i >= 0) return argv[i + 1] && !argv[i + 1].startsWith("-") ? argv[i + 1] : env.REIN_GUARD_FILE || env.REIN_GUARD || "";
+  return env.REIN_GUARD_FILE || env.REIN_GUARD || null;
+}
+
 /// Resolves to { client, info, sandbox }. `info` is what rein_about returns.
 async function openClient({ argv = process.argv, env = process.env } = {}) {
+  const guarded = wantsGuard(argv, env);
+  if (guarded != null) return require("../../scan/guard").guardClient(env.REIN_GUARD_FILE || guarded || null, env);
   if (wantsSandbox(argv, env)) {
     // Required lazily: the in-process EVM is only loaded by people using it.
     const { startSandbox } = require("../sandbox");
@@ -68,4 +78,4 @@ async function openClient({ argv = process.argv, env = process.env } = {}) {
   };
 }
 
-module.exports = { openClient, wantsSandbox, fromEnv, pairs };
+module.exports = { wantsGuard, openClient, wantsSandbox, fromEnv, pairs };

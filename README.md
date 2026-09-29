@@ -23,6 +23,38 @@ completely taken over -- wrong instructions, poisoned tool output, rewritten
 system prompt -- still cannot produce a transaction the account is unwilling to
 make.
 
+## Guard your agent's wallet in one step
+
+```bash
+npx rein-wallet guard 0xYourAgentWallet
+```
+
+It reads the wallet's public history, learns who the agent pays and how much
+it spends in its busiest hour, shows what those limits would have allowed over
+the last 30 days, and saves them on your machine. Then one line before the
+agent signs holds every payment to them:
+
+```js
+const verdict = require("rein-wallet").check(tx);   // { allow, reason, explanation, leftThisHour }
+if (!verdict.allow) throw new Error(`Rein blocked this payment: ${verdict.explanation}`);
+```
+
+`tx` is the transaction about to be signed (`{ to, data, value }`) or an x402
+payment requirement (`{ payTo, asset, amount }`). The check is local and
+synchronous: no network, no key, nothing to host. An MCP agent gets the same
+check from `rein_check_payment` with `npx rein-wallet mcp --guard 0xYourAgentWallet`.
+If the agent runs somewhere else, save the limits with `--out rein-guard.json`,
+ship that file with it, and set `REIN_GUARD_FILE=rein-guard.json`.
+
+Run the command again whenever you like. Limits that should tighten do so on
+their own; anything that would widen them (a new payee, a higher ceiling) waits
+for `rein-wallet guard 0x… --approve`. Add `--webhook <Slack or Discord URL>`
+to hear about every blocked payment.
+
+The check runs in your agent's process, so an agent whose code is fully
+compromised can skip it. For limits nothing can skip, the same policy runs on
+chain in a Rein account (below).
+
 ## Try it in Claude, with nothing to set up
 
 Give Claude a Rein account holding 50,000 test USDC, then try to talk it into

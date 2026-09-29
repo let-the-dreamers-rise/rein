@@ -118,7 +118,12 @@ function units(raw, decimals) {
   return Number(ethers.formatUnits(BigInt(raw), decimals ?? 18));
 }
 
-function toTrail(history) {
+/// `payments: true` reads a token transfer the wallet authorized in someone
+/// else's transaction (an x402 / EIP-3009 payment a facilitator submitted, or
+/// a smart wallet's call through an entry point) as a payment it chose, with
+/// its payee, rather than as a side effect. The guard wants that; the on-chain
+/// policy, which only sees the wallet's own calls, does not.
+function toTrail(history, { payments = false } = {}) {
   const me = lower(history.address);
   const book = tokenBook(history);
   const rows = [];
@@ -170,9 +175,15 @@ function toTrail(history) {
     rows.push({ ...base, selector: sel, kind: "call", token: null, payee: null, amount: 0, method: tx.method || null });
   }
 
+  // The wallet's own transactions, and how far back they were read: a
+  // transfer older than that may belong to a call that was never loaded.
+  const own = new Set(history.transactions.filter((tx) => lower(tx.from?.hash) === me).map((tx) => tx.hash));
+  const ownSince = Math.min(...history.transactions.filter((tx) => lower(tx.from?.hash) === me).map((tx) => seconds(tx.timestamp)));
+
   for (const t of history.tokenTransfers) {
     if (lower(t.from?.hash) !== me || !isErc20(t.token || {})) continue;
     if (explained.has(t.transaction_hash)) continue;
+    const authorized = payments && !own.has(t.transaction_hash) && (own.size === 0 || seconds(t.timestamp) >= ownSince);
     const token = tokenAddress(t.token);
     const decimals = t.total?.decimals != null ? Number(t.total.decimals) : decimalsOf(token);
     rows.push({
@@ -187,7 +198,7 @@ function toTrail(history) {
       amount: units(t.total?.value || 0, decimals),
       value: 0,
       intent: null,
-      derived: true,
+      ...(authorized ? {} : { derived: true }),
     });
   }
 
@@ -216,4 +227,4 @@ function holdings(history) {
   return out;
 }
 
-module.exports = { fetchHistory, toTrail, holdings, tokenBook, CHAINS, NO_CALLDATA };
+module.exports = { fetchHistory, toTrail, holdings, tokenBook, CHAINS, NO_CALLDATA, SELECTOR_NAMES, ERC20 };
