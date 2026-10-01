@@ -220,6 +220,11 @@ describe("rein cosign (Privy)", function () {
     expect((await ask(tweak({ input: "0xdeadbeef" }))).status).to.equal(403);
     expect((await ask({ ...usual, headers: { "privy-app-id": "app-2" } })).body.reason).to.equal("WRONG_APP");
     expect((await ask(usual, {})).status).to.equal(401);
+
+    // The same, from the agent's side, in one call.
+    const rein = require("..");
+    expect(await rein.cosign(usual, { url: base, token: "t0ken" })).to.include({ allow: true }).and.have.property("signature");
+    expect(await rein.cosign(usual, { url: "http://127.0.0.1:1", token: "t0ken" })).to.include({ allow: false, reason: "COSIGNER_UNREACHABLE" });
   });
 
   it("sets Privy up: two key quorums, then the wallet, signed by its current owner", async () => {

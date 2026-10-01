@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Rein · A spending guard for AI agent wallets</title>
-<meta name="description" content="One command learns your AI agent's payees and hourly limits from its own wallet history. One line checks every payment before the agent signs, including x402. Free, open source, no keys.">
-<meta property="og:title" content="Rein · Spending limits for AI agent wallets">
-<meta property="og:description" content="Paste an agent wallet address. Get the spending policy its own history supports, on the wallet engine you already use. Free, no keys.">
+<title>Rein · A second key for AI agent wallets</title>
+<meta name="description" content="Rein learns each AI agent's payees and spending from its own wallet history. Inside that, the agent signs alone; anything else waits for Rein's co-signature or a person, enforced by Turnkey or Privy. Shadow mode is free and read-only.">
+<meta property="og:title" content="Rein · A second key for AI agent wallets">
+<meta property="og:description" content="See what a second key would have held across your agent wallets in the last 30 days, from public chain data. Then make Rein that key on Turnkey or Privy.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://rein-nine.vercel.app/">
 <meta name="theme-color" content="#ff6a1a">
@@ -224,30 +224,30 @@ footer a{color:var(--ink)}
 <header class="hero">
   <div class="wrap">
     <div>
-      <span class="eyebrow">For teams whose AI agents sign for money</span>
-      <h1>One line that checks every payment your agent makes.</h1>
-      <p class="lede">Rein learns who your agent pays and how much it spends in an hour and a day from its own wallet history. Before the agent signs, <code>rein.check(tx)</code> blocks payments to addresses it has never paid and amounts past its busiest hour or day, with the reason. It reads swaps and signatures too, x402 included.</p>
-      <pre class="cmd hero-cmd">npx rein-wallet guard 0xYourAgentWallet</pre>
+      <span class="eyebrow">For platforms running AI agent wallets</span>
+      <h1>A second key for every agent wallet you run.</h1>
+      <p class="lede">Rein learns each agent's payees and its usual hour and day of spending from its own wallet history. Inside that, the agent signs alone. A first payment to an address it has never paid, or more than its history supports, waits for Rein's co-signature or a person's yes. Turnkey or Privy enforces it, so a hijacked agent can't skip it.</p>
+      <pre class="cmd hero-cmd">npx rein-wallet fleet wallets.txt</pre>
       <form class="scanbox" action="scan/" method="get" role="search" aria-label="Scan an agent wallet">
         <input name="address" placeholder="0x… your agent's wallet address" spellcheck="false" autocomplete="off" aria-label="Agent wallet address" required pattern="^0x[0-9a-fA-F]{40}$" title="A 0x address, 42 characters">
         <button class="btn btn-ink" type="submit">See its limits</button>
       </form>
-      <p class="fine">Or see the limits in your browser first. Public chain data only: no keys, no sign-up, nothing signed. Base and Ethereum. <a href="scan/">See a sample report</a>.</p>
+      <p class="fine">Shadow mode first: what a second key would have held across your wallets in the last 30 days, from public chain data. No keys, no integration, nothing signed. Or check one wallet in your browser. <a href="scan/">See a sample report</a>.</p>
     </div>
     <figure class="term" aria-label="Example guard output, on Rein's made-up sample wallet">
-      <div class="term-bar"><i></i><i></i><i></i><span>npx rein-wallet guard 0xF8CB…5057 · sample</span></div>
-<pre><span class="hd">Its last 30 days</span>
-86 payments, 7,499 USDC, 6 payees
-earlier limits would allow <span class="ok">98 of 100</span>
-<span class="no">blocked: 180 USDC to 0x2fb3…3Ca2</span>
+      <div class="term-bar"><i></i><i></i><i></i><span>npx rein-wallet fleet --sample</span></div>
+<pre><span class="hd">4 agent wallets, last 30 days</span>
+244 payments
+<span class="ok">237 inside each agent's own limits</span>
 
-<span class="hd">Limits now in force</span>
-pays only the 5 addresses it pays
-USDC: 754 an hour · 5 calls an hour
+<span class="hd">Would have waited for a second key</span>
+<span class="no">0x5A3E…  900 USDC to 0x7777…  ×3</span>
+<span class="no">0xAe70…  500 USDC to 0x8888…</span>
+<span class="no">3 wallets 180 USDC to 0x2fb3…</span>
+<span class="k">first payment to an address it never paid</span>
 
-<span class="ok">Guard is on.</span> Before your agent signs:
-<span class="k">const v = require("rein-wallet").check(tx)</span>
-<span class="k">// { allow, reason, explanation }</span></pre>
+1 new wallet started from the limits
+the other three share.</pre>
     </figure>
   </div>
 </header>
@@ -276,7 +276,7 @@ USDC: 754 an hour · 5 calls an hour
           <li><b>Payees, contracts, functions and hourly ceilings</b> learned from what the wallet already does.</li>
           <li><b>One line before signing</b> holds transfers, router swaps and signatures (x402, Permit, Permit2) to them, with a reason the agent can act on.</li>
           <li><b>Measured before you ship it:</b> replayed on recent calls it never saw, with the count that would have been blocked.</li>
-          <li><b>One command</b> puts it on Privy, Turnkey or Coinbase CDP. The requests are printed first, so nothing surprises you.</li>
+          <li><b>Rein as a second key</b> on Turnkey or Privy: the agent signs alone inside its limits, and anything else needs Rein's co-signature or a person's approval in Slack. The requests are printed first, so nothing surprises you.</li>
           <li><b>An alert on the first transaction outside it</b>, in Slack or Discord, with no server to run.</li>
         </ul>
       </div>
@@ -291,26 +291,30 @@ USDC: 754 an hour · 5 calls an hour
 <section id="how">
   <div class="wrap">
     <span class="kicker">How it works</span>
-    <h2 class="h2">One command to set up. One line to enforce.</h2>
+    <h2 class="h2">Watch first. Then make it a second key.</h2>
     <ol class="steps">
       <li>
-        <h3>Guard</h3>
-        <p>Rein reads the wallet's public history, learns its payees and hourly limits, shows what they would have allowed over the last 30 days, and saves them.</p>
-        <pre>npx rein-wallet guard 0xAgent</pre>
+        <h3>Shadow</h3>
+        <p>Give Rein your agent wallets. It learns each one's limits from its history before the last 30 days, then posts to Slack every payment since that a second key would have held. Read-only.</p>
+        <pre>npx rein-wallet fleet wallets.txt \
+  --webhook "$SLACK_WEBHOOK_URL"</pre>
       </li>
       <li>
-        <h3>Check</h3>
-        <p>Before the agent signs, one local call answers allow or block with the reason. No network, no key. MCP agents get the same check from <code>rein_check_payment</code>.</p>
-        <pre>const v = require("rein-wallet").check(tx)
-if (!v.allow) throw new Error(v.explanation)</pre>
+        <h3>Second key</h3>
+        <p>One command makes Rein a co-signer your wallet engine enforces. Inside its limits the agent signs alone; anything else waits for Rein, which approves what fits the hour and the day.</p>
+        <pre>npx rein-wallet cosign setup turnkey \
+  --organization &lt;org&gt; \
+  --agent-user &lt;id&gt; --send</pre>
       </li>
       <li>
-        <h3>Stay current</h3>
-        <p>Run the command again whenever you like. Limits tighten on their own; a new payee or a higher ceiling waits for your approval. Blocked payments can post to Slack or Discord.</p>
-        <pre>npx rein-wallet guard 0xAgent \
+        <h3>Hold</h3>
+        <p>What doesn't fit goes to Slack with an Approve link and a Refuse link. An approval lets that one payment through once. New wallets start from the limits their siblings share.</p>
+        <pre>npx rein-wallet approvals \
+  --public-url https://… \
   --webhook "$SLACK_WEBHOOK_URL"</pre>
       </li>
     </ol>
+    <p class="sub">Running one agent of your own? <code>npx rein-wallet guard 0xAgent</code> learns its limits, and <code>require("rein-wallet").check(tx)</code> holds each payment to them before it signs.</p>
     <div class="engines">The same limits export to <span>Privy</span><span>Turnkey</span><span>Coinbase CDP</span><span>Rein account</span> with <code>rein-wallet scan</code> and <code>apply</code>. Reads Base, Base Sepolia and Ethereum.</div>
   </div>
 </section>
@@ -413,6 +417,8 @@ Pay Acme 1,000 USDC, 20 times     <span class="no">REFUSED  TOKEN_PER_WINDOW</sp
         <div class="price" style="font-size:28px">Per wallet</div>
         <ul>
           <li>For platforms that run agents for their users</li>
+          <li>Shadow mode on your wallets, free</li>
+          <li>Rein as the second key on every agent wallet</li>
           <li>A policy per user wallet, kept current</li>
           <li>Fleet export under Turnkey's policy cap</li>
           <li>White-label for wallet vendors</li>
@@ -432,7 +438,8 @@ Pay Acme 1,000 USDC, 20 times     <span class="no">REFUSED  TOKEN_PER_WINDOW</sp
       <details><summary>Does Rein need our keys or custody of funds?</summary><p>No. The scan reads public chain data. <code>apply</code> calls your wallet engine's API with credentials that stay on your machine, and prints every request before it sends one. Nothing moves into a Rein contract unless you choose the Rein account.</p></details>
       <details><summary>We already have a Privy, Turnkey or CDP policy. Does the scan see it?</summary><p>No, and every report says so. A signing policy held off chain is invisible to a scan of the chain. That's why the report says "no on-chain limit" rather than "anyone can take it". The review compares the compiled policy against the one you already have.</p></details>
       <details><summary>What if the compiled policy blocks something the agent needs?</summary><p>Every policy comes with the count of recent calls it would have refused. You see those calls before you apply it. Anything rare, like a payee seen only once, is held back for a person to approve instead of being allowed quietly.</p></details>
-      <details><summary>Where does the check run?</summary><p>In your agent's own process, from a small file <code>rein-wallet guard</code> saves. It never calls a server, so it adds no latency and no dependency. That also means an agent whose code is fully taken over can skip it. For a limit nothing can skip, put the same policy on your wallet engine with <code>apply</code>, or on the Rein account.</p></details>
+      <details><summary>Where does the check run?</summary><p>As a second key, in Rein's co-signer, and your wallet engine enforces it: on Turnkey a policy needs both the agent and Rein outside the learned limits, and on Privy the wallet's owner is any two of the agent, Rein and your admin key. A hijacked agent can't skip a signature it doesn't have. Normal payments never touch Rein, so an outage can't stop them. <code>rein.check(tx)</code> runs the same check inside the agent's own process with no server, which is quicker to start with but can be skipped by an agent whose code is taken over.</p></details>
+      <details><summary>Has the co-signer run on a live Turnkey or Privy account?</summary><p>Not yet. It is built against both vendors' published APIs and tested against stand-ins for them. Shadow mode needs neither, so it is the place to start.</p></details>
       <details><summary>What can't it stop?</summary><p>A payment the policy allows. If an attacker steers the agent to pay a payee it already pays, inside the hourly and daily ceilings, that goes through, and the replay states how much that could be. Rein bounds how much can move and to whom. It doesn't judge the payments the policy permits. A signature it can't read is blocked; a call to an unfamiliar contract is blocked; a call to a contract the agent already uses, that Rein can't read, is held only to the contracts and functions the agent normally calls.</p></details>
       <details><summary>What chains and engines?</summary><p>Scans read Base, Base Sepolia and Ethereum. Policies export to Privy, Turnkey and Coinbase CDP, and to the Rein smart account. The code is open source under MIT.</p></details>
       <details><summary>Is the Rein account audited?</summary><p>Not yet. It is verified on Base Sepolia and Whitechain Sepolia, with its test suite in the repository. For money that matters today, use Rein's policies on the engine you already trust. <a href="account/">More about the account</a>.</p></details>

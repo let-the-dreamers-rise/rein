@@ -131,7 +131,8 @@ npx rein-wallet cosign privy --port 8788
 
 On Turnkey the co-signer watches for signing requests waiting on it and
 approves or rejects them there. On Privy the agent sends the request it is
-about to make to the co-signer's `/sign` and adds the signature it gets back;
+about to make to the co-signer's `/sign` and adds the signature it gets back
+(`await require("rein-wallet").cosign(request, { url })` does it in one call);
 a 202 means a person is deciding. Rein only ever co-signs payments: never a
 change to the wallet, its owner or its policies, a raw signature, or an
 EIP-7702 delegation. For it to hold, the agent must not be in Turnkey's root
