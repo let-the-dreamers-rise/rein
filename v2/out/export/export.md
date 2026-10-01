@@ -8,7 +8,7 @@
 | selector allowlist | yes (data[0..10]) | yes with ABI, else contract only | yes with ABI |
 | payee allowlist | yes (after the ABI upload) | yes (evmData) | yes (calldata) |
 | per-transaction cap | yes | yes | yes |
-| rolling spend window | no: stateless | no: per transaction only | yes (aggregation, signing requests only) |
+| rolling spend window | yes (velocity controls; Rein does not write them yet) | no: per transaction only | yes (aggregation, signing requests only) |
 | approval ceiling | yes | yes | yes |
 | call rate | no | no | no (sum only) |
 | native ceiling of zero | yes | yes | yes |

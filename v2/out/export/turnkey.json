@@ -43,7 +43,7 @@
           "parameters": {
             "policyName": "Rein: compiled from the agent's history",
             "effect": "EFFECT_ALLOW",
-            "notes": "Written by Rein from the agents' own transaction history. Turnkey holds per-transaction caps; hourly totals are not expressible here, so rein watch covers them.",
+            "notes": "Written by Rein from the agents' own transaction history. This policy holds per-transaction caps; hourly totals need a Turnkey velocity control, which Rein does not write yet, so rein watch covers them.",
             "consensus": "approvers.any(user, user.id == '{{turnkey_agent_user_id}}')",
             "condition": "(eth.tx.chain_id == 8453 && eth.tx.to == '0xdac17f958d2ee523a2206206994597c13d831ec7' && eth.tx.data[0..10] == '0x095ea7b3' && eth.tx.value == 0 && eth.tx.contract_call_args['spender'] in ['<Payroll>', '<Router>', '<Supplier A>', '<Supplier B>', '<Supplier C>'] && eth.tx.contract_call_args['value'] <= 500000000) || (eth.tx.chain_id == 8453 && eth.tx.to == '0xdac17f958d2ee523a2206206994597c13d831ec7' && eth.tx.data[0..10] == '0xa9059cbb' && eth.tx.value == 0 && eth.tx.contract_call_args['to'] in ['<Payroll>', '<Router>', '<Supplier A>', '<Supplier B>', '<Supplier C>'] && eth.tx.contract_call_args['value'] <= 3750000000) || (eth.tx.chain_id == 8453 && eth.tx.to == '<Router>' && eth.tx.value <= 0)"
           }

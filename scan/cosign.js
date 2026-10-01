@@ -14,8 +14,8 @@
 // stop them; the rest wait in Turnkey until Rein approves them.
 //
 // The co-signer reads each signing request waiting on it, runs it through the
-// same guard `check` uses (the hourly and daily totals Turnkey's stateless
-// policies can't hold included), and approves what fits. Anything else is
+// same guard `check` uses (the wallet's learned payees, and its hourly and
+// daily totals), and approves what fits. Anything else is
 // held for a person, posted to Slack, and approved or refused in Turnkey once
 // they decide (rein guard --allow / --deny, or rein approvals). A request it
 // can't read, such as a raw signature, is left for a person to approve in

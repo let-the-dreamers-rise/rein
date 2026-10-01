@@ -81,7 +81,8 @@ const lc = (a) => (/^0x[0-9a-fA-F]{40}$/.test(a) ? a.toLowerCase() : a);
 
 // -- Turnkey ------------------------------------------------------------------
 //
-// Stateless expressions over the transaction; no spend windows exist. The
+// Expressions over one transaction. Turnkey's velocity controls can hold
+// spend windows now, but Rein does not write them yet. The
 // decoded call arguments are only there once the contract's ABI is uploaded,
 // so each token gets a create_smart_contract_interface step first. Addresses
 // are compared lowercase, and eth.tx.data carries its 0x, so a selector is
@@ -150,7 +151,7 @@ function turnkey(f, consensus, o = {}, agents = null) {
     request: turnkeyActivity("ACTIVITY_TYPE_CREATE_POLICY_V3", "create_policy", {
       policyName: fleet.length > 1 ? `Rein: ${fleet.length} agents, compiled` : "Rein: compiled from the agent's history",
       effect: "EFFECT_ALLOW",
-      notes: "Written by Rein from the agents' own transaction history. Turnkey holds per-transaction caps; hourly totals are not expressible here, so rein watch covers them.",
+      notes: "Written by Rein from the agents' own transaction history. This policy holds per-transaction caps; hourly totals need a Turnkey velocity control, which Rein does not write yet, so rein watch covers them.",
       consensus,
       condition: branches.map((b) => b.condition).join(" || ") || "false",
     }),
@@ -274,7 +275,7 @@ const CAN = {
   "selector allowlist": { turnkey: "yes (data[0..10])", coinbase: "yes with ABI, else contract only", privy: "yes with ABI" },
   "payee allowlist": { turnkey: "yes (after the ABI upload)", coinbase: "yes (evmData)", privy: "yes (calldata)" },
   "per-transaction cap": { turnkey: "yes", coinbase: "yes", privy: "yes" },
-  "rolling spend window": { turnkey: "no: stateless", coinbase: "no: per transaction only", privy: "yes (aggregation, signing requests only)" },
+  "rolling spend window": { turnkey: "yes (velocity controls; Rein does not write them yet)", coinbase: "no: per transaction only", privy: "yes (aggregation, signing requests only)" },
   "approval ceiling": { turnkey: "yes", coinbase: "yes", privy: "yes" },
   "call rate": { turnkey: "no", coinbase: "no", privy: "no (sum only)" },
   "native ceiling of zero": { turnkey: "yes", coinbase: "yes", privy: "yes" },

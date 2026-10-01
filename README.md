@@ -114,8 +114,8 @@ only after you run `--approve`.
 it can skip it. On Turnkey or Privy, Rein can be a second key instead: the
 wallet's own policy engine lets the agent sign alone inside the limits Rein
 learned, and anything else needs Rein's approval too. Rein's co-signer runs the
-same guard (hourly and daily totals included, which stateless vendor policies
-can't hold), approves what fits, and holds the rest for a person.
+same guard (each wallet's learned payees and its hourly and daily totals),
+approves what fits, and holds the rest for a person to approve in Slack.
 
 ```bash
 npx rein-wallet cosign keygen      # Rein's key: keep it where only the co-signer can read it
