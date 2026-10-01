@@ -32,10 +32,12 @@ const { evaluate, NATIVE } = require("./evaluate");
 const { scanHistory, describe, namer, money } = require("./index");
 const codes = require("../scripts/codes");
 const { readRouterCall, strangers, readTypedData } = require("./moves");
+const { guardFromCohort } = require("./cohort");
 
 const DAY = 86400;
 const KEEP_SECONDS = 2 * DAY; // ledger kept for window state; longer than any window the compiler writes
 const HOUR = 3600;
+const COHORT_UNTIL = 20; // calls of its own before a new wallet's own limits replace its cohort's
 const VERSION = 2; // 2: payees split from approval spenders, a daily ceiling, swaps and signatures read
 
 // -- where guards live ----------------------------------------------------------
@@ -205,6 +207,12 @@ function dailyCeiling(rows, token, hourly) {
     best = Math.max(best, sum);
   }
   return Number(Math.max(hourly, best * 1.25).toFixed(6));
+}
+
+function readCohort(file) {
+  const c = JSON.parse(fs.readFileSync(file, "utf8"));
+  if (c.kind !== "rein-cohort") throw new Error(`${file} is not a Rein cohort (rein fleet --out writes cohort.json)`);
+  return c;
 }
 
 const ledgerRow = (r) => ({ ts: r.ts, target: r.target, selector: r.selector, kind: r.kind, token: r.token, payee: r.payee, amount: r.amount, value: r.value || 0, ...(r.derived ? { derived: true } : {}) });
@@ -677,6 +685,7 @@ function parse(argv) {
     else if (a === "--deny") o.deny = argv[++i];
     else if (a === "--holds") o.holds = true;
     else if (a === "--new-payee-cap") o.newPayeeCap = Number(argv[++i]);
+    else if (a === "--cohort") o.cohort = argv[++i];
     else if (a === "--sample") o.sample = true;
     else if (a === "-h" || a === "--help") o.help = true;
     else if (!a.startsWith("-")) o.address = a;
@@ -690,6 +699,7 @@ const USAGE = `usage: rein guard <address> [--chain base|base-sepolia|ethereum] 
        rein guard <address> --holds       payments held for a person to approve
        rein guard <address> --allow <id>  let one held payment through (--deny <id> refuses it)
        --new-payee-cap N                  let a first payment to a new address through when it is N tokens or less
+       --cohort cohort.json               start a new wallet from the limits its siblings share (rein fleet --out writes it)
        rein guard --sample                try it on Rein's made-up sample wallet`;
 
 async function main(argv, { log = console.log, fetch: fetchImpl, env = process.env, input, now } = {}) {
@@ -712,19 +722,46 @@ async function main(argv, { log = console.log, fetch: fetchImpl, env = process.e
     history = await fetchHistory(o.address, { chain: o.chain, api: o.api, fetch: fetchImpl });
   }
 
-  const { guard, replay } = learn(history, { days: o.days });
-  const file = o.out || guardPath(guard.wallet, env);
+  let learned = null;
+  let failure = null;
+  try {
+    learned = learn(history, { days: o.days });
+  } catch (err) {
+    failure = err;
+  }
+  const wallet = ethers.getAddress(history.address);
+  const file = o.out || guardPath(wallet, env);
   const existing = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : null;
-  const short = `${guard.wallet.slice(0, 6)}…${guard.wallet.slice(-4)}`;
+  const cohort = o.cohort ? readCohort(o.cohort) : null;
+  const own = learned ? learned.guard.learnedFrom.calls : 0;
+  // A new wallet starts from what its siblings share, and keeps to it until it
+  // has enough history of its own; then its own limits replace it, tightening
+  // on their own and widening only with your approval, like any update.
+  const onCohort = own < COHORT_UNTIL && (cohort || existing?.fromCohort);
+  if (!learned && !onCohort) {
+    throw new Error(`${failure.message}. A new wallet can start from the limits its platform's other wallets share: rein fleet <their addresses> --out dir, then rein guard ${wallet} --cohort dir/cohort.json`);
+  }
+  const short = `${wallet.slice(0, 6)}…${wallet.slice(-4)}`;
   log("");
   log(`Rein guard for ${short}${history.synthetic ? " (Rein's made-up sample wallet)" : ""}`);
   log("");
-  const window = replay.byTime ? `Its last ${replay.days} days` : `Its most recent ${replay.total} calls`;
-  log(`${window}: ${replay.payments} payment${replay.payments === 1 ? "" : "s"}${replay.totals.length ? `, ${replay.totals.join(" and ")}` : ""}, to ${replay.payees} address${replay.payees === 1 ? "" : "es"}.`);
-  log(`Limits learned only from before ${replay.since.slice(0, 10)} (${replay.learnedFrom} calls) would have allowed ${replay.allowed} of its ${replay.total} calls.`);
-  if (replay.blocked.length) {
-    log("They would have blocked:");
-    for (const b of replay.blocked) log(`  ${b.when.slice(0, 16).replace("T", " ")}  ${b.what}  ${b.reason}`);
+  let guard;
+  if (onCohort) {
+    guard = cohort ? guardFromCohort(cohort, wallet, { chain: history.chain, chainId: CHAINS[history.chain]?.chainId ?? null }) : JSON.parse(JSON.stringify(existing));
+    const now = Math.floor(Date.now() / 1000);
+    guard.ledger = toTrail(history, { payments: true }).rows.filter((r) => r.ts > now - KEEP_SECONDS).map(ledgerRow);
+    log(`It has ${own} call${own === 1 ? "" : "s"} of its own, too few to learn from (it needs ${COHORT_UNTIL}), so it is held to the limits ${guard.learnedFrom.cohort} sibling wallets share until then.`);
+  } else {
+    const { replay } = learned;
+    guard = learned.guard;
+    const window = replay.byTime ? `Its last ${replay.days} days` : `Its most recent ${replay.total} calls`;
+    log(`${window}: ${replay.payments} payment${replay.payments === 1 ? "" : "s"}${replay.totals.length ? `, ${replay.totals.join(" and ")}` : ""}, to ${replay.payees} address${replay.payees === 1 ? "" : "es"}.`);
+    log(`Limits learned only from before ${replay.since.slice(0, 10)} (${replay.learnedFrom} calls) would have allowed ${replay.allowed} of its ${replay.total} calls.`);
+    if (replay.blocked.length) {
+      log("They would have blocked:");
+      for (const b of replay.blocked) log(`  ${b.when.slice(0, 16).replace("T", " ")}  ${b.what}  ${b.reason}`);
+    }
+    if (existing?.fromCohort) log(`It now has ${own} calls of its own, so its own limits take over from the shared ones.`);
   }
   log("");
 
@@ -746,7 +783,7 @@ async function main(argv, { log = console.log, fetch: fetchImpl, env = process.e
   } else {
     guard.webhook = o.webhook || null;
     guard.newPayeeCap = o.newPayeeCap ?? 0;
-    log(`Limits now in force, learned from all ${guard.learnedFrom.calls} calls:`);
+    log(guard.fromCohort ? `Limits now in force, shared by ${guard.learnedFrom.cohort} sibling wallets:` : `Limits now in force, learned from all ${guard.learnedFrom.calls} calls:`);
     for (const s of guard.sentences) log(`  ${s}`);
   }
   saveGuard(guard, file);
@@ -765,4 +802,4 @@ async function main(argv, { log = console.log, fetch: fetchImpl, env = process.e
   return 0;
 }
 
-module.exports = { withLock, home, judge, WORDS, decide, fingerprint, learn, check, budget, guardClient, evolve, approve, loadGuard, saveGuard, guardPath, toRow, toRows, main, parse, USAGE };
+module.exports = { COHORT_UNTIL, withLock, home, judge, WORDS, decide, fingerprint, learn, check, budget, guardClient, evolve, approve, loadGuard, saveGuard, guardPath, toRow, toRows, main, parse, USAGE };

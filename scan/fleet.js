@@ -14,6 +14,11 @@
 // would have caught, or every 15 minutes with `--since 30m` (cron, or the
 // GitHub Action in scan/watch-action.yml with this command) to get each new
 // one in Slack as it happens.
+//
+// A wallet too new to learn from is checked against its siblings: once three
+// or more wallets in the list have history, Rein keeps what most of them share
+// (cohort.js) and holds the newcomers to that. `--out` saves it as
+// cohort.json, which `rein guard <new wallet> --cohort cohort.json` uses.
 const fs = require("fs");
 const path = require("path");
 const { fetchHistory, toTrail, CHAINS } = require("./blockscout");
@@ -21,7 +26,8 @@ const { NATIVE } = require("./evaluate");
 const { describe, namer, money } = require("./index");
 const { readWallets } = require("./cli");
 const { parseSince } = require("./watch");
-const { learn, judge, WORDS } = require("./guard");
+const { learn, judge, WORDS, COHORT_UNTIL } = require("./guard");
+const { cohortFrom, guardFromCohort } = require("./cohort");
 const { readRouterCall, strangers } = require("./moves");
 
 const DAY = 86400;
@@ -41,18 +47,26 @@ const before = (history, since) => ({
 
 /// What a second key would have held in one wallet's history since `since`.
 /// Returns { address, status, learnedFrom, checked, held: [...] }; status is
-/// "ok", or "too new" when there is too little before `since` to learn from.
-function shadow(history, { since }) {
+/// "ok", "cohort" when it was too new and `cohort` stood in for its own
+/// history, or "too new" when there is too little before `since` to learn
+/// from. `guard` is the guard it was judged by (left out of reports).
+function shadow(history, { since, cohort = null }) {
   const { rows, tokens } = toTrail(history, { payments: true });
   const name = namer(history, tokens);
   const after = rows.filter((r) => r.ts >= since);
   const base = { address: history.address, checked: after.length, held: [], learnedFrom: 0 };
   if (!after.length) return { ...base, status: "quiet" };
   let guard;
+  let status = "ok";
   try {
     guard = learn(before(history, since)).guard;
   } catch (err) {
-    return { ...base, status: "too new", note: err.message };
+    if (!cohort) return { ...base, status: "too new", note: err.message };
+  }
+  // As `rein guard` does: a cohort stands in until the wallet has enough of its own.
+  if (cohort && (!guard || guard.learnedFrom.calls < COHORT_UNTIL)) {
+    guard = guardFromCohort(cohort, history.address, { chain: history.chain });
+    status = "cohort";
   }
   base.learnedFrom = guard.learnedFrom.calls;
   const raw = new Map(history.transactions.map((t) => [t.hash, t.raw_input || "0x"]));
@@ -89,7 +103,21 @@ function shadow(history, { since }) {
       ...(r.payee ? { payee: r.payee } : {}),
     });
   }
-  return { ...base, status: "ok", held };
+  return { ...base, status, held, guard };
+}
+
+/// Shadow every wallet; then, if three or more had enough history, build their
+/// cohort and check the ones with too little against it.
+function shadowFleet(entries) {
+  const results = entries.map(({ history, since, error }) => (error ? error : shadow(history, { since })));
+  const grown = (r) => r.status === "ok" && r.guard.learnedFrom.calls >= COHORT_UNTIL;
+  const learned = results.filter(grown).map((r) => r.guard);
+  let cohort = null;
+  if (learned.length >= 3) {
+    cohort = cohortFrom(learned);
+    for (const [i, r] of results.entries()) if (r.status === "too new" || (r.status === "ok" && !grown(r))) results[i] = shadow(entries[i].history, { since: entries[i].since, cohort });
+  }
+  return { results: results.map(({ guard, ...r }) => r), cohort };
 }
 
 const short = (a) => `${a.slice(0, 6)}…${a.slice(-4)}`;
@@ -117,7 +145,9 @@ function slackText(results, { sinceLabel, explorer, limit = 15 }) {
   }
   if (held.length > limit) lines.push(`…and ${held.length - limit} more in the report.`);
   const young = results.filter((r) => r.status === "too new").length;
-  if (young) lines.push(`${young} wallet${young === 1 ? " has" : "s have"} too little history to learn from yet.`);
+  const cohort = results.filter((r) => r.status === "cohort").length;
+  if (cohort) lines.push(`${cohort} new wallet${cohort === 1 ? " was" : "s were"} held to the limits the others share, having too little history of ${cohort === 1 ? "its" : "their"} own.`);
+  if (young) lines.push(`${young} wallet${young === 1 ? " has" : "s have"} too little history to learn from yet${cohort ? "" : " (three or more wallets with history give new ones a shared starting point)"}.`);
   lines.push("Nothing was held: this is what a second key would have done. Read-only, from public chain data.");
   return lines.join("\n");
 }
@@ -152,7 +182,7 @@ function parse(argv) {
 }
 
 const USAGE = `usage: rein fleet <wallets.txt> [--since 30d] [--chain base|base-sepolia|ethereum] [--webhook URL] [--out dir]
-       rein fleet --sample             Rein's made-up sample wallet, and a copy of it that got drained
+       rein fleet --sample             Rein's made-up sample wallets: one drained, one brand new
   wallets.txt: one address per line (a CSV's first column works).
   --since 30m from cron posts only when something would have been held (add --always to post every run).`;
 
@@ -169,7 +199,7 @@ async function main(argv, { log = console.log, fetch: fetchImpl = globalThis.fet
   if (!list.length) throw new Error(`no addresses found in ${o.file}`);
 
   const latest = (h) => Math.max(...h.transactions.map((t) => Date.parse(t.timestamp) / 1000));
-  const results = [];
+  const entries = [];
   for (const [i, item] of list.entries()) {
     let history = item;
     if (typeof item === "string") {
@@ -177,14 +207,14 @@ async function main(argv, { log = console.log, fetch: fetchImpl = globalThis.fet
       try {
         history = await fetchHistory(item, { chain: o.chain, api: o.api, fetch: fetchImpl });
       } catch (err) {
-        results.push({ address: item, status: "error", note: err.message, checked: 0, held: [], learnedFrom: 0 });
+        entries.push({ error: { address: item, status: "error", note: err.message, checked: 0, held: [], learnedFrom: 0 } });
         continue;
       }
     }
     // A sample's clock is its own last day; a live wallet's is now.
-    const since = parseSince(o.since, history.synthetic ? latest(history) : Date.now() / 1000);
-    results.push(shadow(history, { since }));
+    entries.push({ history, since: parseSince(o.since, history.synthetic ? latest(history) : Date.now() / 1000) });
   }
+  const { results, cohort } = shadowFleet(entries);
 
   const unit = { s: "seconds", m: "minutes", h: "hours", d: "days" };
   const m = /^(\d+)([smhd])$/.exec(o.since);
@@ -197,7 +227,8 @@ async function main(argv, { log = console.log, fetch: fetchImpl = globalThis.fet
     fs.mkdirSync(o.out, { recursive: true });
     fs.writeFileSync(path.join(o.out, "fleet.json"), `${JSON.stringify({ since: o.since, results }, null, 2)}\n`);
     fs.writeFileSync(path.join(o.out, "fleet.md"), markdownReport(results, { sinceLabel }));
-    log(`\nWrote ${path.join(o.out, "fleet.md")} and fleet.json`);
+    if (cohort) fs.writeFileSync(path.join(o.out, "cohort.json"), `${JSON.stringify(cohort, null, 2)}\n`);
+    log(`\nWrote ${path.join(o.out, "fleet.md")}, fleet.json${cohort ? " and cohort.json (rein guard <new wallet> --cohort cohort.json starts a new wallet from it)" : ""}`);
   }
   const anyHeld = results.some((r) => r.held.length);
   if (o.webhook && (anyHeld || o.always)) {
@@ -208,27 +239,42 @@ async function main(argv, { log = console.log, fetch: fetchImpl = globalThis.fet
   return 0;
 }
 
-/// The sample wallet, and a copy of it whose last week includes a drain: a
-/// run of payments to an address it had never paid.
+/// The sample wallet; a copy of it whose last week includes a drain (a run of
+/// payments to an address it had never paid); a twin that behaves; and a new
+/// wallet a few days old, whose third payment goes somewhere the others never pay.
 function sampleFleet() {
-  const { sampleHistory, AGENT, USDC } = require("./sample");
-  const honest = sampleHistory();
-  const drained = JSON.parse(JSON.stringify(honest));
+  const { sampleHistory, AGENT, USDC, PAYEES } = require("./sample");
   const { ethers } = require("ethers");
-  drained.address = ethers.getAddress("0x5a3e5a3e5a3e5a3e5a3e5a3e5a3e5a3e5a3e5a3e");
-  const swap = (x) => (x && x.hash && x.hash.toLowerCase() === AGENT.toLowerCase() ? { ...x, hash: drained.address } : x);
-  const me = (hex) => hex && hex.split(AGENT.slice(2).toLowerCase()).join(drained.address.slice(2).toLowerCase());
-  for (const t of drained.transactions) (t.from = swap(t.from)), (t.raw_input = me(t.raw_input));
-  for (const t of drained.tokenTransfers) (t.from = swap(t.from)), (t.to = swap(t.to));
-  const last = Math.max(...drained.transactions.map((t) => Date.parse(t.timestamp)));
-  const thief = { hash: "0x7777777777777777777777777777777777777777" };
-  for (let i = 0; i < 3; i++) {
-    const ts = new Date(last - (3 - i) * 3600 * 1000).toISOString();
-    const hash = `0x${"d".repeat(63)}${i}`;
-    drained.transactions.push({ hash, timestamp: ts, from: { hash: drained.address }, to: { hash: USDC.address }, value: "0", status: "ok", raw_input: transferData(thief.hash, 900 * 1e6), method: "transfer" });
-  }
+  const honest = sampleHistory();
+  const copyAs = (hex) => {
+    const h = JSON.parse(JSON.stringify(honest));
+    h.address = ethers.getAddress(`0x${hex.repeat(40 / hex.length)}`);
+    const swap = (x) => (x && x.hash && x.hash.toLowerCase() === AGENT.toLowerCase() ? { ...x, hash: h.address } : x);
+    const me = (raw) => raw && raw.split(AGENT.slice(2).toLowerCase()).join(h.address.slice(2).toLowerCase());
+    for (const t of h.transactions) (t.from = swap(t.from)), (t.raw_input = me(t.raw_input));
+    for (const t of h.tokenTransfers) (t.from = swap(t.from)), (t.to = swap(t.to));
+    return h;
+  };
+  const last = Math.max(...honest.transactions.map((t) => Date.parse(t.timestamp)));
+  const pay = (h, i, hoursAgo, to, amount) =>
+    h.transactions.push({ hash: ethers.id(`rein sample: ${h.address} ${i}`), timestamp: new Date(last - hoursAgo * 3600 * 1000).toISOString(), from: { hash: h.address }, to: { hash: USDC.address }, value: "0", status: "ok", raw_input: transferData(to, amount * 1e6), method: "transfer" });
+
+  const drained = copyAs("5a3e");
+  for (let i = 0; i < 3; i++) pay(drained, `d${i}`, 3 - i, "0x7777777777777777777777777777777777777777", 900);
   drained.transactions.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-  return [honest, drained];
+
+  const twin = copyAs("7e1f");
+
+  const fresh = copyAs("ae70");
+  fresh.transactions = [];
+  fresh.tokenTransfers = [];
+  const known = PAYEES.inference.address;
+  pay(fresh, "a1", 50, known, 40);
+  pay(fresh, "a2", 26, known, 35);
+  pay(fresh, "a3", 2, "0x8888888888888888888888888888888888888888", 500);
+  pay(fresh, "a4", 0, known, 30);
+  fresh.transactions.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  return [honest, drained, twin, fresh];
 }
 
 function transferData(to, raw) {
@@ -236,4 +282,4 @@ function transferData(to, raw) {
   return new ethers.Interface(["function transfer(address,uint256)"]).encodeFunctionData("transfer", [to, BigInt(raw)]);
 }
 
-module.exports = { shadow, slackText, markdownReport, main, parse, sampleFleet, USAGE };
+module.exports = { shadow, shadowFleet, slackText, markdownReport, main, parse, sampleFleet, USAGE };

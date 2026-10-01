@@ -86,7 +86,22 @@ Nothing is integrated and nothing is held: it reads public chain data and
 reports what would have happened. Run it with `--since 30m` every 15 minutes
 from cron or a scheduled GitHub Action, and each new one lands in Slack as it
 happens. `--out dir` writes the full list. `npx rein-wallet fleet --sample`
-shows it on a made-up wallet and a copy of it that got drained.
+shows it on made-up wallets: one that got drained, and one too new to have
+habits of its own.
+
+A wallet with fewer than 20 calls has too little history to learn from, so
+once three or more wallets in the list have enough, Rein holds the new ones to
+what most of them share: the contracts and payees at least half of them use,
+and the median of their hourly and daily limits. `--out dir` saves that as
+`cohort.json`, and a new agent's wallet starts guarded from day one:
+
+```bash
+npx rein-wallet guard 0xNEW… --cohort dir/cohort.json
+```
+
+It stays on the shared limits until it has 20 calls of its own. Then its own
+limits take over the same way any update does: tighter ones at once, wider ones
+only after you run `--approve`.
 
 ## Try it in Claude, with nothing to set up
 

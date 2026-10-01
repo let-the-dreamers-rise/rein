@@ -29,6 +29,8 @@ const USAGE = `rein: a wallet your agent can operate and cannot drain.
       anything wider waits for rein guard <address> --approve.
       A payment outside the limits is held: rein guard <address> --allow <id>
       lets it through once. --new-payee-cap N lets small first payments through.
+      A new wallet with little history: --cohort cohort.json (from rein fleet --out)
+      starts it from the limits its sibling wallets share.
 
   rein approvals --public-url URL --webhook <Slack URL>
       Posts each held payment to Slack with a link to approve or refuse it.
@@ -38,7 +40,9 @@ const USAGE = `rein: a wallet your agent can operate and cannot drain.
       Shadow mode for many agent wallets: learns each one's limits from its
       history before --since, and reports to the terminal and Slack every
       payment since that a second key would have held for a person to approve.
-      Read-only. rein fleet --sample shows it on a made-up wallet and a drained copy.
+      Wallets too new to learn from are held to what three or more others share;
+      --out also saves that as cohort.json. Read-only.
+      rein fleet --sample shows it on made-up wallets, one drained and one brand new.
 
   rein try
       A hijacked agent against a real Rein account on a private chain inside

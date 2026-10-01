@@ -162,4 +162,24 @@ function sampleFetch({ pageSize = 50, asOf = null } = {}) {
   };
 }
 
-module.exports = { sampleHistory, sampleFetch, AGENT, PAYEES, USDC, WETH, ROUTER, POOL, START };
+/// A fetch() that serves any histories shaped like sampleHistory()'s (the
+/// fleet sample's wallets, say), keyed by address.
+function historiesFetch(histories, { pageSize = 50 } = {}) {
+  const by = new Map(histories.map((h) => [h.address.toLowerCase(), h]));
+  return async (href) => {
+    const url = new URL(href);
+    const m = /^\/api\/v2\/addresses\/(0x[0-9a-fA-F]{40})(\/[a-z-]+)?$/.exec(url.pathname);
+    const h = m && by.get(m[1].toLowerCase());
+    if (!h) return { ok: false, status: 404, json: async () => ({}) };
+    const json = (body) => ({ ok: true, status: 200, json: async () => body });
+    const start = Number(url.searchParams.get("items_count") || 0);
+    const page = (items) => json({ items: items.slice(start, start + pageSize), next_page_params: start + pageSize < items.length ? { items_count: start + pageSize } : null });
+    if (!m[2]) return json({ ...h.info, hash: h.address });
+    if (m[2] === "/transactions") return page(h.transactions);
+    if (m[2] === "/token-transfers") return page(h.tokenTransfers);
+    if (m[2] === "/token-balances") return json(h.tokenBalances);
+    return { ok: false, status: 404, json: async () => ({}) };
+  };
+}
+
+module.exports = { sampleHistory, sampleFetch, historiesFetch, AGENT, PAYEES, USDC, WETH, ROUTER, POOL, START };
