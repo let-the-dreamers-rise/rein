@@ -199,7 +199,7 @@ details.more>summary{cursor:pointer;font-weight:600;padding:14px 4px;color:var(-
     <div class="card">
       <h2>What this does not say</h2>
       <ul class="caveats">
-        <li>It knows only what this Safe has paid in tokens, from public chain data. ETH paid out of a Safe isn't counted yet, so a usual ETH payee can show up as new.</li>
+        <li>It knows only what this Safe has paid, from public chain data: the most recent few thousand token payments and ETH transfers.</li>
         <li>A payee it flags may be fine: a new contractor is a first payment too. The flag says to confirm the address through another channel, not that it's an attack.</li>
         <li>A payee it doesn't flag isn't vouched for. It checks addresses against this Safe's own history, not against scam lists or what a contract does.</li>
       </ul>
@@ -256,7 +256,8 @@ details.more>summary{cursor:pointer;font-weight:600;padding:14px 4px;color:var(-
       await service.info(address);
       status("Reading what this Safe has paid before…");
       const history = await Rein.fetchHistory(address, { chain, fetch: (...a) => window.fetch(...a) });
-      const r = await Rein.safe.watchOnce(address, { chain, safeApi: service, history, remember: false });
+      const ethPaid = await Rein.fetchEthPaid(address, { chain, fetch: (...a) => window.fetch(...a) }).catch(() => []);
+      const r = await Rein.safe.watchOnce(address, { chain, safeApi: service, history, ethPaid, remember: false });
       status("");
       render(r);
       window.history.replaceState(null, "", `?safe=${r.safe}&chain=${chain}`);

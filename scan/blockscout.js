@@ -301,4 +301,17 @@ function holdings(history) {
   return out;
 }
 
-module.exports = { fetchHistory, toTrail, holdings, tokenBook, poisoned, KNOWN_TOKENS, CHAINS, NO_CALLDATA, SELECTOR_NAMES, ERC20 };
+/// ETH a contract wallet (a Safe) sent: internal transactions from it that
+/// moved value, as { payee, amount, ts }. An EOA's ETH payments are in its
+/// own transactions instead.
+async function fetchEthPaid(address, { chain = "base", api, fetch: fetchImpl = globalThis.fetch, maxPages = 5, pause = 200 } = {}) {
+  const c = CHAINS[chain];
+  const base = (api || c.api).replace(/\/$/, "");
+  const addr = ethers.getAddress(address);
+  const { items } = await paged(base, `/addresses/${addr}/internal-transactions`, { filter: "from" }, { fetchImpl, maxPages, pause });
+  return items
+    .filter((t) => lower(t.from?.hash) === lower(addr) && t.to?.hash && t.success !== false && BigInt(t.value || 0) > 0n)
+    .map((t) => ({ payee: ethers.getAddress(t.to.hash), amount: Number(ethers.formatEther(BigInt(t.value))), ts: seconds(t.timestamp) }));
+}
+
+module.exports = { fetchHistory, fetchEthPaid, toTrail, holdings, tokenBook, poisoned, KNOWN_TOKENS, CHAINS, NO_CALLDATA, SELECTOR_NAMES, ERC20 };

@@ -4,8 +4,8 @@
 // through a Rein server, and nothing is signed.
 const { scan, scanHistory, summary, exportPolicy, CHAINS } = require("./index");
 const { sampleHistory, poisonedSampleHistory } = require("./sample");
-const { fetchHistory } = require("./blockscout");
+const { fetchHistory, fetchEthPaid } = require("./blockscout");
 const checkup = require("./checkup");
 const safe = require("./safe");
 
-module.exports = { scan, scanHistory, summary, exportPolicy, sampleHistory, poisonedSampleHistory, fetchHistory, checkup, safe, CHAINS };
+module.exports = { scan, scanHistory, summary, exportPolicy, sampleHistory, poisonedSampleHistory, fetchHistory, fetchEthPaid, checkup, safe, CHAINS };

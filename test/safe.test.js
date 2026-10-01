@@ -97,6 +97,17 @@ describe("rein safe", function () {
     expect(page).to.contain("Rein.safe.safeGateway").and.contain("remember: false").and.contain("window.history.replaceState");
   });
 
+  it("counts ETH the Safe paid out through internal transactions", async () => {
+    const { fetchEthPaid } = require("../scan/blockscout");
+    const vendor = someone("eth vendor");
+    const page = { items: [{ from: { hash: AGENT }, to: { hash: vendor }, value: "2000000000000000000", success: true, timestamp: "2026-08-01T00:00:00Z" }, { from: { hash: AGENT }, to: { hash: someone("failed") }, value: "1", success: false, timestamp: "2026-08-01T00:00:00Z" }], next_page_params: null };
+    const eth = await fetchEthPaid(AGENT, { fetch: async () => ({ ok: true, status: 200, json: async () => page }), pause: 0 });
+    expect(eth).to.deep.equal([{ payee: vendor, amount: 2, ts: Date.parse("2026-08-01T00:00:00Z") / 1000 }]);
+    const tx = { nonce: 7, safeTxHash: "0x0b", confirmations: [], confirmationsRequired: 2, to: vendor, value: "1500000000000000000", data: "0x", operation: 0 };
+    expect((await safe.watchOnce(AGENT, { safeApi: service([tx]), history, ethPaid: eth, env })).queue[0].found).to.deep.equal([]);
+    expect((await safe.watchOnce(AGENT, { safeApi: service([{ ...tx, safeTxHash: "0x0c" }]), history, ethPaid: [], env })).queue[0].found[0].why).to.contain("never paid");
+  });
+
   it("flags a payee that looks like one of the Safe's owners", async () => {
     const o = OWNERS[1];
     const twin = ethers.getAddress(`0x${o.slice(2, 6)}${"0".repeat(32)}${o.slice(-4)}`.toLowerCase());

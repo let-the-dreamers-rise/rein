@@ -21,7 +21,7 @@
 const fs = require("fs");
 const path = require("path");
 const { ethers } = require("ethers");
-const { fetchHistory, toTrail, CHAINS } = require("./blockscout");
+const { fetchHistory, fetchEthPaid, toTrail, CHAINS } = require("./blockscout");
 const { NATIVE } = require("./evaluate");
 const { namer, money } = require("./index");
 const { looksLike, home } = require("./guard");
@@ -163,7 +163,7 @@ function moveOf(c) {
 /// What Rein knows about a Safe from its public history: who it has paid, the
 /// largest it has sent in each token, who it has approved, and the addresses
 /// that appear only in fake transfers made to look like it sent them.
-function habits(history, { owners = [] } = {}) {
+function habits(history, { owners = [], ethPaid = [] } = {}) {
   const { rows, tokens, ignored = [] } = toTrail(history, { payments: true });
   const own = rows.filter((r) => !r.derived);
   const paid = new Map();
@@ -181,9 +181,16 @@ function habits(history, { owners = [] } = {}) {
       }
     }
   }
+  // ETH a Safe pays goes out as internal transactions, read separately.
+  for (const e of ethPaid) {
+    const key = e.payee.toLowerCase();
+    paid.set(key, (paid.get(key) || 0) + 1);
+    const k = `${key}:${NATIVE.toLowerCase()}`;
+    largest[k] = Math.max(largest[k] || 0, e.amount);
+  }
   const fakes = new Set(ignored.map((x) => x.payee && x.payee.toLowerCase()).filter(Boolean));
   const rate = (t) => (t === NATIVE ? (history.info?.exchange_rate != null ? Number(history.info.exchange_rate) : null) : tokens[t]?.rate ?? (STABLES.test(tokens[t]?.symbol || "") ? 1 : null));
-  return { paid, largest, spenders, fakes, tokens, rate, owners: owners.map((o) => ethers.getAddress(o)), name: namer(history, tokens), payments: own.length, ignored };
+  return { paid, largest, spenders, fakes, tokens, rate, owners: owners.map((o) => ethers.getAddress(o)), name: namer(history, tokens), payments: own.length + ethPaid.length, ignored };
 }
 
 /// The findings for one queued transaction: [{ level: "danger" | "warn", why }].
@@ -261,14 +268,16 @@ function saveState(state, file) {
 /// Reads the queue and judges each pending transaction. Returns
 /// { safe, threshold, owners, nonce, queue: [{ nonce, safeTxHash, signed, needed, what, found }], fresh }
 /// where `fresh` are the flagged ones not posted before.
-async function watchOnce(address, { chain = "base", api = null, safeApi: given = null, apiKey = null, safeUrl = null, fetch: fetchImpl = globalThis.fetch, env = process.env, minUsd = 1000, history = null, remember = true } = {}) {
+async function watchOnce(address, { chain = "base", api = null, safeApi: given = null, apiKey = null, safeUrl = null, fetch: fetchImpl = globalThis.fetch, env = process.env, minUsd = 1000, history = null, ethPaid = null, remember = true } = {}) {
   const safe = ethers.getAddress(address);
   const service = given || safeApi(chain, { url: safeUrl, apiKey, fetch: fetchImpl });
   const info = await service.info(safe);
   const nonce = Number(info.nonce || 0);
   const pending = await service.queue(safe, nonce);
   const hist = history || (await fetchHistory(safe, { chain, api, fetch: fetchImpl }));
-  const h = habits(hist, { owners: info.owners || [] });
+  // Best effort: without it a usual ETH payee reads as new, which only adds a flag.
+  const eth = ethPaid || (history ? [] : await fetchEthPaid(safe, { chain, api, fetch: fetchImpl }).catch(() => []));
+  const h = habits(hist, { owners: info.owners || [], ethPaid: eth });
   const queue = pending
     .filter((t) => !t.isExecuted && Number(t.nonce) >= nonce)
     .map((t) => ({
