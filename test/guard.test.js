@@ -294,6 +294,23 @@ describe("rein guard", function () {
       fs.writeFileSync(file, JSON.stringify(g));
       expect(rein.check(stranger(5), { env, now: NOW }).allow).to.equal(true);
       expect(rein.check(stranger(50), { env, now: NOW + 1 }).allow).to.equal(false);
+      // Only the first: a second small payment to the same new address waits.
+      expect(rein.check(stranger(5), { env, now: NOW + 2 }).allow).to.equal(false);
+      // And new addresses together get at most three times the cap a day.
+      const fresh = (i, n) => ({ payTo: `0x${String(i).repeat(40)}`, asset: USDC.address, amount: usdc(n) });
+      expect([1, 2, 3, 4].map((i) => rein.check(fresh(i, 18), { env, now: NOW + 600 * i }).allow)).to.deep.equal([true, true, true, false]);
+    });
+
+    it("refuses a negative amount, which would otherwise add to what is left of the hour", () => {
+      saved();
+      const known = (amount) => ({ payTo: PAYEES.inference.address, asset: USDC.address, amount });
+      const before = rein.check(known(usdc(1)), { env, now: NOW }).leftThisHour;
+      for (const amount of ["-700000000", "-1", "1.5", "abc", " -0x10"]) expect(rein.check(known(amount), { env, now: NOW + 1 })).to.include({ allow: false, reason: "GUARD_ERROR" });
+      expect(rein.check({ to: PAYEES.inference.address, value: "-1" }, { env, now: NOW + 2 }).reason).to.equal("GUARD_ERROR");
+      const neg = { domain: { verifyingContract: USDC.address }, types: { TransferWithAuthorization: [] }, primaryType: "TransferWithAuthorization", message: { to: PAYEES.inference.address, value: "-500000000" } };
+      expect(rein.check(neg, { env, now: NOW + 3 }).allow).to.equal(false);
+      expect(rein.check(known(usdc(1)), { env, now: NOW + 4 }).leftThisHour).to.equal(before - 1);
+      expect(rein.check(null, { env }).explanation).to.contain("got nothing");
     });
 
     it("posts each new hold to Slack once, with a signed link to approve or refuse it", async () => {
@@ -358,7 +375,7 @@ describe("rein guard", function () {
       expect(await guard.main(["--sample"], { log: (l) => lines.push(l), env })).to.equal(0);
       const out = lines.join("\n");
       expect(out).to.contain("Its last 30 days").and.contain("would have allowed").and.contain("Guard is on");
-      expect(out).to.contain('require("rein-wallet").check(tx)');
+      expect(out).to.contain('require("rein-wallet").check(tx, { wallet:');
       expect(fs.existsSync(guard.guardPath(AGENT, env))).to.equal(true);
 
       lines.length = 0;

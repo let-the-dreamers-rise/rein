@@ -227,6 +227,15 @@ describe("rein cosign (Privy)", function () {
     expect(await rein.cosign(usual, { url: "http://127.0.0.1:1", token: "t0ken" })).to.include({ allow: false, reason: "COSIGNER_UNREACHABLE" });
   });
 
+  it("won't set Privy up with keys that aren't P-256, or with the same key twice", async () => {
+    const agent = cosign.keygen();
+    const e = { ...env, REIN_PRIVY_PUBLIC_KEY: key.privyPublicKey };
+    const run = (a, b) => cosign.main(["setup", "privy", "--wallet", WALLET_ID, "--policy", "p", "--agent-key", a, "--admin-key", b], { log: () => {}, env: e }).catch((x) => x.message);
+    expect(await run("notakey", agent.privyPublicKey)).to.contain("--agent-key isn't a P-256 public key");
+    expect(await run(agent.privyPublicKey, agent.privyPublicKey)).to.contain("three different keys");
+    expect(await run(agent.privyPublicKey, key.privyPublicKey)).to.contain("three different keys");
+  });
+
   it("sets Privy up: two key quorums, then the wallet, signed by its current owner", async () => {
     const owner = cosign.keygen();
     const agent = cosign.keygen();

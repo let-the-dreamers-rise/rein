@@ -212,6 +212,7 @@ function dailyCeiling(rows, token, hourly) {
 }
 
 function readCohort(file) {
+  if (!fs.existsSync(file)) throw new Error(`no cohort file at ${file} (rein fleet <wallets.txt> --out dir writes dir/cohort.json)`);
   const c = JSON.parse(fs.readFileSync(file, "utf8"));
   if (c.kind !== "rein-cohort") throw new Error(`${file} is not a Rein cohort (rein fleet --out writes cohort.json)`);
   return c;
@@ -298,13 +299,24 @@ function approve(g) {
 // -- checking a payment -------------------------------------------------------------
 
 function units(raw, decimals) {
-  return Number(ethers.formatUnits(BigInt(raw), decimals));
+  let n;
+  try {
+    n = BigInt(raw);
+  } catch {
+    n = -1n;
+  }
+  // A negative amount would add to what is left of the hour instead of taking from it.
+  if (n < 0n || (typeof raw === "string" && !/^(0x[0-9a-fA-F]+|\d+)$/.test(raw.trim()))) {
+    throw new Error(`"${raw}" isn't an amount: it must be a whole, non-negative number of the token's smallest units`);
+  }
+  return Number(ethers.formatUnits(n, decimals));
 }
 
 /// A payment as a trail row. Takes an EVM transaction ({ to, data, value })
 /// or an x402 payment requirement ({ payTo, asset, amount | maxAmountRequired },
 /// in the token's smallest units).
 function toRow(tx, guard, now) {
+  if (!tx || typeof tx !== "object") throw new Error("check needs a transaction, an x402 payment or a typed-data signature, and got nothing");
   const decimalsOf = (token) => guard.tokens[token]?.decimals ?? 18;
   if (tx.payTo) {
     const token = ethers.getAddress(tx.asset);
@@ -454,7 +466,7 @@ function decide(guard, id, decision, now = Math.floor(Date.now() / 1000)) {
 /// `catch` around it can't turn an error into a payment.
 function check(tx, opts = {}) {
   try {
-    const { guard, file } = loadGuard(opts.wallet || opts.guard || tx.from || null, opts.env);
+    const { guard, file } = loadGuard(opts.wallet || opts.guard || tx?.from || null, opts.env);
     return file ? withLock(file, () => checkOnce(tx, opts, file)) : checkOnce(tx, opts, null, guard);
   } catch (err) {
     return { allow: false, reason: "GUARD_ERROR", explanation: `Rein could not check this payment, so it is blocked: ${err.message}` };
@@ -475,12 +487,24 @@ function checkOnce(tx, opts, file, given) {
   const lookalike = reason === "PAYEE_NOT_ALLOWED" && rows.some((r) => r.payee && guard.policy.transferPayees.some((p) => looksLike(p, r.payee)));
   if (lookalike) reason = "LOOKALIKE_PAYEE";
   let allow = reason === "OK";
-  // A first payment to a new address, if it is small, goes through and
-  // counts toward the hour and the day like any other.
+  // The first payment to a new address, if it is small, goes through and
+  // counts toward the hour and the day like any other. Only the first: a
+  // second payment to that address waits for a person, and new addresses
+  // together get at most three times the cap a day, so an attacker can't
+  // take the daily ceiling in small pieces.
+  let first = null;
+  const firsts = (guard.firstPayments || []).filter((f) => f.ts > now - 30 * DAY);
   if (reason === "PAYEE_NOT_ALLOWED" && guard.newPayeeCap > 0 && rows.every((r) => r.derived || r.kind === "call" || Number(r.amount) <= guard.newPayeeCap)) {
     const extra = rows.map((r) => r.payee).filter(Boolean);
+    const amount = rows.filter((r) => !r.derived && r.kind !== "call").reduce((a, r) => a + Number(r.amount), 0);
+    const seen = extra.some((p) => firsts.some((f) => f.payee.toLowerCase() === p.toLowerCase()));
+    const today = firsts.filter((f) => f.ts > now - DAY).reduce((a, f) => a + f.amount, 0);
     const widened = { ...guard, policy: { ...guard.policy, transferPayees: [...guard.policy.transferPayees, ...extra], payees: [...guard.policy.payees, ...extra] } };
-    if (judge(widened, ledger, rows, now) === "OK") (reason = "OK"), (allow = true);
+    if (!seen && today + amount <= guard.newPayeeCap * 3 && judge(widened, ledger, rows, now) === "OK") {
+      reason = "OK";
+      allow = true;
+      first = { payee: extra[0], ts: now, amount };
+    }
   }
   // Anything else outside the limits is held: a person can let this exact
   // payment through once, and the agent's retry then passes.
@@ -537,6 +561,7 @@ function checkOnce(tx, opts, file, given) {
   }
   if (opts.record !== false && file) {
     if (allow) guard.ledger = [...ledger, ...rows.map(ledgerRow)];
+    if (first) guard.firstPayments = [...firsts, first];
     else guard.blocked = [...(guard.blocked || []), { at: new Date(now * 1000).toISOString(), ...verdict }].slice(-100);
   }
   const isNew = hold && hold.isNew;
@@ -672,6 +697,35 @@ function listHolds(address, { log, env }) {
   return 0;
 }
 
+/// One line from the terminal. Node leaves stdin non-blocking once it has
+/// looked at isTTY, so a plain read fails with EAGAIN; read the terminal
+/// itself where there is one, and wait on stdin otherwise.
+function readLine() {
+  let fd = 0;
+  let opened = false;
+  if (process.platform !== "win32") {
+    try {
+      fd = fs.openSync("/dev/tty", "r");
+      opened = true;
+    } catch {
+      fd = 0;
+    }
+  }
+  const buf = Buffer.alloc(64);
+  let n;
+  for (;;) {
+    try {
+      n = fs.readSync(fd, buf, 0, 64, null);
+      break;
+    } catch (err) {
+      if (err.code !== "EAGAIN") throw err;
+      sleep(50);
+    }
+  }
+  if (opened) fs.closeSync(fd);
+  return buf.toString("utf8", 0, n);
+}
+
 function confirmed(guard, { log, input }) {
   const want = guard.wallet.slice(-4).toLowerCase();
   let typed = input;
@@ -681,8 +735,13 @@ function confirmed(guard, { log, input }) {
       return false;
     }
     process.stdout.write("Type the last four characters of the wallet address to approve: ");
-    const buf = Buffer.alloc(64);
-    typed = buf.toString("utf8", 0, fs.readSync(0, buf, 0, 64, null));
+    const asked = Date.now();
+    typed = readLine();
+    // Typed before the question was asked: a script, not a person reading it.
+    if (Date.now() - asked < 300) {
+      log("\nNot approved: that answer was already waiting before the question. Type it after the prompt.");
+      return false;
+    }
   }
   if (String(typed).trim().toLowerCase() !== want) {
     log("Not approved: that didn't match.");
@@ -716,7 +775,7 @@ function parse(argv) {
   return o;
 }
 
-const USAGE = `usage: rein guard <address> [--chain base|base-sepolia|ethereum] [--days 30] [--webhook URL] [--out file]
+const USAGE = `usage: rein guard <address> [--chain base|base-sepolia|ethereum] [--api <Blockscout URL>] [--days 30] [--webhook URL] [--out file]
        rein guard <address> --approve     accept the widenings the last update proposed
        rein guard <address> --holds       payments held for a person to approve
        rein guard <address> --allow <id>  let one held payment through (--deny <id> refuses it)
@@ -730,6 +789,8 @@ async function main(argv, { log = console.log, fetch: fetchImpl, env = process.e
     console.error(USAGE);
     return o.help ? 0 : 2;
   }
+  // Read before the network, so a wrong path fails first and plainly.
+  const cohort = o.cohort ? readCohort(o.cohort) : null;
   let history;
   if (o.sample) {
     const { sampleHistory } = require("./sample");
@@ -741,7 +802,13 @@ async function main(argv, { log = console.log, fetch: fetchImpl, env = process.e
     if (o.deny) return decideAtKeyboard(o.address, o.deny, "denied", { log, env, input, now });
     if (o.holds) return listHolds(o.address, { log, env });
     log(`Reading ${o.address}'s history on ${CHAINS[o.chain]?.name || o.api || o.chain}…`);
-    history = await fetchHistory(o.address, { chain: o.chain, api: o.api, fetch: fetchImpl });
+    try {
+      history = await fetchHistory(o.address, { chain: o.chain, api: o.api, fetch: fetchImpl });
+    } catch (err) {
+      // A brand-new wallet the explorer hasn't seen yet can still start from its cohort.
+      if (!(cohort && /has no record/.test(err.message))) throw err;
+      history = { chain: o.chain, address: ethers.getAddress(o.address), info: null, transactions: [], tokenTransfers: [], tokenBalances: [] };
+    }
   }
 
   let learned = null;
@@ -754,7 +821,6 @@ async function main(argv, { log = console.log, fetch: fetchImpl, env = process.e
   const wallet = ethers.getAddress(history.address);
   const file = o.out || guardPath(wallet, env);
   const existing = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : null;
-  const cohort = o.cohort ? readCohort(o.cohort) : null;
   const own = learned ? learned.guard.learnedFrom.calls : toTrail(history, { payments: true }).rows.filter((r) => !r.derived).length;
   // A new wallet starts from what its siblings share, and keeps to it until it
   // has enough history of its own; then its own limits replace it, tightening
@@ -819,7 +885,7 @@ async function main(argv, { log = console.log, fetch: fetchImpl, env = process.e
   log("");
   log(`Guard is on. Hold every payment to these limits with one line before your agent signs:`);
   log("");
-  log(`  const verdict = require("rein-wallet").check(tx);   // { allow, reason, explanation }`);
+  log(`  const verdict = require("rein-wallet").check(tx, { wallet: "${guard.wallet}" });   // { allow, reason, explanation }`);
   log("");
   log(`  tx is the transaction about to be signed, or an x402 payment ({ payTo, asset, amount }).`);
   log(`  For an MCP agent: rein-wallet mcp --guard ${guard.wallet}${o.out ? ` (with REIN_GUARD_FILE=${file})` : ""}`);

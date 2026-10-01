@@ -178,7 +178,7 @@ function fleetNumbers(results) {
 function numbersLine(results, sinceLabel) {
   const n = fleetNumbers(results);
   const share = n.payments ? ` (${Math.round((100 * n.wouldHold) / n.payments)}%)` : "";
-  return `${n.wallets} wallet${n.wallets === 1 ? "" : "s"} read. ${n.payments} payment${n.payments === 1 ? "" : "s"} ${sinceLabel}: ${n.firstOver100} first-ever payment${n.firstOver100 === 1 ? "" : "s"} over $100 to an address that wallet had never paid, and ${n.burstHours} hour${n.burstHours === 1 ? "" : "s"} where a wallet sent more than 3× its own earlier peak. ${n.wouldHold} of the ${n.payments}${share} would have waited for a second key by those two rules alone.`;
+  return `${n.wallets} wallet${n.wallets === 1 ? "" : "s"} read. ${n.payments} payment${n.payments === 1 ? "" : "s"} ${sinceLabel}: ${n.firstOver100} first-ever payment${n.firstOver100 === 1 ? "" : "s"} over $100 to an address that wallet had never paid, and ${n.burstHours} hour${n.burstHours === 1 ? "" : "s"} where a wallet sent more than 3× its own earlier peak. By those two simple rules alone, ${n.wouldHold} of the ${n.payments} payments${share} would have waited; the full guard above holds more.`;
 }
 
 /// The Slack message: a headline, then the held payments, newest first.
@@ -188,7 +188,7 @@ function slackText(results, { sinceLabel, explorer, limit = 15 }) {
   const sum = totals(results);
   const lines = [
     held.length
-      ? `*Rein shadow mode:* ${held.length} payment${held.length === 1 ? "" : "s"} from ${wallets} of ${results.length} agent wallet${results.length === 1 ? "" : "s"} would have waited for a person's approval ${sinceLabel}${sum.length ? ` (${sum.join(", ")})` : ""}.`
+      ? `*Rein shadow mode:* ${held.length} payment${held.length === 1 ? "" : "s"} or approval${held.length === 1 ? "" : "s"} from ${wallets} of ${results.length} agent wallet${results.length === 1 ? "" : "s"} would have waited for a person ${sinceLabel}${sum.length ? ` (${sum.join(", ")})` : ""}.`
       : `*Rein shadow mode:* nothing from ${results.length} agent wallet${results.length === 1 ? "" : "s"} would have been held ${sinceLabel}.`,
   ];
   for (const h of held.slice(0, limit)) {

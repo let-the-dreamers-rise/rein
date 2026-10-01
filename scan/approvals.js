@@ -129,6 +129,14 @@ const USAGE = `usage: REIN_APPROVAL_SECRET=<long random string> rein approvals -
 async function main(argv, { env = process.env, log = console.error } = {}) {
   const o = parse(argv);
   const secret = env.REIN_APPROVAL_SECRET;
+  if (o.publicUrl && !/^https:\/\//.test(o.publicUrl) && !/^http:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(o.publicUrl)) {
+    console.error("--public-url must be https (approval links carry a secret), or http://localhost while you try it");
+    return 2;
+  }
+  if (o.webhook && !/^https?:\/\//.test(o.webhook)) {
+    console.error("--webhook must be a URL (a Slack or Discord incoming webhook)");
+    return 2;
+  }
   if (o.help || !o.publicUrl || !secret || secret.length < 16) {
     console.error(USAGE);
     if (!o.help && (!secret || secret.length < 16)) console.error("REIN_APPROVAL_SECRET must be set, 16 characters or more, and kept where the agent can't read it.");

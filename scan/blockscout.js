@@ -90,11 +90,25 @@ function poisoned(t, { chain, interacted }) {
 
 // -- fetching ---------------------------------------------------------------
 
-async function getJson(url, fetchImpl) {
-  const res = await fetchImpl(url, { headers: { accept: "application/json" } });
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`${url} answered ${res.status}`);
-  return res.json();
+async function getJson(url, fetchImpl, { tries = 4 } = {}) {
+  for (let i = 1; ; i++) {
+    const res = await fetchImpl(url, { headers: { accept: "application/json" } });
+    if (res.status === 404) return null;
+    if (res.ok) return res.json();
+    // Busy or rate-limited: wait and ask again, as the explorer asks.
+    if ((res.status === 429 || res.status >= 500) && i < tries) {
+      const after = Number(res.headers?.get?.("retry-after"));
+      await new Promise((r) => setTimeout(r, Number.isFinite(after) && after > 0 ? Math.min(after, 30) * 1000 : 1000 * 2 ** (i - 1)));
+      continue;
+    }
+    const hint =
+      res.status === 403
+        ? " (refused: a proxy or firewall on this network may block the explorer; --api <Blockscout URL> points Rein at another one)"
+        : res.status === 429
+          ? " (rate-limited: try again in a minute, or point --api at your own Blockscout)"
+          : "";
+    throw new Error(`${url} answered ${res.status}${hint}`);
+  }
 }
 
 async function paged(base, path, query, { fetchImpl, maxPages, pause }) {

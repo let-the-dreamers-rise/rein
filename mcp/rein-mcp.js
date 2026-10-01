@@ -25,11 +25,11 @@
 //                            commitment so it is not readable by strangers
 
 const readline = require("readline");
-const { openClient } = require("./lib/config");
+const { openClient, wantsGuard } = require("./lib/config");
 const { NAMES, explain } = require("../scripts/codes");
 
 const PROTOCOL_VERSION = "2024-11-05";
-const SERVER = { name: "rein", version: "0.4.0" };
+const SERVER = { name: "rein", version: require("../package.json").version };
 
 // The descriptions below are the real interface. A model decides whether to
 // check before paying based on what these say, so they state the two facts that
@@ -127,6 +127,21 @@ const TOOLS = [
   },
 ];
 
+// With --guard, Rein checks payments the agent makes with its own wallet: it
+// doesn't pay, and an allowed check is counted against the hour, because the
+// agent is about to sign it.
+const GUARD_TOOLS = TOOLS.filter((t) => t.name !== "rein_pay").map((t) =>
+  t.name !== "rein_check_payment"
+    ? t
+    : {
+        ...t,
+        description:
+          "Call this before you sign any payment with your wallet. It answers allow or block with the reason, from limits learned from this wallet's own history. " +
+          "An allowed payment is counted against this hour and day, so call it once per payment, right before you sign. " +
+          "If it blocks, the reason says why (for example PAYEE_NOT_ALLOWED or TOKEN_PER_WINDOW); a payment that is held waits for a person to approve it, so tell them and retry the same payment later. Do not look for another way to make it.",
+      }
+);
+
 // Opened on first use rather than at startup, so a misconfigured server still
 // answers initialize and tools/list and can explain what is wrong through the
 // tool result, where the person will actually see it. A failed open is not
@@ -210,7 +225,7 @@ async function handle(msg) {
       return reply(id, {});
 
     case "tools/list":
-      return reply(id, { tools: TOOLS });
+      return reply(id, { tools: wantsGuard() ? GUARD_TOOLS : TOOLS });
 
     case "tools/call": {
       const toolName = params?.name;

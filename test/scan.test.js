@@ -469,7 +469,7 @@ describe("the wallet scanner", function () {
       const entries = [...new Set([...Object.values(pkg.bin), pkg.main])].map((b) => path.join(ROOT, b));
       const { metafile } = await esbuild.build({ entryPoints: entries, bundle: true, platform: "node", write: false, outdir: os.tmpdir(), metafile: true, logLevel: "silent" });
       const local = Object.keys(metafile.inputs).filter((f) => !f.includes("node_modules"));
-      const shipped = (f) => pkg.files.some((p) => (p.endsWith("/") ? f.startsWith(p) : p.includes("*") ? f.startsWith(p.split("*")[0]) && !f.slice(p.split("*")[0].length).includes("/") : f === p));
+      const shipped = (f) => f === "package.json" /* npm always ships it */ || pkg.files.some((p) => (p.endsWith("/") ? f.startsWith(p) : p.includes("*") ? f.startsWith(p.split("*")[0]) && !f.slice(p.split("*")[0].length).includes("/") : f === p));
       expect(local.filter((f) => !shipped(f))).to.deep.equal([]);
       expect(pkg.private).to.equal(undefined);
       expect(pkg.bin[pkg.name]).to.equal("bin/rein.js"); // so `npx rein-wallet` knows what to run

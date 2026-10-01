@@ -31,7 +31,7 @@ describe("rein fleet (shadow mode)", function () {
     // Held payments never left, so the honest payments after them still fit the day.
     expect(drained.held.filter((h) => h.reason === "TOKEN_PER_DAY")).to.deep.equal([]);
     const text = lines.join("\n");
-    expect(text).to.contain("would have waited for a person's approval in the last 30 days").and.contain("the first payment this agent ever made to that address");
+    expect(text).to.contain("would have waited for a person in the last 30 days").and.contain("the first payment this agent ever made to that address");
     expect(text).to.contain("Nothing was held");
     expect(fs.readFileSync(path.join(out, "fleet.md"), "utf8")).to.contain(`## ${drained.address}`);
   });
@@ -41,7 +41,7 @@ describe("rein fleet (shadow mode)", function () {
     const fetch = async (url, init) => (posts.push(JSON.parse(init.body).text), { ok: true });
     await fleet.main(["--sample", "--webhook", "https://hooks.example/x"], { log: () => {}, fetch });
     expect(posts).to.have.length(1);
-    expect(posts[0]).to.contain("*Rein shadow mode:* 10 payments from 4 of 4 agent wallets");
+    expect(posts[0]).to.contain("*Rein shadow mode:* 10 payments or approvals from 4 of 4 agent wallets");
     await fleet.main(["--sample", "--since", "1m", "--webhook", "https://hooks.example/x"], { log: () => {}, fetch });
     expect(posts).to.have.length(1);
     await fleet.main(["--sample", "--since", "1m", "--always", "--webhook", "https://hooks.example/x"], { log: () => {}, fetch });
@@ -104,6 +104,19 @@ describe("rein fleet (shadow mode)", function () {
     expect(started).to.include({ version: 2, fromCohort: true });
     expect(started.sentences.join(" ")).to.contain("USDC: at most 200 an hour and 400 a day");
     expect(() => guardFromCohort({ kind: "other" }, a)).to.throw("not a Rein cohort");
+  });
+
+  it("guards a wallet the explorer has never seen from cohort.json, and says plainly when the file is missing", async () => {
+    const env = { REIN_HOME: fs.mkdtempSync(path.join(os.tmpdir(), "rein-cohort-")) };
+    const out = path.join(env.REIN_HOME, "fleet");
+    await fleet.main(["--sample", "--out", out], { log: () => {} });
+    const brandNew = "0x" + "b".repeat(40);
+    const nobody = async () => ({ ok: false, status: 404, json: async () => ({}) });
+    await guard.main([brandNew, "--cohort", path.join(out, "cohort.json")], { fetch: nobody, env, log: () => {} });
+    expect(guard.loadGuard(brandNew, env).guard).to.include({ fromCohort: true });
+    let err;
+    await guard.main([brandNew, "--cohort", "nope.json"], { fetch: nobody, env, log: () => {} }).catch((e) => (err = e));
+    expect(err.message).to.contain("no cohort file at nope.json");
   });
 
   it("starts a new wallet's guard from cohort.json, and lets its own limits take over once it has history", async () => {

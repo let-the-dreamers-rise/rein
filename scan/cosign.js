@@ -401,6 +401,21 @@ async function main(argv, { log = console.log, env = process.env, fetch: fetchIm
     const need = { privy_wallet_id: "--wallet", privy_policy_id: "--policy", agent_key: "--agent-key", admin_key: "--admin-key" };
     const missing = Object.keys(need).filter((k) => !o.vars[k]);
     if (o.send && missing.length) throw new Error(`--send needs ${missing.map((k) => need[k]).join(", ")}`);
+    if (missing.length) log(`Showing the requests with ${missing.map((k) => need[k]).join(", ")} left as placeholders.`);
+    // Three different P-256 keys, or the quorum is a quorum of one.
+    const keys = { "--agent-key": o.vars.agent_key, "--admin-key": o.vars.admin_key, REIN_PRIVY_PUBLIC_KEY: pub };
+    for (const [flag, k] of Object.entries(keys)) {
+      if (k == null) continue;
+      let ok = false;
+      try {
+        ok = crypto.createPublicKey({ key: Buffer.from(k, "base64"), format: "der", type: "spki" }).asymmetricKeyDetails?.namedCurve === "prime256v1";
+      } catch {
+        ok = false;
+      }
+      if (!ok) throw new Error(`${flag} isn't a P-256 public key in base64 DER (what Privy calls an authorization key's public half)`);
+    }
+    const given = Object.values(keys).filter(Boolean);
+    if (new Set(given).size !== given.length) throw new Error("the agent, admin and Rein keys must be three different keys: any two of them sign for the wallet");
     const { apply } = require("./apply");
     await apply(privySetup(), { vars: { ...o.vars, rein_key: pub }, send: o.send, env, fetch: fetchImpl, log });
     log("");
