@@ -271,9 +271,13 @@ function toTrail(history, { payments = false } = {}) {
 }
 
 /// What the wallet holds now, in each token's own units and, where the
-/// explorer knows a price, in dollars.
+/// explorer knows a price, in dollars. Airdropped junk (lookalike names,
+/// tokens the explorer flags, unpriced tokens this wallet never used) is left
+/// out and counted in `junk`, so a phishing "token" never shows as a holding.
 function holdings(history) {
   const out = [];
+  const me = lower(history.address);
+  const used = new Set(history.transactions.filter((tx) => lower(tx.from?.hash) === me && tx.to?.hash).map((tx) => lower(tx.to.hash)));
   const coin = history.info?.coin_balance;
   if (coin != null) {
     const amount = Number(ethers.formatEther(BigInt(coin)));
@@ -286,7 +290,13 @@ function holdings(history) {
     const amount = units(b.value || 0, decimals);
     if (amount === 0) continue;
     const rate = b.token.exchange_rate != null ? Number(b.token.exchange_rate) : null;
-    out.push({ token: tokenAddress(b.token), symbol: b.token.symbol || null, amount, usd: rate != null ? amount * rate : null });
+    const address = tokenAddress(b.token);
+    const known = (KNOWN_TOKENS[history.chain] || []).some((a) => a.toLowerCase() === address.toLowerCase());
+    const junk = !PLAIN.test(b.token.symbol || "") || !PLAIN.test(b.token.name || "")
+      || (b.token.reputation && b.token.reputation !== "ok")
+      || (rate == null && !known && !used.has(address.toLowerCase()));
+    if (junk) { out.junk = (out.junk || 0) + 1; continue; }
+    out.push({ token: address, symbol: b.token.symbol || null, amount, usd: rate != null ? amount * rate : null });
   }
   return out;
 }

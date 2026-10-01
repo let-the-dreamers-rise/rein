@@ -173,6 +173,7 @@ footer{border-top:1px solid var(--hair);padding:28px 0 40px;font-size:14px;color
     <div class="card">
       <h2>What it holds</h2>
       <div class="tablewrap"><table><thead><tr><th>token</th><th class="n">amount</th><th class="n">USD</th></tr></thead><tbody id="holdings"></tbody></table></div>
+      <p class="sub" id="junk" style="margin-top:12px" hidden></p>
     </div>
 
     <div class="card" id="c-next">
@@ -280,6 +281,8 @@ footer{border-top:1px solid var(--hair);padding:28px 0 40px;font-size:14px;color
     }
 
     $("holdings").replaceChildren(...r.holdings.map((h) => row([[h.symbol || h.token], [amt(h.amount), "n"], [h.usd != null ? usd(h.usd) : "?", "n"]])));
+    $("junk").hidden = !r.junkTokens;
+    $("junk").textContent = r.junkTokens ? `Left out ${r.junkTokens} airdropped token(s) with no price that this wallet never used, or with lookalike names. Often spam or phishing: don't open their links.` : "";
     $("caveats").replaceChildren(...r.caveats.map((c) => el("li", c)));
     $("share").textContent = r.synthetic ? "" : `Link to this scan: ${location.href}`;
     $("report").hidden = false;

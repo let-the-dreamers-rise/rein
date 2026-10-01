@@ -377,6 +377,8 @@ describe("rein guard", function () {
       expect(out).to.contain("Its last 30 days").and.contain("would have allowed").and.contain("Guard is on");
       expect(out).to.contain('require("rein-wallet").check(tx, { wallet:');
       expect(fs.existsSync(guard.guardPath(AGENT, env))).to.equal(true);
+      // check() has no intent to verify, so the file must not claim it does.
+      expect(JSON.parse(fs.readFileSync(guard.guardPath(AGENT, env), "utf8")).policy.agent).to.not.have.property("requireIntent");
 
       lines.length = 0;
       await guard.main(["--sample"], { log: (l) => lines.push(l), env });
@@ -406,6 +408,7 @@ describe("rein guard", function () {
       const ok = client.check({ payee: PAYEES.inference.address, amount: "12.5", token: "usdc", because: "inference" });
       expect(ok).to.include({ allow: true, amount: 12.5 });
       expect(client.check({ payee: PAYEES.stranger.address, amount: "5000", token: "USDC", because: "x" })).to.include({ allow: false, reason: "PAYEE_NOT_ALLOWED" });
+      for (const amount of ["1e3", "abc", "-5", "1.1234567"]) expect(() => client.check({ payee: PAYEES.inference.address, amount, token: "USDC", because: "x" })).to.throw("isn't an amount");
       expect(client.pay({}).message).to.contain("Rein checks, your wallet signs");
       expect(client.budget().tokens.USDC.leftThisHour).to.be.lessThan(learned.guard.policy.tokens[USDC.address].maxPerWindow);
     });

@@ -58,7 +58,6 @@ function cohortFrom(guards, { share = 0.5 } = {}) {
         maxCallsPerWindow: Math.max(1, Math.round(median(agents.map((a) => a.maxCallsPerWindow)))),
         maxNativePerCall: median(agents.map((a) => a.maxNativePerCall)) ?? 0,
         maxNativePerWindow: median(agents.map((a) => a.maxNativePerWindow)) ?? 0,
-        requireIntent: agents.filter((a) => a.requireIntent).length * 2 > agents.length,
         expiry: 0,
       },
       targets,

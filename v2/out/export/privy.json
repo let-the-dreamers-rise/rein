@@ -80,7 +80,7 @@
       }
     },
     {
-      "step": "create the policy: 3 allow rule(s), nothing else allowed",
+      "step": "create the policy: 2 allow rule(s), nothing else allowed",
       "returns": "policy",
       "request": {
         "method": "POST",
@@ -346,31 +346,6 @@
                   "value": "0x1dcd6500"
                 }
               ]
-            },
-            {
-              "name": "calls on Router",
-              "method": "eth_signTransaction",
-              "action": "ALLOW",
-              "conditions": [
-                {
-                  "field_source": "ethereum_transaction",
-                  "field": "chain_id",
-                  "operator": "eq",
-                  "value": "8453"
-                },
-                {
-                  "field_source": "ethereum_transaction",
-                  "field": "to",
-                  "operator": "eq",
-                  "value": "<Router>"
-                },
-                {
-                  "field_source": "ethereum_transaction",
-                  "field": "value",
-                  "operator": "lte",
-                  "value": "0x0"
-                }
-              ]
             }
           ]
         }
@@ -388,6 +363,16 @@
           ]
         }
       }
+    }
+  ],
+  "leftOut": [
+    {
+      "contract": "Router",
+      "address": "<Router>",
+      "functions": [
+        "swapExact"
+      ],
+      "why": "Privy can only limit which function is called with the contract's ABI, so Rein leaves it out rather than allow every function on it. Add an ABI rule by hand, or have a person approve these calls."
     }
   ]
 }

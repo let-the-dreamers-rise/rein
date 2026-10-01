@@ -97,6 +97,7 @@ async function apply(plan, { vars = {}, send = false, env = process.env, fetch: 
   // What the user must supply before anything is sent.
   const missing = holes(plan.steps.map((s) => s.request)).filter((k) => known[k] == null && k !== "now_ms" && !k.endsWith(".id"));
   if (send && missing.length) throw new Error(`missing ${missing.map((k) => FLAG[k] || `{{${k}}}`).join(", ")}`);
+  for (const l of plan.leftOut || []) log(`Left out of this policy: calls on ${l.contract} (${l.address}). ${l.why}`);
 
   for (const [i, s] of plan.steps.entries()) {
     const req = fillIn(s.request, { ...known, now_ms: String(Date.now()) });

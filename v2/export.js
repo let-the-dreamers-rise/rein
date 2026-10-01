@@ -251,11 +251,12 @@ function privy(f, o = {}) {
       { field_source: "ethereum_calldata", field: "approve.spender", abi: ERC20_ABI, operator: "in", value: payees },
       { field_source: "ethereum_calldata", field: "approve.value", abi: ERC20_ABI, operator: "lte", value: hex(tok.maxApproval) }] });
   }
-  for (const oth of f.others) {
-    rules.push({ name: `calls on ${oth.name}`.slice(0, 50), method, action: "ALLOW", conditions: [chain,
-      { field_source: "ethereum_transaction", field: "to", operator: "eq", value: oth.address },
-      { field_source: "ethereum_transaction", field: "value", operator: "lte", value: hex(f.nativePerCall) }] });
-  }
+  // Privy can only tell one function on a contract from another by decoding
+  // its arguments with the ABI, which Rein doesn't write yet. A rule on `to`
+  // alone would allow every function on a router, including a swap paid out
+  // to someone else, so other contracts are left out: closed, not open.
+  const leftOut = f.others.map((oth) => ({ contract: oth.name, address: oth.address, functions: oth.selectors,
+    why: "Privy can only limit which function is called with the contract's ABI, so Rein leaves it out rather than allow every function on it. Add an ABI rule by hand, or have a person approve these calls." }));
   if (f.nativeTo.length && f.nativePerCall > 0n) {
     rules.push({ name: "ETH to known recipients", method, action: "ALLOW", conditions: [chain,
       { field_source: "ethereum_transaction", field: "to", operator: "in", value: f.nativeTo },
@@ -266,7 +267,7 @@ function privy(f, o = {}) {
   steps.push({ step: "attach it to the agent's wallet (a wallet holds one policy, so this replaces any other)",
     request: { method: "PATCH", url: `${PRIVY}/wallets/${fill("privy_wallet_id")}`, auth: `${PRIVY_AUTH}; a wallet with an owner also needs privy-authorization-signature`,
       body: { policy_ids: [fill("policy.id")] } } });
-  return { vendor: "privy", method, fill: ["privy_wallet_id"], steps };
+  return { vendor: "privy", method, fill: ["privy_wallet_id"], steps, ...(leftOut.length ? { leftOut } : {}) };
 }
 
 // The honest table: which of the compiled bounds each engine can hold.

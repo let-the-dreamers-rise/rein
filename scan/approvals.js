@@ -143,7 +143,10 @@ async function main(argv, { env = process.env, log = console.error } = {}) {
     return o.help ? 0 : 2;
   }
   const server = http.createServer(handler({ env, secret }));
-  await new Promise((r) => server.listen(o.port, r));
+  await new Promise((r, j) => {
+    server.once("error", (err) => j(err.code === "EADDRINUSE" ? new Error(`port ${o.port} is already in use; stop whatever holds it or pass --port`) : err));
+    server.listen(o.port, r);
+  });
   log(`Approvals on ${o.publicUrl} (listening on ${o.port}). Watching ${guardFiles(env).length} guard(s) in ${path.join(home(env), "guards")}.`);
   const tick = () => announce({ env, secret, publicUrl: o.publicUrl, webhook: o.webhook }).catch((err) => log(`could not announce: ${err.message}`));
   await tick();

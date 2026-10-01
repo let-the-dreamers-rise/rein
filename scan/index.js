@@ -101,6 +101,7 @@ function scanHistory(history, { robust = true, train = 0.8, trail, expiryDays } 
       truncated: Boolean(history.truncated),
     },
     holdings: held.map((h) => ({ ...h, symbol: h.symbol || name(h.token) })),
+    junkTokens: held.junk || 0,
     synthetic: Boolean(history.synthetic),
     caveats: history.synthetic
       ? ["SYNTHETIC: this is Rein's made-up sample wallet (scan/sample.js), not a real one. Every number below describes that sample."]
@@ -237,7 +238,12 @@ function sentences(b, policy, name) {
   if (policy.agent.maxNativePerWindow) out.push(`ETH: at most ${money(policy.agent.maxNativePerWindow)} an hour`);
   else out.push("Sends no ETH");
   out.push(`At most ${policy.agent.maxCallsPerWindow} calls an hour`);
-  if (policy.agent.expiry) out.push(`Lapses on ${new Date(policy.agent.expiry * 1000).toISOString().slice(0, 10)}, so somebody looks at it again`);
+  if (policy.agent.expiry) {
+    const day = new Date(policy.agent.expiry * 1000).toISOString().slice(0, 10);
+    out.push(policy.agent.expiry * 1000 < Date.now()
+      ? `Already lapsed (${day}): the history it was learned from is old, so scan again before using it`
+      : `Lapses on ${day}, so somebody looks at it again`);
+  }
   return out;
 }
 
@@ -328,6 +334,7 @@ function markdown(r) {
   L.push("## Today: no on-chain limit", "", r.exposureToday.sentence, "");
   L.push("| holds | amount | USD |", "|---|---:|---:|");
   for (const h of r.holdings) L.push(`| ${h.symbol} | ${money(h.amount)} | ${h.usd != null ? money(round(h.usd)) : "?"} |`);
+  if (r.junkTokens) L.push("", `Left out: ${r.junkTokens} airdropped token(s) with no price that this wallet never used, or with lookalike names. Often spam or phishing; don't open their links.`);
   if (!r.policy) {
     L.push("", ...r.caveats.map((c) => `- ${c}`), "");
     return L.join("\n");

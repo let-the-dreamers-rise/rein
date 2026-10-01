@@ -154,7 +154,10 @@ function learn(history, { days = 30 } = {}) {
   // apart: an allowance to a router is not permission to send it money,
   // since anyone can sweep tokens left in a router.
   const { admitted } = current.compiled.bounds;
-  const policy = { ...current.policy.onchain, transferPayees: [...admitted.payees].sort(), spenders: [...admitted.spenders].sort() };
+  // requireIntent is a Rein-account (on-chain) rule; check() has no intent to
+  // verify, so the guard file doesn't claim it.
+  const { requireIntent, ...agent } = current.policy.onchain.agent;
+  const policy = { ...current.policy.onchain, agent, transferPayees: [...admitted.payees].sort(), spenders: [...admitted.spenders].sort() };
   for (const [t, tp] of Object.entries(policy.tokens)) tp.maxPerDay = dailyCeiling(rows, t, tp.maxPerWindow);
 
   const now = Math.floor(Date.now() / 1000);
@@ -623,7 +626,12 @@ function guardClient(which, env = process.env) {
       if (!/^0x[0-9a-fA-F]{40}$/.test(payee)) throw new Error("in guard mode the payee is a 0x address");
       const asset = tokenOf(args.token);
       const decimals = guard.tokens[asset]?.decimals ?? 18;
-      const amount = ethers.parseUnits(String(args.amount), decimals).toString();
+      const said = String(args.amount ?? "").trim();
+      const places = said.split(".")[1]?.length || 0;
+      if (!/^\d+(\.\d+)?$/.test(said) || places > decimals) {
+        throw new Error(`"${said}" isn't an amount: write it in normal units with at most ${decimals} decimal places, like "250" or "12.50"`);
+      }
+      const amount = ethers.parseUnits(said, decimals).toString();
       const v = check({ payTo: payee, asset, amount }, { guard: w, env });
       return { ...v, next: v.next || (v.allow ? "Allowed and counted against this hour. Sign and send it with your own wallet now." : "Do not send it. Tell the person why, or pay less or later.") };
     },

@@ -192,7 +192,14 @@ function main() {
     process.exit(1);
   }
   if (sandbox) rein().catch((err) => console.error(`rein-api: the sandbox did not start: ${err.message}`));
-  createServer(tokens).listen(PORT, "127.0.0.1", () => {
+  const server = createServer(tokens);
+  server.on("error", (err) => {
+    console.error(err.code === "EADDRINUSE"
+      ? `rein-api: port ${PORT} is already in use (another rein-api?). Stop it, or pick another with REIN_API_PORT=8403.`
+      : `rein-api: could not listen on port ${PORT}: ${err.message}`);
+    process.exit(1);
+  });
+  server.listen(PORT, "127.0.0.1", () => {
     // Loopback by default. Putting a key that can spend on a public interface
     // should be a decision somebody makes on purpose, behind a proxy they chose.
     console.error(`rein-api listening on http://127.0.0.1:${PORT} for ${tokens.size} caller(s)`);

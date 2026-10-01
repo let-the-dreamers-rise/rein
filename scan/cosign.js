@@ -468,7 +468,10 @@ async function main(argv, { log = console.log, env = process.env, fetch: fetchIm
     const need = ["REIN_PRIVY_AUTH_KEY", "PRIVY_APP_ID", "PRIVY_APP_SECRET"].filter((k) => !env[k]);
     if (need.length) throw new Error(`set ${need.join(", ")}`);
     const server = http.createServer(privyHandler({ env, appId: env.PRIVY_APP_ID, appSecret: env.PRIVY_APP_SECRET, key: env.REIN_PRIVY_AUTH_KEY, token: env.REIN_COSIGN_TOKEN || null, fetch: fetchImpl, log }));
-    await new Promise((r) => server.listen(o.port, r));
+    await new Promise((r, j) => {
+      server.once("error", (err) => j(err.code === "EADDRINUSE" ? new Error(`port ${o.port} is already in use; stop whatever holds it or pass --port`) : err));
+      server.listen(o.port, r);
+    });
     log(`Rein co-signer for Privy app ${env.PRIVY_APP_ID} on port ${o.port}: POST /sign${env.REIN_COSIGN_TOKEN ? " (bearer token required)" : ""}.`);
     return null; // runs until stopped
   }

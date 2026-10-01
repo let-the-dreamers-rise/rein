@@ -147,6 +147,28 @@ describe("the wallet scanner", function () {
       expect(report.exposureUnderPolicy.tokens.find((t) => t.symbol === "WETH").perDay).to.equal(0);
     });
 
+    it("leaves airdropped junk out of what the wallet holds, and says how many", () => {
+      const h = sampleHistory();
+      const junk = (symbol, extra = {}) => ({ value: "1000000000000000000000", token_id: null, token: { address_hash: ethers.Wallet.createRandom().address, symbol, name: symbol, decimals: "18", type: "ERC-20", exchange_rate: null, ...extra } });
+      h.tokenBalances.push(junk("Visit claim-base.xyz"), junk("USDС"), junk("SCAM", { exchange_rate: "1", reputation: "scam" }));
+      const r = scanHistory(h);
+      expect(r.holdings.map((x) => x.symbol)).to.deep.equal(report.holdings.map((x) => x.symbol));
+      expect(r.junkTokens).to.equal(3);
+      expect(markdown(r)).to.contain("Left out: 3 airdropped token(s)");
+      expect(report.junkTokens).to.equal(0);
+    });
+
+    it("says when a policy learned from old history has already lapsed", () => {
+      expect(markdown(report)).to.contain("Lapses on");
+      const now = Date.now;
+      Date.now = () => (report.policy.onchain.agent.expiry + 86400) * 1000;
+      try {
+        expect(markdown(scanHistory(sampleHistory()))).to.contain("Already lapsed").and.contain("scan again before using it");
+      } finally {
+        Date.now = now;
+      }
+    });
+
     it("bounds ETH in fractions of an ETH, not whole ones", () => {
       const eth = report.policy.onchain.agent.maxNativePerWindow;
       expect(eth).to.be.above(0.01).and.below(0.1);
