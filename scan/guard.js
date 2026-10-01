@@ -587,6 +587,14 @@ function checkOnce(tx, opts, file, given) {
   if (opts.record !== false && file) {
     if (allow) guard.ledger = [...ledger, ...rows.map(ledgerRow)];
     if (first) guard.firstPayments = [...firsts, first];
+    // Learning mode (a starter guard): an address a small first payment went
+    // to becomes one it pays, until its own history replaces these limits.
+    if (first && guard.learning) {
+      const add = rows.map((r) => r.payee).filter((p) => p && !guard.policy.transferPayees.includes(p));
+      guard.policy.transferPayees = [...guard.policy.transferPayees, ...add];
+      guard.policy.payees = [...new Set([...guard.policy.payees, ...add])];
+      guard.paid = [...new Set([...(guard.paid || []), ...add])];
+    }
     else guard.blocked = [...(guard.blocked || []), { at: new Date(now * 1000).toISOString(), ...verdict }].slice(-100);
   }
   const isNew = hold && hold.isNew;

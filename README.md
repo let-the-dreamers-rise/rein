@@ -31,9 +31,28 @@ Asked about a few payments, Rein says:
 ```
 
 Then ask about any payment in plain words (`--ask "send 500 USDC to 0x…"`),
-switch it on for one agent with `npx rein-wallet guard 0x…`, or see what a
+or see what a
 second key would have held across a whole fleet with `npx rein-wallet fleet
 wallets.txt`. In Claude, the `rein_check_wallet` tool does the same.
+
+## Switch it on: one line
+
+```js
+const { protect } = require("rein-wallet");
+const wallet = protect(walletClient);   // a viem wallet client
+```
+
+Coinbase AgentKit, GOAT and ElizaOS all sign with a viem wallet client, so
+wrap it before you hand it to them. Every `sendTransaction`, `writeContract`,
+`signTransaction` and `signTypedData` (x402 included) is checked first; one
+outside the agent's habits throws `ReinHeld` with the reason and the id a
+person approves it with (`npx rein-wallet guard 0x… --allow <id>`).
+
+On first use Rein learns the wallet's limits from its history. A brand-new
+agent starts in learning mode: stablecoin payments up to 25 go through and
+the addresses they pay become trusted (at most 100 an hour and 250 a day);
+anything bigger, any other token or contract, and any lookalike address
+waits. Change those with `protect(walletClient, { starter: { perPayment, perHour, perDay } })`.
 
 ## The Rein account: limits in the contract itself
 

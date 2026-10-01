@@ -209,8 +209,8 @@ details.more>summary{cursor:pointer;font-weight:600;padding:14px 4px;color:var(-
 
     <div class="card on" id="c-on">
       <h2>Switch it on</h2>
-      <h3>One agent: one command</h3>
-      <p class="sub">Learns these habits on your machine, then checks each payment before your agent signs it.</p>
+      <h3>One agent: one line</h3>
+      <p class="sub">Wrap the wallet your agent signs with (viem, so Coinbase AgentKit, GOAT and ElizaOS too). Rein learns these habits on first use and checks every payment before it's signed; anything it holds throws an error that says why.</p>
       <pre class="cmd" id="cmd-guard"></pre>
       <h3>Many agent wallets: Rein as a second key</h3>
       <p class="sub">Your agents keep signing normal payments alone. Anything unusual needs Rein's second signature too, which Turnkey or Privy enforce, so a hijacked agent can't skip it. A person approves or refuses in Slack. Start with a free shadow report across all your wallets, with nothing to integrate:</p>
@@ -416,7 +416,7 @@ details.more>summary{cursor:pointer;font-weight:600;padding:14px 4px;color:var(-
       b.addEventListener("click", () => { $("ask-text").value = e.text; ask(e.text); });
       return b;
     }));
-    $("cmd-guard").textContent = `npx rein-wallet guard ${c.address}${chain && chain !== "base" ? ` --chain ${chain}` : ""}\n\n// then, before your agent signs:\nconst v = require("rein-wallet").check(tx, { wallet: "${c.address}" });\nif (!v.allow) throw new Error(v.explanation);`;
+    $("cmd-guard").textContent = `npm i rein-wallet\n\nconst { protect } = require("rein-wallet");\nconst wallet = protect(walletClient);   // the viem client for ${c.address.slice(0, 6)}…${c.address.slice(-4)}`;
   }
 
   function ask(text) {

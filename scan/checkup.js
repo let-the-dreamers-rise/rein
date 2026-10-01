@@ -312,7 +312,8 @@ async function main(argv, { log = console.log, fetch: fetchImpl = globalThis.fet
   const who = c.address;
   if (c.guard) {
     log("Switch it on:");
-    log(`  One agent:          npx rein-wallet guard ${who}${o.chain !== "base" ? ` --chain ${o.chain}` : ""}`);
+    log(`  One agent:          const wallet = require("rein-wallet").protect(walletClient)   (viem, AgentKit, GOAT, ElizaOS)`);
+    log(`                      or npx rein-wallet guard ${who}${o.chain !== "base" ? ` --chain ${o.chain}` : ""}, then check(tx) before signing`);
     log("  Many agent wallets: npx rein-wallet fleet wallets.txt   (what a second key would have held, read-only)");
     log("");
   }

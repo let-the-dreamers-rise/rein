@@ -1,5 +1,8 @@
 // rein-wallet as a library.
 //
+//   const { protect } = require("rein-wallet");
+//   const wallet = protect(walletClient);   // a viem wallet client: every payment is checked first
+//
 //   const rein = require("rein-wallet");
 //   const verdict = rein.check(tx);   // after `npx rein-wallet guard 0xAgentWallet`
 //   if (!verdict.allow) throw new Error(`Rein blocked this payment: ${verdict.explanation}`);
@@ -19,6 +22,7 @@
 // headers: { "privy-app-id" } }.
 const { check, learn, evolve, approve, loadGuard } = require("./scan/guard");
 const { scan, scanHistory, exportPolicy } = require("./scan/index");
+const { protect, ReinHeld } = require("./scan/protect");
 
 /// Asks `rein cosign privy` to co-sign a Privy request. Resolves with the
 /// verdict: { allow, signature } when it signs, { held, next } while a person
@@ -38,4 +42,4 @@ async function cosign(request, { url, token = process.env.REIN_COSIGN_TOKEN, fet
   }
 }
 
-module.exports = { check, cosign, learn, evolve, approve, loadGuard, scan, scanHistory, exportPolicy };
+module.exports = { protect, ReinHeld, check, cosign, learn, evolve, approve, loadGuard, scan, scanHistory, exportPolicy };
