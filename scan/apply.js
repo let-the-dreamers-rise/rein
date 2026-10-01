@@ -83,7 +83,7 @@ function created(vendor, body) {
   const a = body.activity || {};
   if (a.status && a.status !== "ACTIVITY_STATUS_COMPLETED") return { pending: a.status, activityId: a.id };
   const r = a.result || {};
-  return { id: r.createPolicyResult?.policyId || r.createSmartContractInterfaceResult?.smartContractInterfaceId || r.createApiOnlyUsersResult?.userIds?.[0] };
+  return { id: r.createPolicyResult?.policyId || r.createSmartContractInterfaceResult?.smartContractInterfaceId || r.createApiOnlyUsersResult?.userIds?.[0] || r.createWebhookEndpointResult?.endpointId || r.createWebhookEndpointResult?.webhookEndpoint?.endpointId };
 }
 
 /// Runs (or, without `send`, prints) a plan. Resolves with the ids created.

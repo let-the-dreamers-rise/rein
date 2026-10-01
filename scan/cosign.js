@@ -107,10 +107,13 @@ function turnkeyClient({ organizationId, publicKey, privateKey, fetch: fetchImpl
     if (!res.ok) throw new Error(`Turnkey ${p} answered ${res.status}: ${out.slice(0, 300)}`);
     return out ? JSON.parse(out) : {};
   };
-  const vote = (kind) => (fingerprint) =>
-    post(`/public/v1/submit/${kind}_activity`, { type: `ACTIVITY_TYPE_${kind.toUpperCase()}_ACTIVITY`, timestampMs: String(Date.now()), organizationId, parameters: { fingerprint } });
+  // A vote goes to the organization the activity lives in: a sub-organization,
+  // when an app gives each user one.
+  const vote = (kind) => (fingerprint, org = organizationId) =>
+    post(`/public/v1/submit/${kind}_activity`, { type: `ACTIVITY_TYPE_${kind.toUpperCase()}_ACTIVITY`, timestampMs: String(Date.now()), organizationId: org, parameters: { fingerprint } });
   return {
     waiting: async () => (await post("/public/v1/query/list_activities", { organizationId, filterByStatus: ["ACTIVITY_STATUS_CONSENSUS_NEEDED"], filterByType: SIGNING, paginationOptions: { limit: "100" } })).activities || [],
+    get: async (activityId, org = organizationId) => (await post("/public/v1/query/get_activity", { organizationId: org, activityId })).activity || null,
     approve: vote("approve"),
     reject: vote("reject"),
   };
@@ -133,13 +136,21 @@ function saveState(state, file) {
 
 /// One pass over the signing requests waiting on Rein. Returns what it did:
 /// { approved, rejected, held, left } as lists of activity ids.
-async function tick({ client, organizationId, env = process.env, webhook = null, fetch: fetchImpl = globalThis.fetch, log = () => {}, now = () => Math.floor(Date.now() / 1000), learn = true, cohort = null }) {
+async function tick({ client, organizationId, env = process.env, webhook = null, fetch: fetchImpl = globalThis.fetch, log = () => {}, now = () => Math.floor(Date.now() / 1000), learn = true, cohort = null, activities = null }) {
   const file = statePath(organizationId, env);
   const state = loadState(file);
   const done = { approved: [], rejected: [], held: [], left: [] };
   const tell = (text) => webhook && fetchImpl(webhook, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text, content: text }) }).catch(() => {});
-  const waiting = await client.waiting();
+  // Polling reads what is waiting in one organization; a Turnkey webhook hands
+  // over activities from any of its sub-organizations, fresh from Turnkey.
+  const given = activities != null;
+  const waiting = given ? activities.filter(Boolean) : await client.waiting();
   for (const a of waiting) {
+    const org = a.organizationId || organizationId;
+    if (given && a.status && a.status !== "ACTIVITY_STATUS_CONSENSUS_NEEDED") {
+      delete state.activities[a.id]; // signed, rejected or expired in Turnkey
+      continue;
+    }
     if (a.canApprove === false) continue; // already voted, or not Rein's to vote on
     const seen = state.activities[a.id];
     if (seen?.status === "left") continue;
@@ -184,7 +195,7 @@ async function tick({ client, organizationId, env = process.env, webhook = null,
       const h = (guard.holds || []).find((x) => x.id === seen.hold);
       if (h && h.status === "waiting" && h.until > now()) continue; // a person hasn't decided yet
       if (!h || h.status === "denied" || h.until <= now()) {
-        await client.reject(a.fingerprint);
+        await client.reject(a.fingerprint, org);
         delete state.activities[a.id];
         done.rejected.push(a.id);
         log(`rejected ${a.id}: ${h ? "a person refused it" : "nobody approved it in time"}`);
@@ -194,26 +205,74 @@ async function tick({ client, organizationId, env = process.env, webhook = null,
     }
     const v = check(r.tx, { env, wallet: r.tx.from, now: now(), fetch: fetchImpl });
     if (v.allow) {
-      await client.approve(a.fingerprint);
+      await client.approve(a.fingerprint, org);
       delete state.activities[a.id];
       done.approved.push(a.id);
       log(`approved ${a.id}: ${v.explanation}`);
     } else if (v.refused) {
-      await client.reject(a.fingerprint);
+      await client.reject(a.fingerprint, org);
       delete state.activities[a.id];
       done.rejected.push(a.id);
       log(`rejected ${a.id}: a person refused this payment`);
     } else if (v.held) {
-      state.activities[a.id] = { status: "held", hold: v.held, wallet: guard.wallet, at: new Date(now() * 1000).toISOString() };
+      state.activities[a.id] = { status: "held", hold: v.held, wallet: guard.wallet, org, at: new Date(now() * 1000).toISOString() };
       done.held.push(a.id);
       log(`holding ${a.id} for a person: ${v.explanation} (rein guard ${guard.wallet} --allow ${v.held})`);
     } else leave(v.explanation);
   }
   // Forget what Turnkey no longer has waiting (signed, rejected, or expired there).
-  const live = new Set(waiting.map((a) => a.id));
-  for (const id of Object.keys(state.activities)) if (!live.has(id)) delete state.activities[id];
+  if (!given) {
+    const live = new Set(waiting.map((a) => a.id));
+    for (const id of Object.keys(state.activities)) if (!live.has(id)) delete state.activities[id];
+  }
   saveState(state, file);
   return done;
+}
+
+/// Activities Rein is holding for a person, fetched again from Turnkey, so a
+/// decision made since (rein guard --allow / --deny) reaches Turnkey.
+async function recheck({ client, organizationId, env = process.env, ...rest }) {
+  const state = loadState(statePath(organizationId, env));
+  const held = Object.entries(state.activities).filter(([, x]) => x.status === "held");
+  if (!held.length) return { approved: [], rejected: [], held: [], left: [] };
+  const fresh = await Promise.all(held.map(([id, x]) => client.get(id, x.org || organizationId).catch(() => ({ id, status: "ACTIVITY_STATUS_GONE" }))));
+  return tick({ client, organizationId, env, ...rest, activities: fresh });
+}
+
+/// For an app with a sub-organization per user, where polling each one can't
+/// scale: a webhook endpoint on the parent organization gets ACTIVITY_UPDATES
+/// for the parent and every sub-organization. The webhook is only a doorbell:
+/// Rein reads the activity again from Turnkey, signed with its own key, and
+/// judges that, so a forged delivery can't make it approve anything.
+function turnkeyWebhookHandler({ client, organizationId, env = process.env, log = () => {}, ...rest }) {
+  let queue = Promise.resolve();
+  const handle = async (a) => {
+    const fresh = await client.get(a.id, a.organizationId || organizationId);
+    if (!fresh || fresh.status !== "ACTIVITY_STATUS_CONSENSUS_NEEDED" || !SIGNING.includes(fresh.type)) return null;
+    return tick({ client, organizationId, env, log, ...rest, activities: [fresh] });
+  };
+  const handler = async (req, res) => {
+    const send = (code, body) => {
+      res.writeHead(code, { "content-type": "application/json", "cache-control": "no-store" });
+      res.end(JSON.stringify(body));
+    };
+    if (req.method !== "POST") return send(404, { error: "POST a Turnkey ACTIVITY_UPDATES delivery" });
+    let body;
+    try {
+      let raw = "";
+      for await (const c of req) if ((raw += c).length > 1e6) throw new Error("too large");
+      body = JSON.parse(raw);
+    } catch (err) {
+      return send(400, { error: `not JSON: ${err.message}` });
+    }
+    const a = body?.activity || body?.data?.activity || body?.data || body;
+    if (!a?.id || (a.status && a.status !== "ACTIVITY_STATUS_CONSENSUS_NEEDED") || (a.type && !SIGNING.includes(a.type))) return send(200, { ignored: true });
+    send(202, { checking: a.id });
+    // One at a time: the guard's hourly totals and the held list stay consistent.
+    queue = queue.then(() => handle(a)).catch((err) => log(`could not check ${a.id}: ${err.message}`));
+  };
+  handler.idle = () => queue;
+  return handler;
 }
 
 // -- setup ---------------------------------------------------------------------------
@@ -228,7 +287,21 @@ const activity = (type, p, parameters) => ({
 /// Rein's public key, and a policy letting the agent sign outside its learned
 /// limits only when that user approves too. The learned limits themselves
 /// come from `rein apply turnkey.json`, which lets the agent sign alone.
-function turnkeySetup() {
+function turnkeySetup({ webhookUrl = null } = {}) {
+  // Once, in the parent organization: a webhook for the parent and every
+  // sub-organization under it, so Rein needn't poll each one.
+  if (webhookUrl) {
+    return {
+      vendor: "turnkey",
+      steps: [
+        {
+          step: "tell Rein about signing requests in this organization and every sub-organization under it",
+          returns: "webhook",
+          request: activity("ACTIVITY_TYPE_CREATE_WEBHOOK_ENDPOINT", "create_webhook_endpoint", { url: webhookUrl, name: "Rein co-signer", subscriptions: [{ eventType: "ACTIVITY_UPDATES" }] }),
+        },
+      ],
+    };
+  }
   return {
     vendor: "turnkey",
     steps: [
@@ -285,7 +358,7 @@ function readPrivyRequest(r) {
 /// url, body, headers }). 200 { signature } to add to its
 /// privy-authorization-signature header; 202 { held, next } while a person
 /// decides; 403 { reason, explanation } when Rein won't sign.
-function privyHandler({ env = process.env, appId, appSecret, key, token = null, fetch: fetchImpl = globalThis.fetch, log = () => {} }) {
+function privyHandler({ env = process.env, appId, appSecret, key, token = null, fetch: fetchImpl = globalThis.fetch, log = () => {}, learn = true, cohort = null }) {
   const addresses = new Map();
   const walletAddress = async (id) => {
     if (!addresses.has(id)) {
@@ -318,9 +391,22 @@ function privyHandler({ env = process.env, appId, appSecret, key, token = null, 
     let guard;
     try {
       address = await walletAddress(r.walletId);
-      guard = loadGuard(address, env).guard;
     } catch (err) {
       return refuse(`Rein has no guard for that wallet (${err.message})`, "GUARD_ERROR");
+    }
+    try {
+      guard = loadGuard(address, env).guard;
+    } catch (err) {
+      if (!learn) return refuse(`Rein has no guard for that wallet (${err.message})`, "GUARD_ERROR");
+      // First sight of this wallet: learn it, as the Turnkey co-signer does.
+      try {
+        const chain = Object.keys(CHAINS).find((k) => CHAINS[k].chainId === r.chainId) || "base";
+        await ensureGuard(address, { chain, env, fetch: fetchImpl, cohort });
+        guard = loadGuard(address, env).guard;
+        log(`set up a guard for ${address}`);
+      } catch (e) {
+        return refuse(`Rein couldn't set up a guard for that wallet (${e.message})`, "GUARD_ERROR");
+      }
     }
     if (guard.chainId && r.chainId && guard.chainId !== r.chainId) return refuse(`it is for chain ${r.chainId}, and this wallet's limits were learned on chain ${guard.chainId}`, "WRONG_CHAIN");
     const v = check(r.tx, { env, wallet: address, fetch: fetchImpl });
@@ -375,7 +461,7 @@ function keygen() {
 // -- command line --------------------------------------------------------------------
 
 function parse(argv) {
-  const o = { cmd: argv[0], vendor: null, learn: true, cohort: null, organization: null, agentUser: null, send: false, every: 3, once: false, webhook: process.env.REIN_WEBHOOK || null, port: Number(process.env.PORT) || 8788, vars: {} };
+  const o = { cmd: argv[0], vendor: null, learn: true, cohort: null, listen: null, webhookUrl: null, organization: null, agentUser: null, send: false, every: 3, once: false, webhook: process.env.REIN_WEBHOOK || null, port: Number(process.env.PORT) || 8788, vars: {} };
   for (let i = 1; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--organization") o.organization = argv[++i];
@@ -385,6 +471,8 @@ function parse(argv) {
     else if (a === "--once") o.once = true;
     else if (a === "--cohort") o.cohort = argv[++i];
     else if (a === "--no-learn") o.learn = false;
+    else if (a === "--listen") o.listen = Number(argv[++i]);
+    else if (a === "--webhook-url") o.webhookUrl = argv[++i];
     else if (a === "--webhook") o.webhook = argv[++i];
     else if (a === "--port") o.port = Number(argv[++i]);
     else if (a === "--wallet") o.vars.privy_wallet_id = argv[++i];
@@ -406,10 +494,16 @@ const USAGE = `usage: rein cosign keygen                      a key for Rein's c
                                                run the co-signer (needs REIN_TURNKEY_PUBLIC_KEY/PRIVATE_KEY). A wallet it
                                                hasn't seen gets limits learned from its history, else the cohort's, else
                                                learning mode; --no-learn leaves those for a person instead
+       rein cosign turnkey --organization <parent org id> --listen <port> [same flags]
+                                               for an app with a sub-organization per user: judge what Turnkey's
+                                               webhook reports, from any sub-organization, instead of polling
+       rein cosign setup turnkey --organization <parent org id> --webhook-url https://… [--send]
+                                               point that webhook at the co-signer (once, in the parent)
        rein cosign setup privy --wallet <wallet id> --policy <learned policy id> --agent-key <key> --admin-key <key> [--send]
                                                keys are base64 P-256 public keys (needs REIN_PRIVY_PUBLIC_KEY, and
                                                PRIVY_APP_ID/SECRET plus the wallet owner's PRIVY_AUTHORIZATION_KEY to --send)
-       rein cosign privy [--port 8788]         run the co-signer (needs REIN_PRIVY_AUTH_KEY, PRIVY_APP_ID/SECRET;
+       rein cosign privy [--port 8788] [--cohort cohort.json] [--no-learn]
+                                               run the co-signer (needs REIN_PRIVY_AUTH_KEY, PRIVY_APP_ID/SECRET;
                                                REIN_COSIGN_TOKEN, if set, is required as a bearer token)`;
 
 async function main(argv, { log = console.log, env = process.env, fetch: fetchImpl = globalThis.fetch } = {}) {
@@ -465,6 +559,18 @@ async function main(argv, { log = console.log, env = process.env, fetch: fetchIm
   if (o.cmd === "setup") {
     if (o.vendor !== "turnkey") throw new Error("rein cosign setup takes turnkey or privy");
     const pub = env.REIN_TURNKEY_PUBLIC_KEY;
+    if (o.webhookUrl) {
+      if (!/^https:\/\//.test(o.webhookUrl)) throw new Error("--webhook-url must be an https URL Turnkey can reach");
+      if (o.send && !o.organization) throw new Error("--send needs --organization (the parent organization)");
+      const { apply } = require("./apply");
+      const ids = await apply(turnkeySetup({ webhookUrl: o.webhookUrl }), { vars: { turnkey_organization_id: o.organization }, send: o.send, env, fetch: fetchImpl, log });
+      log("");
+      log(o.send ? `Turnkey now tells Rein about signing requests in ${o.organization} and every sub-organization under it (webhook ${ids["webhook.id"]}).` : "Nothing was sent. Add --send to make this request.");
+      log(`Run the co-signer where that URL points: rein cosign turnkey --organization ${o.organization || "<parent org id>"} --listen <port>`);
+      log("Each sub-organization still needs Rein's user and policy: rein cosign setup turnkey --organization <sub-org id> --agent-user <user id>,");
+      log("best run when the app creates the sub-organization, while its own key is still in the root quorum.");
+      return 0;
+    }
     if (!pub) throw new Error("set REIN_TURNKEY_PUBLIC_KEY (rein cosign keygen makes one)");
     if (o.send && (!o.organization || !o.agentUser)) throw new Error("--send needs --organization and --agent-user");
     const { apply } = require("./apply");
@@ -489,6 +595,20 @@ async function main(argv, { log = console.log, env = process.env, fetch: fetchIm
     const client = turnkeyClient({ organizationId: o.organization, publicKey: env.REIN_TURNKEY_PUBLIC_KEY, privateKey: env.REIN_TURNKEY_PRIVATE_KEY, fetch: fetchImpl });
     const cohort = o.cohort ? JSON.parse(fs.readFileSync(o.cohort, "utf8")) : null;
     const run = () => tick({ client, organizationId: o.organization, env, webhook: o.webhook, fetch: fetchImpl, log, learn: o.learn, cohort });
+    if (o.listen) {
+      const handler = turnkeyWebhookHandler({ client, organizationId: o.organization, env, webhook: o.webhook, fetch: fetchImpl, log, learn: o.learn, cohort });
+      const server = http.createServer(handler);
+      await new Promise((r, j) => {
+        server.once("error", (err) => j(err.code === "EADDRINUSE" ? new Error(`port ${o.listen} is already in use; stop whatever holds it or pass another --listen port`) : err));
+        server.listen(o.listen, r);
+      });
+      log(`Rein co-signer for Turnkey organization ${o.organization} and its sub-organizations: webhook on port ${o.listen}; held payments re-checked every ${o.every}s.`);
+      for (;;) {
+        await new Promise((r) => setTimeout(r, o.every * 1000));
+        await handler.idle();
+        await recheck({ client, organizationId: o.organization, env, webhook: o.webhook, fetch: fetchImpl, log, learn: o.learn, cohort }).catch((err) => log(`could not re-check held payments: ${err.message}`));
+      }
+    }
     if (o.once) {
       const d = await run();
       log(`approved ${d.approved.length}, rejected ${d.rejected.length}, holding ${d.held.length}, left for a person ${d.left.length}`);
@@ -503,7 +623,8 @@ async function main(argv, { log = console.log, env = process.env, fetch: fetchIm
   if (o.cmd === "privy") {
     const need = ["REIN_PRIVY_AUTH_KEY", "PRIVY_APP_ID", "PRIVY_APP_SECRET"].filter((k) => !env[k]);
     if (need.length) throw new Error(`set ${need.join(", ")}`);
-    const server = http.createServer(privyHandler({ env, appId: env.PRIVY_APP_ID, appSecret: env.PRIVY_APP_SECRET, key: env.REIN_PRIVY_AUTH_KEY, token: env.REIN_COSIGN_TOKEN || null, fetch: fetchImpl, log }));
+    const cohort = o.cohort ? JSON.parse(fs.readFileSync(o.cohort, "utf8")) : null;
+    const server = http.createServer(privyHandler({ env, appId: env.PRIVY_APP_ID, appSecret: env.PRIVY_APP_SECRET, key: env.REIN_PRIVY_AUTH_KEY, token: env.REIN_COSIGN_TOKEN || null, fetch: fetchImpl, log, learn: o.learn, cohort }));
     await new Promise((r, j) => {
       server.once("error", (err) => j(err.code === "EADDRINUSE" ? new Error(`port ${o.port} is already in use; stop whatever holds it or pass --port`) : err));
       server.listen(o.port, r);
@@ -514,4 +635,4 @@ async function main(argv, { log = console.log, env = process.env, fetch: fetchIm
   throw new Error(`unknown cosign command ${o.cmd}`);
 }
 
-module.exports = { main, tick, readActivity, turnkeyClient, turnkeySetup, readPrivyRequest, privyHandler, privySetup, keygen, parse, USAGE, SIGNING };
+module.exports = { main, tick, recheck, turnkeyWebhookHandler, readActivity, turnkeyClient, turnkeySetup, readPrivyRequest, privyHandler, privySetup, keygen, parse, USAGE, SIGNING };

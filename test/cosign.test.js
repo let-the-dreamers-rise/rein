@@ -190,6 +190,56 @@ describe("rein cosign (Turnkey)", function () {
     expect(guard.loadGuard(fresh, env).guard.learning).to.equal(true);
   });
 
+  it("serves an app with a sub-organization per user from Turnkey's webhook, reading each activity again from Turnkey", async () => {
+    const sub = (id, org, to, amount) => ({ ...signing(id, to, amount), organizationId: org });
+    const live = { a: sub("a", "sub-1", PAYEES.inference.address, 5), b: sub("b", "sub-2", "0x8888888888888888888888888888888888888888", 300) };
+    const gets = [];
+    const turnkey = async (url, init) => {
+      if (url.endsWith("/query/get_activity")) {
+        const body = JSON.parse(init.body);
+        gets.push([body.organizationId, body.activityId]);
+        return { ok: true, status: 200, text: async () => JSON.stringify({ activity: live[body.activityId] || null }) };
+      }
+      return tk.fetch(url, init);
+    };
+    const c = cosign.turnkeyClient({ organizationId: "parent", publicKey: key.publicKey, privateKey: key.privateKey, fetch: turnkey });
+    const handler = cosign.turnkeyWebhookHandler({ client: c, organizationId: "parent", env, fetch: turnkey });
+    const server = http.createServer(handler);
+    await new Promise((r) => server.listen(0, r));
+    const hook = (body) => fetch(`http://127.0.0.1:${server.address().port}/`, { method: "POST", body: JSON.stringify(body) }).then((r) => r.status);
+    try {
+      // What the webhook says is only a doorbell: Rein judges what Turnkey returns.
+      expect(await hook({ type: "ACTIVITY_UPDATES", data: { activity: { ...live.a, intent: { forged: true } } } })).to.equal(202);
+      expect(await hook({ activity: { id: "b", organizationId: "sub-2", status: "ACTIVITY_STATUS_CONSENSUS_NEEDED" } })).to.equal(202);
+      expect(await hook({ activity: { id: "z", status: "ACTIVITY_STATUS_COMPLETED" } })).to.equal(200);
+      await handler.idle();
+      expect(gets).to.deep.equal([["sub-1", "a"], ["sub-2", "b"]]);
+      // The vote goes to the sub-organization the activity lives in.
+      expect(tk.votes).to.deep.equal([["approve", "fp-a"]]);
+      expect(tk.requests.find((r) => r.url.endsWith("/approve_activity")).body.organizationId).to.equal("sub-1");
+
+      // A person's yes reaches Turnkey on the next re-check of held payments.
+      const hold = guard.loadGuard(AGENT, env).guard.holds.find((h) => h.what.includes("0x8888"));
+      await guard.main([AGENT, "--allow", hold.id], { log: () => {}, env, input: AGENT.slice(-4) });
+      const d = await cosign.recheck({ client: c, organizationId: "parent", env, fetch: turnkey });
+      expect(d.approved).to.deep.equal(["b"]);
+      expect(tk.requests.filter((r) => r.url.endsWith("/approve_activity")).map((r) => r.body.organizationId)).to.deep.equal(["sub-1", "sub-2"]);
+    } finally {
+      server.close();
+    }
+  });
+
+  it("points Turnkey's webhook at the co-signer, once, in the parent organization", async () => {
+    const logs = [];
+    const e = { ...env, TURNKEY_API_PUBLIC_KEY: key.publicKey, TURNKEY_API_PRIVATE_KEY: key.privateKey };
+    const hookFetch = async (url, init) => (url.endsWith("/create_webhook_endpoint") ? (tk.requests.push({ url, body: JSON.parse(init.body) }), { ok: true, status: 200, text: async () => JSON.stringify({ activity: { status: "ACTIVITY_STATUS_COMPLETED", result: { createWebhookEndpointResult: { endpointId: "hook-1" } } } }) }) : tk.fetch(url, init));
+    await cosign.main(["setup", "turnkey", "--organization", "parent", "--webhook-url", "https://rein.example/turnkey", "--send"], { log: (l) => logs.push(l), env: e, fetch: hookFetch });
+    expect(tk.requests[0].body.parameters).to.deep.equal({ url: "https://rein.example/turnkey", name: "Rein co-signer", subscriptions: [{ eventType: "ACTIVITY_UPDATES" }] });
+    expect(logs.join("\n")).to.contain("webhook hook-1").and.contain("--listen");
+    await cosign.main(["setup", "turnkey", "--webhook-url", "http://plain"], { log: () => {}, env: e }).catch((err) => logs.push(err.message));
+    expect(logs.pop()).to.contain("https");
+  });
+
   it("sets Turnkey up: a co-signer user, then a policy needing both the agent and Rein", async () => {
     const logs = [];
     const e = { ...env, REIN_TURNKEY_PUBLIC_KEY: key.publicKey, TURNKEY_API_PUBLIC_KEY: key.publicKey, TURNKEY_API_PRIVATE_KEY: key.privateKey };
@@ -289,6 +339,22 @@ describe("rein cosign (Privy)", function () {
     const rein = require("..");
     expect(await rein.cosign(usual, { url: base, token: "t0ken" })).to.include({ allow: true }).and.have.property("signature");
     expect(await rein.cosign(usual, { url: "http://127.0.0.1:1", token: "t0ken" })).to.include({ allow: false, reason: "COSIGNER_UNREACHABLE" });
+  });
+
+  it("learns a Privy wallet it hasn't seen, the first time it is asked to co-sign for it", async () => {
+    const fresh = "0x" + "4".repeat(40);
+    const privy = async (url) => (url.startsWith("https://api.privy.io") ? { ok: true, status: 200, json: async () => ({ id: "w2", address: fresh }) } : Promise.reject(new Error("offline")));
+    const s = http.createServer(cosign.privyHandler({ env, appId: APP, appSecret: "s3cret", key: key.privyPrivateKey, fetch: privy }));
+    await new Promise((r) => s.listen(0, r));
+    const at = (o) => fetch(`http://127.0.0.1:${s.address().port}/sign`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(o) }).then(async (r) => ({ status: r.status, body: await r.json() }));
+    const p = (to, amount) => ({ ...pay(to, amount), url: "https://api.privy.io/v1/wallets/w2/rpc" });
+    try {
+      expect((await at(p(PAYEES.inference.address, 10))).status).to.equal(200);
+      expect((await at(p(PAYEES.data.address, 400))).status).to.equal(202);
+      expect(guard.loadGuard(fresh, env).guard.learning).to.equal(true);
+    } finally {
+      s.close();
+    }
   });
 
   it("won't set Privy up with keys that aren't P-256, or with the same key twice", async () => {

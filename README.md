@@ -178,18 +178,30 @@ npx rein-wallet cosign keygen      # Rein's key: keep it where only the co-signe
 npx rein-wallet cosign setup turnkey --organization <org id> --agent-user <agent user id> --send
 npx rein-wallet cosign turnkey --organization <org id> --webhook "$SLACK_WEBHOOK_URL"
 
+# Turnkey, an app with a sub-organization per user: one webhook in the parent, and the co-signer listens for it
+npx rein-wallet cosign setup turnkey --organization <parent org id> --webhook-url https://<co-signer host>/ --send
+npx rein-wallet cosign turnkey --organization <parent org id> --listen 8789 --cohort cohort.json
+
 # Privy: the agent alone signs inside the learned policy; the wallet's owner is any two of agent, Rein, admin
 npx rein-wallet cosign setup privy --wallet <id> --policy <learned policy id> --agent-key <key> --admin-key <key> --send
 npx rein-wallet cosign privy --port 8788
 ```
 
 On Turnkey the co-signer watches for signing requests waiting on it and
-approves or rejects them there. On Privy the agent sends the request it is
+approves or rejects them there. An app that gives each user a sub-organization
+can't be polled one organization at a time, so Turnkey's webhook on the parent
+reports activity from every sub-organization; Rein reads each one again from
+Turnkey with its own key before judging it, and votes in the sub-organization
+it lives in. Each sub-organization still needs Rein's user and policy, best
+added when the app creates it. A wallet the co-signer hasn't seen gets limits
+learned from its history, the cohort's (`rein fleet --out`), or learning mode;
+`--no-learn` leaves it for a person instead. It reads transactions, batches
+(judged as one payment) and x402/EIP-712 signatures. On Privy the agent sends the request it is
 about to make to the co-signer's `/sign` and adds the signature it gets back
 (`await require("rein-wallet").cosign(request, { url })` does it in one call);
 a 202 means a person is deciding. Rein only ever co-signs payments: never a
-change to the wallet, its owner or its policies, a raw signature, or an
-EIP-7702 delegation. For it to hold, the agent must not be in Turnkey's root
+change to the wallet, its owner or its policies, a raw signature it can't
+read, or an EIP-7702 delegation. For it to hold, the agent must not be in Turnkey's root
 quorum or have any other way to sign alone, and must not be able to read
 Rein's key. Both setups are written against Turnkey's and Privy's published
 API types and tested against fakes of them, not yet against a live account.
