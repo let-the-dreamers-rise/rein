@@ -6,5 +6,6 @@ const { scan, scanHistory, summary, exportPolicy, CHAINS } = require("./index");
 const { sampleHistory, poisonedSampleHistory } = require("./sample");
 const { fetchHistory } = require("./blockscout");
 const checkup = require("./checkup");
+const safe = require("./safe");
 
-module.exports = { scan, scanHistory, summary, exportPolicy, sampleHistory, poisonedSampleHistory, fetchHistory, checkup, CHAINS };
+module.exports = { scan, scanHistory, summary, exportPolicy, sampleHistory, poisonedSampleHistory, fetchHistory, checkup, safe, CHAINS };

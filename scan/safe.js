@@ -13,7 +13,7 @@
 //   - a payee that only ever appears in fake transfers made to look like the
 //     Safe sent them;
 //   - a first payment to an address it has never paid, over --min-usd;
-//   - a payment far above anything it has sent in that token;
+//   - a payment more than 3× the most it has paid that payee;
 //   - a delegatecall to anything but Safe's own MultiSend, and changes to
 //     the Safe's owners, threshold, modules or guard.
 // It holds no key and signs nothing: it can only warn. Each flagged
@@ -174,7 +174,11 @@ function habits(history, { owners = [] } = {}) {
     if (r.kind === "approve") spenders.add(r.payee.toLowerCase());
     else if (r.kind === "transfer" || r.kind === "transferFrom") {
       paid.set(r.payee.toLowerCase(), (paid.get(r.payee.toLowerCase()) || 0) + 1);
-      if (r.token) largest[r.token.toLowerCase()] = Math.max(largest[r.token.toLowerCase()] || 0, Number(r.amount));
+      // The most it has paid each payee in each token.
+      if (r.token) {
+        const k = `${r.payee.toLowerCase()}:${r.token.toLowerCase()}`;
+        largest[k] = Math.max(largest[k] || 0, Number(r.amount));
+      }
     }
   }
   const fakes = new Set(ignored.map((x) => x.payee && x.payee.toLowerCase()).filter(Boolean));
@@ -229,9 +233,9 @@ function judge(tx, h, { safe, minUsd = 1000 }) {
     } else if (!h.paid.has(key) && (usd == null || usd >= minUsd)) {
       found.push({ level: "warn", why: `the Safe has never paid ${payee} before${usd != null ? `, and this is ${dollars(usd)}` : ", and Rein can't price this token"}. Confirm the address with the payee through another channel` });
     }
-    const top = h.largest[m.token.toLowerCase()];
-    if (h.paid.has(key) && top && amount != null && amount > 3 * top && (usd == null || usd >= minUsd)) {
-      found.push({ level: "warn", why: `${shown} is more than 3× the most this Safe has ever sent in ${symbol} (${money(top)})` });
+    const top = h.largest[`${key}:${m.token.toLowerCase()}`];
+    if (top && amount != null && amount > 3 * top && (usd == null || usd >= minUsd)) {
+      found.push({ level: "warn", why: `${shown} is more than 3× the most this Safe has ever paid ${h.name(payee)} in ${symbol} (${money(top)})` });
     }
   }
   return { what: what.join(", then ") || "nothing Rein can read", found };
@@ -257,7 +261,7 @@ function saveState(state, file) {
 /// Reads the queue and judges each pending transaction. Returns
 /// { safe, threshold, owners, nonce, queue: [{ nonce, safeTxHash, signed, needed, what, found }], fresh }
 /// where `fresh` are the flagged ones not posted before.
-async function watchOnce(address, { chain = "base", api = null, safeApi: given = null, apiKey = null, safeUrl = null, fetch: fetchImpl = globalThis.fetch, env = process.env, minUsd = 1000, history = null } = {}) {
+async function watchOnce(address, { chain = "base", api = null, safeApi: given = null, apiKey = null, safeUrl = null, fetch: fetchImpl = globalThis.fetch, env = process.env, minUsd = 1000, history = null, remember = true } = {}) {
   const safe = ethers.getAddress(address);
   const service = given || safeApi(chain, { url: safeUrl, apiKey, fetch: fetchImpl });
   const info = await service.info(safe);
@@ -275,14 +279,16 @@ async function watchOnce(address, { chain = "base", api = null, safeApi: given =
       proposer: t.proposer || null,
       ...judge(t, h, { safe, minUsd }),
     }));
-  const file = statePath(safe, env);
-  const state = loadState(file);
+  // What was already posted, so each flagged transaction is posted once. A web
+  // page passes remember: false and keeps nothing.
+  const file = remember ? statePath(safe, env) : null;
+  const state = file ? loadState(file) : { posted: {} };
   const fresh = queue.filter((q) => q.found.length && state.posted[q.safeTxHash] !== q.found.map((f) => f.why).join("|"));
   for (const q of fresh) state.posted[q.safeTxHash] = q.found.map((f) => f.why).join("|");
   // Forget what has left the queue (executed or replaced).
   const live = new Set(queue.map((q) => q.safeTxHash));
   for (const k of Object.keys(state.posted)) if (!live.has(k)) delete state.posted[k];
-  saveState(state, file);
+  if (file) saveState(state, file);
   return { safe, chain, threshold: Number(info.threshold || 0), owners: info.owners || [], nonce, payments: h.payments, poisoning: h.ignored.length, queue, fresh };
 }
 
@@ -306,9 +312,29 @@ function alertText(r) {
   return [`*Rein, before you sign:* ${plural(n, "transaction")} in the queue of Safe ${short(r.safe)} need${n === 1 ? "s" : ""} a second look.`, text(r, { only: r.fresh })].join("\n");
 }
 
+/// A made-up Safe under attack, for the web page's one-click demo and
+/// `rein safe --sample`: Rein's sample wallet's history, poisoned, with four
+/// payments waiting to be signed.
+function sampleSafe() {
+  const { poisonedSampleHistory, AGENT, PAYEES, USDC } = require("./sample");
+  const history = poisonedSampleHistory();
+  const inf = PAYEES.inference.address;
+  const fake = ethers.getAddress(`0x${inf.slice(2, 6)}${"9".repeat(32)}${inf.slice(-4)}`.toLowerCase());
+  const owners = ["safe sample owner a", "safe sample owner b", "safe sample owner c"].map((l) => ethers.getAddress(ethers.dataSlice(ethers.id(l), 12)));
+  const pay = (to, n) => ({ to: USDC.address, value: "0", data: ERC20.encodeFunctionData("transfer", [to, ethers.parseUnits(String(n), 6)]), operation: 0 });
+  const queue = [
+    { nonce: 41, safeTxHash: "0x41", confirmations: [{}], confirmationsRequired: 2, ...pay(inf, 15) },
+    { nonce: 42, safeTxHash: "0x42", confirmations: [{}], confirmationsRequired: 2, ...pay(fake, 48000) },
+    { nonce: 43, safeTxHash: "0x43", confirmations: [], confirmationsRequired: 2, ...pay(ethers.getAddress(ethers.dataSlice(ethers.id("safe sample: new contractor"), 12)), 6500) },
+    { nonce: 44, safeTxHash: "0x44", confirmations: [], confirmationsRequired: 2, to: AGENT, value: "0", operation: 0, data: new ethers.Interface(["function addOwnerWithThreshold(address,uint256)"]).encodeFunctionData("addOwnerWithThreshold", [ethers.getAddress(ethers.dataSlice(ethers.id("safe sample: unknown owner"), 12)), 1]) },
+  ];
+  return { address: AGENT, chain: "base", history, safeApi: { info: async () => ({ nonce: 41, threshold: 2, owners }), queue: async () => queue } };
+}
+
 // -- command line ---------------------------------------------------------------------
 
 const USAGE = `usage: rein safe <safe address> [--chain base|ethereum|base-sepolia] [--webhook URL] [--every 300] [--min-usd 1000] [--json]
+       rein safe --sample          a made-up Safe under attack, with no network
   Reads the Safe's queued transactions and checks each payee against what the Safe has paid before.
   Flags lookalike addresses (address poisoning), first payments to new addresses over --min-usd,
   amounts far above its usual, delegatecalls and changes to owners or threshold. Holds no key.
@@ -317,7 +343,7 @@ const USAGE = `usage: rein safe <safe address> [--chain base|ethereum|base-sepol
   --webhook posts each flagged transaction once to Slack, Discord or Telegram; --every keeps watching.`;
 
 function parse(argv) {
-  const o = { address: null, chain: "base", api: null, safeUrl: null, webhook: process.env.REIN_WEBHOOK || null, every: 0, minUsd: 1000, json: false };
+  const o = { address: null, chain: "base", api: null, safeUrl: null, webhook: process.env.REIN_WEBHOOK || null, every: 0, minUsd: 1000, json: false, sample: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--chain") o.chain = argv[++i];
@@ -327,11 +353,12 @@ function parse(argv) {
     else if (a === "--every") o.every = Number(argv[++i]);
     else if (a === "--min-usd") o.minUsd = Number(argv[++i]);
     else if (a === "--json") o.json = true;
+    else if (a === "--sample") o.sample = true;
     else if (a === "-h" || a === "--help") o.help = true;
     else if (!a.startsWith("-") && !o.address) o.address = a;
     else throw new Error(`unknown flag ${a}`);
   }
-  if (!o.help && !o.address) throw new Error("which Safe? rein safe 0x…");
+  if (!o.help && !o.address && !o.sample) throw new Error("which Safe? rein safe 0x… (or rein safe --sample to see one under attack)");
   if (o.address && !ethers.isAddress(o.address)) throw new Error(`${o.address} isn't an address`);
   if (!Number.isFinite(o.minUsd) || o.minUsd < 0) throw new Error("--min-usd takes a number of dollars");
   if (o.webhook && !/^https:\/\//.test(o.webhook)) throw new Error("--webhook must be an https URL");
@@ -350,8 +377,12 @@ async function main(argv, { log = console.log, env = process.env, fetch: fetchIm
     log(USAGE);
     return 0;
   }
+  const demo = o.sample ? sampleSafe() : null;
   const run = async () => {
-    const r = await watchOnce(o.address, { chain: o.chain, api: o.api, safeUrl: o.safeUrl, apiKey: env.SAFE_API_KEY || null, fetch: fetchImpl, env, minUsd: o.minUsd });
+    const r = demo
+      ? await watchOnce(demo.address, { safeApi: demo.safeApi, history: demo.history, minUsd: o.minUsd, remember: false })
+      : await watchOnce(o.address, { chain: o.chain, api: o.api, safeUrl: o.safeUrl, apiKey: env.SAFE_API_KEY || null, fetch: fetchImpl, env, minUsd: o.minUsd });
+    if (demo && !o.json) log("(Rein's made-up sample Safe, not a real one.)");
     if (o.json) log(JSON.stringify(r, null, 2));
     else log(text(r));
     if (o.webhook && r.fresh.length) await post(o.webhook, alertText(r), fetchImpl).catch((err) => log(`could not post the alert: ${err.message}`));
@@ -368,4 +399,4 @@ async function main(argv, { log = console.log, env = process.env, fetch: fetchIm
   }
 }
 
-module.exports = { main, parse, watchOnce, judge, habits, callsOf, unpackMultiSend, safeApi, safeGateway, text, alertText, USAGE };
+module.exports = { main, parse, watchOnce, sampleSafe, judge, habits, callsOf, unpackMultiSend, safeApi, safeGateway, text, alertText, USAGE };

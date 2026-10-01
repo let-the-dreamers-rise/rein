@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rein · Check a Safe before you sign</title>
+<meta name="description" content="Paste a Safe multisig address. Rein checks every transaction waiting to be signed against what that Safe has paid before, and flags lookalike addresses, first payments to strangers and owner changes. Free, in your browser, nothing signed.">
+<meta property="og:title" content="Rein · Check a Safe before you sign">
+<meta property="og:description" content="Is anything in your Safe's queue paying a lookalike address or a stranger? Free, in your browser, nothing signed.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://rein-nine.vercel.app/safe/">
+<meta name="theme-color" content="#ff6a1a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23ff6a1a'/%3E%3Cpath d='M9 23V9h8.5a4.5 4.5 0 0 1 1.6 8.7L23 23h-3.6l-3.5-4.8H12V23z' fill='%23141210'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:oklch(0.985 0 0);
+  --surface:#fff;
+  --sunken:oklch(0.955 0.004 60);
+  --ink:oklch(0.21 0.012 60);
+  --ink-2:oklch(0.40 0.012 60);
+  --ink-3:oklch(0.55 0.010 60);
+  --hair:oklch(0.89 0.006 60);
+  --brand:oklch(0.70 0.20 45);
+  --brand-strong:oklch(0.64 0.21 42);
+  --brand-deep:oklch(0.50 0.16 40);
+  --brand-tint:oklch(0.96 0.03 55);
+  --ok:oklch(0.52 0.14 150);
+  --ok-tint:oklch(0.95 0.04 150);
+  --no:oklch(0.55 0.19 35);
+  --display:"Bricolage Grotesque","Helvetica Neue",Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--display);font-size:17px;line-height:1.55;-webkit-font-smoothing:antialiased}
+a{color:var(--brand-deep);text-decoration:none}
+a:hover{text-decoration:underline;text-underline-offset:3px}
+:focus-visible{outline:3px solid var(--brand);outline-offset:3px;border-radius:2px}
+h1,h2,h3{margin:0;font-weight:700;letter-spacing:-.02em;line-height:1.08;text-wrap:balance}
+p{margin:0;text-wrap:pretty}
+code,.mono{font-family:var(--mono);font-size:.88em}
+code{background:var(--sunken);padding:.1em .4em;border-radius:4px;overflow-wrap:anywhere}
+.wrap{max-width:980px;margin:0 auto;padding:0 clamp(16px,4vw,40px)}
+.tape{height:10px;background:repeating-linear-gradient(-45deg,var(--brand) 0 18px,var(--ink) 18px 36px)}
+.nav{border-bottom:1px solid var(--hair);background:var(--bg)}
+.nav .wrap{display:flex;align-items:center;gap:20px;height:60px}
+.mark{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px;color:var(--ink)}
+.mark svg{width:26px;height:26px}
+.nav .links{margin-left:auto;display:flex;gap:20px;font-size:15px}
+.nav .links a{color:var(--ink-2)}
+
+header{padding:clamp(40px,7vw,80px) 0 28px}
+header h1{font-size:clamp(2.2rem,5.4vw,3.8rem);font-weight:800;letter-spacing:-.03em;max-width:16ch}
+header .lede{margin-top:18px;font-size:clamp(17px,1.5vw,19px);color:var(--ink-2);max-width:60ch}
+
+form{margin-top:30px;display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px}
+@media(max-width:700px){form{grid-template-columns:minmax(0,1fr) auto}form input{grid-column:1/-1}}
+input,select,button{font:inherit;font-size:16px;border-radius:8px;border:1px solid var(--ink);padding:12px 14px;background:var(--surface);color:var(--ink);min-width:0}
+input{font-family:var(--mono);font-size:15px}
+button{cursor:pointer;font-weight:600;background:var(--ink);color:#fff}
+button:hover{background:oklch(0.30 0.012 60)}
+button:disabled{opacity:.6;cursor:progress}
+.alt{margin-top:12px;font-size:15px;color:var(--ink-3)}
+.alt button{all:unset;cursor:pointer;color:var(--brand-deep);font-weight:500}
+.alt button:hover{text-decoration:underline;text-underline-offset:3px}
+#status{margin-top:22px;font-family:var(--mono);font-size:14px;color:var(--ink-2);min-height:1.5em}
+#status.err{color:var(--no)}
+.fail{margin-top:14px;border:1px solid var(--hair);background:var(--surface);border-radius:10px;padding:16px 18px;font-size:15px;color:var(--ink-2)}
+.fail pre{margin:10px 0 0;font-family:var(--mono);font-size:13.5px;background:var(--sunken);border-radius:8px;padding:10px 12px;overflow-x:auto;color:var(--ink)}
+
+#report{padding-bottom:80px}
+.card{background:var(--surface);border:1px solid var(--hair);border-radius:12px;padding:clamp(18px,3vw,28px);margin-top:18px}
+.who{font-family:var(--mono);font-size:13px;color:var(--ink-3);overflow-wrap:anywhere}
+.verdict{margin-top:10px;font-size:clamp(1.25rem,2.4vw,1.6rem);line-height:1.3;font-weight:600;letter-spacing:-.01em}
+.synthetic{display:inline-block;margin-top:12px;font-family:var(--mono);font-size:12px;background:var(--brand-tint);color:var(--brand-deep);padding:4px 10px;border-radius:999px}
+.nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--hair);border:1px solid var(--hair);border-radius:12px;overflow:hidden;margin-top:18px}
+@media(max-width:700px){.nums{grid-template-columns:minmax(0,1fr)}}
+.nums>div{background:var(--surface);padding:18px 20px}
+.nums .k{font-size:14px;color:var(--ink-2)}
+.nums .v{font-size:clamp(1.6rem,3.4vw,2.2rem);font-weight:800;letter-spacing:-.02em;margin-top:4px;font-variant-numeric:tabular-nums}
+.nums .v.bad{color:var(--no)}
+.nums .v.good{color:var(--ok)}
+.nums .s{font-size:13.5px;color:var(--ink-3);margin-top:4px}
+h2{font-size:clamp(1.25rem,2vw,1.5rem);margin-bottom:10px}
+.card p+p{margin-top:10px}
+.card .sub{color:var(--ink-2);font-size:15.5px}
+ul.policy{margin:12px 0 0;padding-left:1.1em}
+ul.policy li{margin:6px 0}
+.tablewrap{overflow-x:auto;margin-top:12px}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--hair);vertical-align:top}
+th{font-size:13px;font-weight:600;color:var(--ink-3)}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+td .mono{overflow-wrap:anywhere}
+.downloads{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+.downloads button{background:var(--surface);color:var(--ink);font-size:15px;padding:10px 14px}
+.downloads button:hover{background:var(--sunken)}
+.downloads button.primary{background:var(--brand);border-color:var(--brand)}
+.downloads button.primary:hover{background:var(--brand-strong)}
+pre.cmd{margin:10px 0 0;font-family:var(--mono);font-size:13.5px;line-height:1.6;background:var(--sunken);border-radius:8px;padding:12px 14px;overflow-x:auto;white-space:pre}
+ol.next{margin:12px 0 0;padding-left:1.2em}
+ol.next li{margin:14px 0}
+ul.caveats{margin:10px 0 0;padding-left:1.1em;color:var(--ink-2);font-size:15px}
+ul.caveats li{margin:6px 0}
+.share{margin-top:14px;font-size:14px;color:var(--ink-3)}
+footer{border-top:1px solid var(--hair);padding:28px 0 40px;font-size:14px;color:var(--ink-3)}
+ul.habits{margin:12px 0 0;padding-left:1.1em}
+ul.habits li{margin:6px 0}
+.card.alarm{border-color:var(--no);box-shadow:inset 4px 0 0 var(--no)}
+.card.alarm h2{color:var(--no)}
+.ask{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;margin-top:14px}
+.ask input{font-family:var(--display);font-size:16px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.chips button{background:var(--surface);color:var(--ink);border-color:var(--hair);font-weight:500;font-size:14px;padding:7px 12px;border-radius:999px}
+.chips button:hover{background:var(--sunken)}
+.answer{margin-top:16px;border-radius:10px;padding:14px 16px;font-size:16px;line-height:1.5}
+.answer.ok{background:var(--ok-tint);color:oklch(0.32 0.09 150)}
+.answer.held{background:var(--brand-tint);color:var(--brand-deep)}
+.answer.no{background:var(--sunken);color:var(--ink-2)}
+.answer .q{font-size:13.5px;font-family:var(--mono);opacity:.8;overflow-wrap:anywhere;margin-bottom:6px}
+.answer .follow{margin-top:10px;padding-top:10px;border-top:1px solid currentColor;border-top-color:color-mix(in oklab,currentColor 25%,transparent)}
+.answer .acts{display:flex;gap:8px;margin-top:12px}
+.answer .acts button{font-size:14px;padding:8px 14px}
+.answer .acts button.second{background:var(--surface);color:var(--ink)}
+.on h3{font-size:1.05rem;margin-top:18px}
+.on h3:first-of-type{margin-top:6px}
+details.more{margin-top:18px}
+details.more>summary{cursor:pointer;font-weight:600;padding:14px 4px;color:var(--ink-2)}
+[hidden]{display:none!important}
+.q{border-top:1px solid var(--hair);padding:16px 0}
+.q:first-child{border-top:0;padding-top:4px}
+.q .line{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:baseline}
+.q .n{font-family:var(--mono);font-size:14px;color:var(--ink-3)}
+.q .what{font-weight:600;overflow-wrap:anywhere}
+.tag{font-size:13px;font-weight:700;letter-spacing:.02em;padding:3px 10px;border-radius:999px;white-space:nowrap}
+.tag.danger{background:var(--no);color:#fff}
+.tag.warn{background:var(--brand-tint);color:var(--brand-deep)}
+.tag.ok{background:var(--ok-tint);color:oklch(0.32 0.09 150)}
+.q ul{margin:8px 0 0;padding-left:1.1em;color:var(--ink-2);font-size:15.5px}
+.q ul li{margin:4px 0;overflow-wrap:anywhere}
+.q .signed{font-size:14px;color:var(--ink-3)}
+</style>
+</head>
+<body>
+<div class="tape" aria-hidden="true"></div>
+<nav class="nav" aria-label="Primary">
+  <div class="wrap">
+    <a class="mark" href="../" aria-label="Rein, home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--brand)"/><path d="M9 23V9h8.5a4.5 4.5 0 0 1 1.6 8.7L23 23h-3.6l-3.5-4.8H12V23z" fill="var(--ink)"/></svg>
+      Rein
+    </a>
+    <div class="links"><a href="../scan/">Check an agent wallet</a><a href="https://github.com/let-the-dreamers-rise/rein">GitHub</a></div>
+  </div>
+</nav>
+
+<main>
+  <header>
+    <div class="wrap">
+      <h1>Check your Safe's queue before you sign.</h1>
+      <p class="lede">Paste a Safe multisig address. Rein reads every transaction waiting for signatures and checks each payee against what this Safe has actually paid before. It flags addresses dressed up as ones you pay (address poisoning), first payments to strangers, amounts far above the usual, and changes to who controls the Safe. It runs in your browser: nothing is signed, and no Rein server sees the address.</p>
+      <form id="form" autocomplete="off">
+        <input id="address" name="address" placeholder="0x… Safe address" spellcheck="false" aria-label="Safe address" required pattern="^0x[0-9a-fA-F]{40}$" title="A 0x address, 42 characters">
+        <select id="chain" name="chain" aria-label="Chain">
+          <option value="base">Base</option>
+          <option value="ethereum">Ethereum</option>
+          <option value="base-sepolia">Base Sepolia</option>
+        </select>
+        <button id="go" type="submit">Check the queue</button>
+      </form>
+      <p class="alt">No Safe to hand? <button id="sample" type="button">Try a made-up Safe with a poisoned payment in its queue</button></p>
+      <p id="status" role="status" aria-live="polite"></p>
+      <div id="fail" class="fail" hidden></div>
+    </div>
+  </header>
+
+  <div class="wrap" id="report" hidden>
+    <div class="card" id="c-head">
+      <div class="who" id="who"></div>
+      <p class="verdict" id="headline"></p>
+      <span class="synthetic" id="synthetic" hidden>Made-up sample Safe, not a real one</span>
+    </div>
+
+    <div class="card" id="c-queue">
+      <h2>Waiting to be signed</h2>
+      <div id="queue"></div>
+    </div>
+
+    <div class="card on">
+      <h2>Get told before anyone signs</h2>
+      <p class="sub">Rein can post to your team's Slack, Discord or Telegram the moment a risky payment is queued, once per transaction. It holds no key and can't sign or move anything.</p>
+      <h3>With no server: a GitHub Action</h3>
+      <p class="sub">Copy <a href="https://github.com/let-the-dreamers-rise/rein/blob/main/scan/safe-action.yml">this file</a> into any repository you own as <code>.github/workflows/rein-safe.yml</code>, then set the variable <code>SAFE_ADDRESS</code> and the secret <code>REIN_WEBHOOK</code>. It checks every 10 minutes.</p>
+      <h3>Or from any terminal</h3>
+      <pre class="cmd" id="cmd"></pre>
+    </div>
+
+    <div class="card">
+      <h2>What this does not say</h2>
+      <ul class="caveats">
+        <li>It knows only what this Safe has paid in tokens, from public chain data. ETH paid out of a Safe isn't counted yet, so a usual ETH payee can show up as new.</li>
+        <li>A payee it flags may be fine: a new contractor is a first payment too. The flag says to confirm the address through another channel, not that it's an attack.</li>
+        <li>A payee it doesn't flag isn't vouched for. It checks addresses against this Safe's own history, not against scam lists or what a contract does.</li>
+      </ul>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">Rein reads queued transactions from Safe's public service and the Safe's history from <a href="https://www.blockscout.com/">Blockscout</a>. It's the same code as <code>npx rein-wallet safe</code>; read it at <a href="https://github.com/let-the-dreamers-rise/rein/blob/main/scan/safe.js">github.com/let-the-dreamers-rise/rein</a>. MIT.</div>
+</footer>
+
+<script src="../scan/rein-scan.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
+  const status = (t, err) => { $("status").textContent = t || ""; $("status").className = err ? "err" : ""; };
+
+  function render(r, { synthetic } = {}) {
+    const danger = r.queue.filter((q) => q.found.some((f) => f.level === "danger")).length;
+    const warn = r.queue.filter((q) => q.found.length).length - danger;
+    $("who").textContent = `${r.safe} · ${r.threshold} of ${r.owners.length} owners sign`;
+    $("headline").textContent = !r.queue.length
+      ? "Nothing is waiting to be signed. Rein would check each new transaction as it's queued."
+      : danger
+        ? `Don't sign yet: ${danger} of the ${r.queue.length} queued transaction${r.queue.length === 1 ? "" : "s"} ${danger === 1 ? "pays" : "pay"} an address that only looks like one this Safe uses.`
+        : warn
+          ? `${warn} of the ${r.queue.length} queued transaction${r.queue.length === 1 ? "" : "s"} need${warn === 1 ? "s" : ""} a second look before the last signature.`
+          : `All ${r.queue.length} queued transaction${r.queue.length === 1 ? "" : "s"} fit what this Safe normally does.`;
+    $("synthetic").hidden = !synthetic;
+    const list = $("queue");
+    list.replaceChildren();
+    if (!r.queue.length) list.append(el("p", `Rein knows ${r.payments} payments this Safe has made.`, "sub"));
+    for (const q of r.queue) {
+      const d = el("div", null, "q");
+      const line = el("div", null, "line");
+      const bad = q.found.some((f) => f.level === "danger");
+      line.append(el("span", `#${q.nonce}`, "n"), el("span", q.what, "what"), el("span", bad ? "Don't sign yet" : q.found.length ? "Check first" : "Looks normal", `tag ${bad ? "danger" : q.found.length ? "warn" : "ok"}`), el("span", `${q.signed} of ${q.needed} signed`, "signed"));
+      d.append(line);
+      if (q.found.length) { const ul = el("ul"); for (const f of q.found) ul.append(el("li", `${f.why}.`)); d.append(ul); }
+      list.append(d);
+    }
+    if (r.poisoning) list.append(el("p", `Rein also ignored ${r.poisoning} fake transfer${r.poisoning === 1 ? "" : "s"} made to look like this Safe sent them: someone is poisoning its history with lookalike addresses.`, "sub"));
+    $("cmd").textContent = `npx rein-wallet safe ${synthetic ? "0xYourSafe" : r.safe}${r.chain && r.chain !== "base" ? ` --chain ${r.chain}` : ""} --webhook "$SLACK_OR_DISCORD_WEBHOOK_URL" --every 300`;
+    $("report").hidden = false;
+  }
+
+  async function check(address, chain) {
+    $("fail").hidden = true;
+    $("go").disabled = true;
+    try {
+      status("Reading the queue from Safe…");
+      const service = Rein.safe.safeGateway(chain, { fetch: (...a) => window.fetch(...a) });
+      await service.info(address);
+      status("Reading what this Safe has paid before…");
+      const history = await Rein.fetchHistory(address, { chain, fetch: (...a) => window.fetch(...a) });
+      const r = await Rein.safe.watchOnce(address, { chain, safeApi: service, history, remember: false });
+      status("");
+      render(r);
+      window.history.replaceState(null, "", `?safe=${r.safe}&chain=${chain}`);
+    } catch (err) {
+      status("");
+      const f = $("fail");
+      f.replaceChildren(el("div", `Rein couldn't check that Safe: ${err.message}.`), el("div", "From a terminal it runs the same check:"), el("pre", `npx rein-wallet safe ${address} --chain ${chain}`));
+      f.hidden = false;
+    } finally {
+      $("go").disabled = false;
+    }
+  }
+
+  async function sample() {
+    const s = Rein.safe.sampleSafe();
+    const r = await Rein.safe.watchOnce(s.address, { safeApi: s.safeApi, history: s.history, remember: false });
+    render(r, { synthetic: true });
+    $("report").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  $("form").addEventListener("submit", (e) => { e.preventDefault(); check($("address").value.trim(), $("chain").value); });
+  $("sample").addEventListener("click", sample);
+  const p = new URLSearchParams(location.search);
+  if (p.get("sample")) sample();
+  else if (p.get("safe")) { $("address").value = p.get("safe"); if (p.get("chain")) $("chain").value = p.get("chain"); check(p.get("safe"), $("chain").value); }
+})();
+</script>
+</body>
+</html>

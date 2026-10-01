@@ -35,6 +35,30 @@ or see what a
 second key would have held across a whole fleet with `npx rein-wallet fleet
 wallets.txt`. In Claude, the `rein_check_wallet` tool does the same.
 
+## On a Safe multisig: check the queue before you sign
+
+One person queues a payment and the others sign what the screen shows them.
+None of them pasted the address, so a lookalike is easy to sign. Rein checks
+every queued transaction against what the Safe has paid before:
+
+```
+npx rein-wallet safe 0xYourSafe          # or offline: npx rein-wallet safe --sample
+```
+
+```
+#41 (1 of 2 signed): pay 15 USDC to Inference API. Looks normal.
+#42 (1 of 2 signed): pay 48,000 USDC to 0xc64F…e299. DON'T SIGN YET:
+  - 0xc64F…e299 starts and ends like Inference API (0xC64f…e299), an address the Safe
+    has paid, but it is a different address: the mark of address poisoning.
+#43 (0 of 2 signed): pay 6,500 USDC to 0x6320…8F82. Check first:
+  - the Safe has never paid 0x6320…8F82 before, and this is $6,500.
+```
+
+Or paste the Safe at [rein-nine.vercel.app/safe](https://rein-nine.vercel.app/safe/).
+`--webhook URL --every 300` posts each flagged transaction once to Slack,
+Discord or Telegram, and [scan/safe-action.yml](scan/safe-action.yml) does the
+same from a GitHub Action with no server. It holds no key and needs none.
+
 ## Switch it on: one line
 
 ```js

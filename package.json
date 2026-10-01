@@ -41,6 +41,7 @@
     "scan/*.js",
     "scan/README.md",
     "scan/watch-action.yml",
+    "scan/safe-action.yml",
     "mcp/rein-mcp.js",
     "mcp/lib/",
     "mcp/sandbox/",

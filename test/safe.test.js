@@ -77,6 +77,26 @@ describe("rein safe", function () {
     expect(safe.alertText(r)).to.match(/^\*Rein, before you sign:\* 1 transaction in the queue of Safe 0x/);
   });
 
+  it("flags a payment far above the most the Safe has paid that payee, and runs a made-up Safe offline", async () => {
+    const r = await safe.watchOnce(AGENT, { safeApi: service([{ nonce: 7, safeTxHash: "0x0a", confirmations: [], confirmationsRequired: 2, ...pay(PAYEES.inference.address, 4000) }]), history, env });
+    expect(r.queue[0].found.map((f) => f.why).join()).to.contain("more than 3× the most this Safe has ever paid Inference API");
+    const lines = [];
+    expect(await safe.main(["--sample"], { log: (l) => lines.push(l) })).to.equal(1);
+    expect(lines.join("\n")).to.contain("made-up sample Safe").and.contain("#41 (1 of 2 signed): pay 15 USDC to Inference API. Looks normal.").and.contain("#42 (1 of 2 signed): pay 48,000 USDC");
+  });
+
+  it("runs on the web page from the same bundle, keeping nothing", async () => {
+    const vm = require("vm");
+    const code = fs.readFileSync(path.join(__dirname, "..", "web", "scan", "rein-scan.js"), "utf8");
+    const sandbox = { window: { crypto: globalThis.crypto }, crypto: globalThis.crypto, TextEncoder, TextDecoder, URL, console };
+    vm.runInNewContext(`${code};window.Rein = Rein;`, sandbox);
+    const s = sandbox.window.Rein.safe.sampleSafe();
+    const r = await sandbox.window.Rein.safe.watchOnce(s.address, { safeApi: s.safeApi, history: s.history, remember: false });
+    expect(r.queue.map((q) => q.found.map((f) => f.level).join())).to.deep.equal(["", "danger", "warn", "warn"]);
+    const page = fs.readFileSync(path.join(__dirname, "..", "web", "safe", "index.html"), "utf8");
+    expect(page).to.contain("Rein.safe.safeGateway").and.contain("remember: false").and.contain("window.history.replaceState");
+  });
+
   it("flags a payee that looks like one of the Safe's owners", async () => {
     const o = OWNERS[1];
     const twin = ethers.getAddress(`0x${o.slice(2, 6)}${"0".repeat(32)}${o.slice(-4)}`.toLowerCase());
