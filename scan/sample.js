@@ -33,7 +33,8 @@ const ERC20 = new ethers.Interface([
   "function transfer(address to, uint256 value)",
   "function approve(address spender, uint256 value)",
 ]);
-const SWAP_SELECTOR = "0x04e45aaf"; // exactInputSingle
+// SwapRouter02's exactInputSingle, sending what it buys back to the agent.
+const SWAP = new ethers.Interface(["function exactInputSingle((address tokenIn,address tokenOut,uint24 fee,address recipient,uint256 amountIn,uint256 amountOutMinimum,uint160 sqrtPriceLimitX96))"]);
 
 // A small deterministic generator: the same sample on every machine.
 function rng(seed) {
@@ -99,7 +100,7 @@ function build() {
       const dollars = 150 + rand() * 100;
       const raw = ethers.parseUnits(dollars.toFixed(2), 6);
       tx({ ts: at(11), to: { address: USDC.address, name: "USD Coin", contract: true }, input: ERC20.encodeFunctionData("approve", [ROUTER, raw]), method: "approve" });
-      tx({ ts: at(11.2), to: { address: ROUTER, name: "SwapRouter02", contract: true }, input: SWAP_SELECTOR + "00".repeat(224), method: "exactInputSingle",
+      tx({ ts: at(11.2), to: { address: ROUTER, name: "SwapRouter02", contract: true }, input: SWAP.encodeFunctionData("exactInputSingle", [[USDC.address, WETH.address, 500, AGENT, raw, 0, 0]]), method: "exactInputSingle",
         tokenTransfers: [{ to: POOL, name: "Uniswap V3: USDC-WETH", contract: true, token: USDC, raw, method: "exactInputSingle" }] });
     }
     // An ETH tip to the bounty address, weekly.

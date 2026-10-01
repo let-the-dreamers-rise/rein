@@ -62,6 +62,25 @@ The check runs in your agent's process, so an agent whose code is fully
 compromised can skip it. For limits nothing can skip, the same policy runs on
 chain in a Rein account (below).
 
+## Shadow mode for a platform's agent wallets
+
+```bash
+npx rein-wallet fleet wallets.txt --webhook "$SLACK_WEBHOOK_URL"
+```
+
+For a platform that runs many agent wallets, give Rein the list, one address
+per line. It learns each wallet's limits from its history before the last 30
+days, then posts to Slack every payment since that a second key would have held
+for a person to approve. That covers a first payment to an address the agent
+had never paid, a payee it doesn't pay often enough to trust, a swap that sent
+its output elsewhere, and more in an hour or a day than its history supports.
+
+Nothing is integrated and nothing is held: it reads public chain data and
+reports what would have happened. Run it with `--since 30m` every 15 minutes
+from cron or a scheduled GitHub Action, and each new one lands in Slack as it
+happens. `--out dir` writes the full list. `npx rein-wallet fleet --sample`
+shows it on a made-up wallet and a copy of it that got drained.
+
 ## Try it in Claude, with nothing to set up
 
 Give Claude a Rein account holding 50,000 test USDC, then try to talk it into

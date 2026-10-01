@@ -360,6 +360,9 @@ const WORDS = {
   NATIVE_PER_CALL: "more ETH in one payment than this agent normally sends",
   NATIVE_PER_WINDOW: "that would take this agent past its hourly ETH limit",
   APPROVAL_TOO_LARGE: "a larger allowance than this agent normally grants",
+  RECIPIENT_NOT_SELF: "this swap sends what it buys to an address other than this wallet",
+  SWAP_NOT_UNDERSTOOD: "Rein can't read every step of this router call, so it can't tell who it pays",
+  SIGNATURE_NOT_UNDERSTOOD: "Rein can't tell what this signature lets someone move",
 };
 
 /// The reason the guard refuses `rows` on top of `ledger`, or "OK".
@@ -646,4 +649,4 @@ async function main(argv, { log = console.log, fetch: fetchImpl, env = process.e
   return 0;
 }
 
-module.exports = { learn, check, budget, guardClient, evolve, approve, loadGuard, saveGuard, guardPath, toRow, toRows, main, parse, USAGE };
+module.exports = { judge, WORDS, learn, check, budget, guardClient, evolve, approve, loadGuard, saveGuard, guardPath, toRow, toRows, main, parse, USAGE };

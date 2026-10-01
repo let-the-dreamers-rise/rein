@@ -5,6 +5,8 @@
 //
 //   rein guard 0x…           learn the wallet's limits from its history and
 //                            hold every payment to them with rein.check(tx)
+//   rein fleet wallets.txt   what a second key would have held across many
+//                            agent wallets, posted to Slack (shadow mode)
 //   rein try                 a hijacked agent against a real Rein account, in a
 //                            sandbox inside this process
 //   rein scan 0x…            the policy a wallet's history supports, and what it
@@ -25,6 +27,12 @@ const USAGE = `rein: a wallet your agent can operate and cannot drain.
         const verdict = require("rein-wallet").check(tx)   // { allow, reason }
       Run it again to keep the limits current: they tighten on their own, and
       anything wider waits for rein guard <address> --approve.
+
+  rein fleet <wallets.txt> [--since 30d] [--webhook URL] [--out dir]
+      Shadow mode for many agent wallets: learns each one's limits from its
+      history before --since, and reports to the terminal and Slack every
+      payment since that a second key would have held for a person to approve.
+      Read-only. rein fleet --sample shows it on a made-up wallet and a drained copy.
 
   rein try
       A hijacked agent against a real Rein account on a private chain inside
@@ -107,6 +115,8 @@ async function main(argv) {
   switch (cmd) {
     case "guard":
       return require("../scan/guard").main(rest);
+    case "fleet":
+      return require("../scan/fleet").main(rest);
     case "try":
       await require("./try").runTry();
       return 0;
