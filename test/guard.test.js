@@ -70,6 +70,60 @@ describe("rein guard", function () {
     });
   });
 
+  describe("address poisoning", () => {
+    // Luna's wallet, 1 Oct 2026: fake "USDC" tokens emit Transfer events from
+    // the wallet to addresses that start and end like ones it really pays.
+    const look = (a, mid) => ethers.getAddress(`0x${a.slice(2, 6)}${mid.repeat(32 / mid.length)}${a.slice(-4)}`.toLowerCase());
+    const poisoned = () => {
+      const h = sampleHistory();
+      const real = PAYEES.inference.address;
+      const fake = (symbol, address, rate) => ({ address_hash: address, symbol, name: symbol, decimals: "6", type: "ERC-20", exchange_rate: rate, reputation: "ok" });
+      const tokens = [fake("ÚSDС", "0x4facd9f600000000000000000000000000000001", null), fake("USDC", "0x08cfbc7300000000000000000000000000000002", null)];
+      const last = Date.parse(h.transactions[0].timestamp);
+      for (let i = 0; i < 40; i++) {
+        h.tokenTransfers.push({
+          transaction_hash: ethers.id(`poison ${i}`),
+          timestamp: new Date(last - i * 3600 * 1000).toISOString(),
+          block_number: 1,
+          from: { hash: AGENT },
+          to: { hash: look(real, i % 2 ? "9" : "7") },
+          token: tokens[i % 2],
+          total: { value: String(250000 * 1e6), decimals: "6" },
+        });
+      }
+      return { h, real };
+    };
+
+    it("ignores transfers the wallet never sent in tokens it never used, and never trusts their payees", () => {
+      const { h, real } = poisoned();
+      const { guard: g, ignored } = guard.learn(h);
+      expect(ignored).to.have.length(40);
+      expect(ignored.map((x) => x.why).join(" ")).to.contain("lookalike characters").and.contain("unpriced, and this wallet never called it");
+      expect(g.policy.transferPayees).to.include(real).and.not.include(look(real, "7"));
+      expect(g.policy.targets.map((t) => t.toLowerCase())).to.not.include("0x4facd9f600000000000000000000000000000001");
+      expect(Object.keys(g.policy.tokens)).to.deep.equal([USDC.address]);
+    });
+
+    it("holds a payment to an address that only looks like one the agent pays, and says why", async () => {
+      const { h, real } = poisoned();
+      const lines = [];
+      const fetch = require("../scan/sample").historiesFetch([h]);
+      await guard.main([AGENT], { log: (l) => lines.push(l), env, fetch });
+      expect(lines.join("\n")).to.contain("Ignored 40 transfers this wallet never sent").and.contain("address poisoning");
+      const v = rein.check({ payTo: look(real, "7"), asset: USDC.address, amount: usdc(5) }, { env, now: NOW });
+      expect(v).to.include({ allow: false, reason: "LOOKALIKE_PAYEE" });
+      expect(v.explanation).to.contain("starts and ends like one the agent pays");
+      expect(rein.check({ payTo: real, asset: USDC.address, amount: usdc(5) }, { env, now: NOW }).allow).to.equal(true);
+    });
+
+    it("won't learn limits from fewer than 20 calls of the wallet's own", () => {
+      const h = sampleHistory();
+      h.transactions = h.transactions.slice(-15);
+      h.tokenTransfers = [];
+      expect(() => guard.learn(h)).to.throw("needs 20");
+    });
+  });
+
   describe("check", () => {
     it("allows a usual payment, as an x402 requirement or as a transfer, and counts it against the hour", () => {
       saved();

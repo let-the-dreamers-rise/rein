@@ -48,6 +48,46 @@ const tokenAddress = (t) => ethers.getAddress(t.address_hash || t.address);
 const seconds = (iso) => Math.floor(Date.parse(iso) / 1000);
 const isErc20 = (t) => !t.type || t.type === "ERC-20";
 
+// Tokens that are what their symbol says, by address. Anyone can deploy a
+// token called "USDC" (or "ÚSDС"), so a symbol proves nothing.
+const KNOWN_TOKENS = {
+  base: [
+    "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // USDC
+    "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA", // USDbC
+    "0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42", // EURC
+    "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2", // USDT
+    "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb", // DAI
+    "0x4200000000000000000000000000000000000006", // WETH
+    "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf", // cbBTC
+  ],
+  "base-sepolia": ["0x036CbD53842c5426634e7929541eC2318f3dCF7e", "0x4200000000000000000000000000000000000006"],
+  ethereum: [
+    "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", // USDC
+    "0xdAC17F958D2ee523a2206206994597C13D831ec7", // USDT
+    "0x6B175474E89094C44Da98b954EedeAC495271d0F", // DAI
+    "0x1aBaEA1f7C830bD89Acc67eC4af516284b1bC33c", // EURC
+    "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", // WETH
+  ],
+};
+const PLAIN = /^[\x20-\x7E]*$/; // printable ASCII: no lookalike letters, no invisible ones
+
+/// Why a transfer out of the wallet, in a transaction the wallet didn't
+/// send, is not to be believed, or null if it can be. Address poisoning mints
+/// a fake "USDC" and emits Transfer events "from" the victim to an address
+/// that looks like one it pays, so the victim's history seems to show it
+/// paying the attacker. A real payment the wallet signed for someone else to
+/// submit (x402, a smart wallet's user operation) moves a real token.
+function poisoned(t, { chain, interacted }) {
+  const tok = t.token || {};
+  const address = tokenAddress(tok);
+  if (BigInt(t.total?.value || 0) === 0n) return "moves nothing";
+  if (!PLAIN.test(tok.symbol || "") || !PLAIN.test(tok.name || "")) return `its token's name hides lookalike characters (${tok.symbol})`;
+  if (tok.reputation && tok.reputation !== "ok") return `the explorer marks its token ${tok.reputation}`;
+  const known = (KNOWN_TOKENS[chain] || []).some((a) => a.toLowerCase() === address.toLowerCase());
+  if (known || interacted.has(address.toLowerCase()) || tok.exchange_rate != null) return null;
+  return `its token (${tok.symbol || address}) is unpriced, and this wallet never called it`;
+}
+
 // -- fetching ---------------------------------------------------------------
 
 async function getJson(url, fetchImpl) {
@@ -180,9 +220,19 @@ function toTrail(history, { payments = false } = {}) {
   const own = new Set(history.transactions.filter((tx) => lower(tx.from?.hash) === me).map((tx) => tx.hash));
   const ownSince = Math.min(...history.transactions.filter((tx) => lower(tx.from?.hash) === me).map((tx) => seconds(tx.timestamp)));
 
+  // Contracts the wallet itself has called: a token among them is one it uses.
+  const interacted = new Set(history.transactions.filter((tx) => lower(tx.from?.hash) === me && tx.to?.hash).map((tx) => lower(tx.to.hash)));
+  const ignored = [];
   for (const t of history.tokenTransfers) {
     if (lower(t.from?.hash) !== me || !isErc20(t.token || {})) continue;
     if (explained.has(t.transaction_hash)) continue;
+    if (!own.has(t.transaction_hash)) {
+      const why = poisoned(t, { chain: history.chain, interacted });
+      if (why) {
+        ignored.push({ tx: t.transaction_hash, token: t.token?.symbol || null, payee: t.to?.hash ? ethers.getAddress(t.to.hash) : null, why });
+        continue;
+      }
+    }
     const authorized = payments && !own.has(t.transaction_hash) && (own.size === 0 || seconds(t.timestamp) >= ownSince);
     const token = tokenAddress(t.token);
     const decimals = t.total?.decimals != null ? Number(t.total.decimals) : decimalsOf(token);
@@ -203,7 +253,7 @@ function toTrail(history, { payments = false } = {}) {
   }
 
   rows.sort((a, b) => a.ts - b.ts);
-  return { rows, tokens: book, unknownDecimals: [...unknownDecimals] };
+  return { rows, tokens: book, unknownDecimals: [...unknownDecimals], ignored };
 }
 
 /// What the wallet holds now, in each token's own units and, where the
@@ -227,4 +277,4 @@ function holdings(history) {
   return out;
 }
 
-module.exports = { fetchHistory, toTrail, holdings, tokenBook, CHAINS, NO_CALLDATA, SELECTOR_NAMES, ERC20 };
+module.exports = { fetchHistory, toTrail, holdings, tokenBook, poisoned, KNOWN_TOKENS, CHAINS, NO_CALLDATA, SELECTOR_NAMES, ERC20 };

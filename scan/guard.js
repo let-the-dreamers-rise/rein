@@ -128,9 +128,10 @@ function loadGuard(which, env = process.env) {
 /// `days` days, held against what the wallet did in those days.
 function learn(history, { days = 30 } = {}) {
   const trail = { payments: true };
-  const { rows, tokens } = toTrail(history, trail);
-  if (rows.filter((r) => !r.derived).length < 2) {
-    throw new Error(`${history.address} has ${rows.length} outgoing payment(s) on record; the guard needs its habits, and there are none to read yet`);
+  const { rows, tokens, ignored } = toTrail(history, trail);
+  const own = rows.filter((r) => !r.derived).length;
+  if (own < COHORT_UNTIL) {
+    throw new Error(`${history.address} has ${own} call${own === 1 ? "" : "s"} of its own on record; the guard needs ${COHORT_UNTIL} to learn its habits from`);
   }
   const last = rows[rows.length - 1].ts;
   const since = last - days * DAY;
@@ -176,6 +177,7 @@ function learn(history, { days = 30 } = {}) {
   };
   return {
     guard,
+    ignored,
     replay: {
       byTime,
       days,
@@ -358,7 +360,16 @@ function toRows(tx, guard, now) {
   return { rows: [row, ...spends] };
 }
 
+/// Same first four and last four hex characters, different address: what a
+/// poisoner generates so a hurried copy from history picks theirs.
+const looksLike = (a, b) => {
+  const x = String(a).toLowerCase();
+  const y = String(b).toLowerCase();
+  return x !== y && x.slice(2, 6) === y.slice(2, 6) && x.slice(-4) === y.slice(-4);
+};
+
 const WORDS = {
+  LOOKALIKE_PAYEE: "this address starts and ends like one the agent pays, but it is a different address: the mark of address poisoning",
   PAYEE_NOT_ALLOWED: "this agent has never paid that address often enough for it to be trusted",
   SPENDER_NOT_ALLOWED: "this agent has never given that address an allowance often enough for it to be trusted",
   NOT_A_PAYEE: "this agent only gives that address allowances; it has never paid it directly, and tokens sent to a router can be taken by anyone",
@@ -460,6 +471,9 @@ function checkOnce(tx, opts, file, given) {
   const { rows, block } = toRows(tx, guard, now);
   const main = rows ? rows[0] : null;
   let reason = block ? block.reason : judge(guard, ledger, rows, now);
+  // An address that starts and ends like one the agent pays, but isn't it.
+  const lookalike = reason === "PAYEE_NOT_ALLOWED" && rows.some((r) => r.payee && guard.policy.transferPayees.some((p) => looksLike(p, r.payee)));
+  if (lookalike) reason = "LOOKALIKE_PAYEE";
   let allow = reason === "OK";
   // A first payment to a new address, if it is small, goes through and
   // counts toward the hour and the day like any other.
@@ -741,7 +755,7 @@ async function main(argv, { log = console.log, fetch: fetchImpl, env = process.e
   const file = o.out || guardPath(wallet, env);
   const existing = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : null;
   const cohort = o.cohort ? readCohort(o.cohort) : null;
-  const own = learned ? learned.guard.learnedFrom.calls : 0;
+  const own = learned ? learned.guard.learnedFrom.calls : toTrail(history, { payments: true }).rows.filter((r) => !r.derived).length;
   // A new wallet starts from what its siblings share, and keeps to it until it
   // has enough history of its own; then its own limits replace it, tightening
   // on their own and widening only with your approval, like any update.
@@ -762,6 +776,11 @@ async function main(argv, { log = console.log, fetch: fetchImpl, env = process.e
   } else {
     const { replay } = learned;
     guard = learned.guard;
+    if (learned.ignored.length) {
+      const payees = [...new Set(learned.ignored.map((x) => x.payee).filter(Boolean))];
+      log(`Ignored ${learned.ignored.length} transfer${learned.ignored.length === 1 ? "" : "s"} this wallet never sent: someone else's contract made ${learned.ignored.length === 1 ? "it" : "them"} look like payments from it${payees.length ? `, to ${payees.slice(0, 3).map((a) => `${a.slice(0, 6)}…${a.slice(-4)}`).join(", ")}${payees.length > 3 ? ` and ${payees.length - 3} more` : ""}` : ""}. That is how address poisoning works, and none of them is trusted.`);
+      log("");
+    }
     const window = replay.byTime ? `Its last ${replay.days} days` : `Its most recent ${replay.total} calls`;
     log(`${window}: ${replay.payments} payment${replay.payments === 1 ? "" : "s"}${replay.totals.length ? `, ${replay.totals.join(" and ")}` : ""}, to ${replay.payees} address${replay.payees === 1 ? "" : "es"}.`);
     log(`Limits learned only from before ${replay.since.slice(0, 10)} (${replay.learnedFrom} calls) would have allowed ${replay.allowed} of its ${replay.total} calls.`);
@@ -810,4 +829,4 @@ async function main(argv, { log = console.log, fetch: fetchImpl, env = process.e
   return 0;
 }
 
-module.exports = { COHORT_UNTIL, withLock, home, judge, WORDS, decide, fingerprint, learn, check, budget, guardClient, evolve, approve, loadGuard, saveGuard, guardPath, toRow, toRows, main, parse, USAGE };
+module.exports = { looksLike, COHORT_UNTIL, withLock, home, judge, WORDS, decide, fingerprint, learn, check, budget, guardClient, evolve, approve, loadGuard, saveGuard, guardPath, toRow, toRows, main, parse, USAGE };

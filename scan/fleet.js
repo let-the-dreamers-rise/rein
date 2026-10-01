@@ -26,7 +26,7 @@ const { NATIVE } = require("./evaluate");
 const { describe, namer, money } = require("./index");
 const { readWallets } = require("./cli");
 const { parseSince } = require("./watch");
-const { learn, judge, WORDS, COHORT_UNTIL } = require("./guard");
+const { learn, judge, WORDS, COHORT_UNTIL, looksLike } = require("./guard");
 const { cohortFrom, guardFromCohort } = require("./cohort");
 const { readRouterCall, strangers } = require("./moves");
 
@@ -128,7 +128,8 @@ function shadow(history, { since, cohort = null }) {
       if (r.payee && r.kind !== "approve" && !r.derived) paidBefore.add(r.payee);
       continue;
     }
-    if (reason === "PAYEE_NOT_ALLOWED" && !paidBefore.has(r.payee)) reason = "NEW_ADDRESS";
+    if (reason === "PAYEE_NOT_ALLOWED" && guard.policy.transferPayees.some((p) => looksLike(p, r.payee))) reason = "LOOKALIKE_PAYEE";
+    else if (reason === "PAYEE_NOT_ALLOWED" && !paidBefore.has(r.payee)) reason = "NEW_ADDRESS";
     if (r.payee && r.kind !== "approve" && !r.derived) paidBefore.add(r.payee);
     skipped.add(r);
     held.push({
