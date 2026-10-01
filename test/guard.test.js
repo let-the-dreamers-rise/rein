@@ -103,7 +103,7 @@ describe("rein guard", function () {
       expect(pay(NOW + 3700).allow).to.equal(true);
     });
 
-    it("posts a blocked payment to the webhook without waiting for it", async () => {
+    it("posts a held payment to the webhook without waiting for it", async () => {
       const file = saved();
       const g = JSON.parse(fs.readFileSync(file, "utf8"));
       g.webhook = "https://hooks.example/rein";
@@ -113,7 +113,7 @@ describe("rein guard", function () {
       await new Promise((r) => setTimeout(r, 10));
       expect(posts).to.have.length(1);
       expect(posts[0][0]).to.equal("https://hooks.example/rein");
-      expect(posts[0][1].text).to.contain("Rein blocked a payment").and.contain("5,000 USDC");
+      expect(posts[0][1].text).to.contain("Rein is holding a payment").and.contain("5,000 USDC").and.contain("--allow");
     });
 
     it("blocks, and says what to do, when nothing is guarded yet or the file can't be read", () => {
@@ -200,6 +200,72 @@ describe("rein guard", function () {
       expect(runs.filter((x) => x === "GUARD_ERROR")).to.deep.equal([]);
       const limit = learned.guard.policy.tokens[USDC.address].maxPerWindow;
       expect(runs.filter((x) => x === "A").length).to.equal(Math.floor(limit / 200));
+    });
+  });
+
+  describe("holding a payment for a person", () => {
+    const stranger = (n) => ({ payTo: PAYEES.stranger.address, asset: USDC.address, amount: usdc(n) });
+
+    it("holds a payment outside the limits; an approval lets that one payment through once", async () => {
+      saved();
+      const v = rein.check(stranger(300), { env, now: NOW });
+      expect(v).to.include({ allow: false, reason: "PAYEE_NOT_ALLOWED" });
+      expect(v.held).to.match(/^[0-9a-f]{8}$/);
+      expect(v.next).to.contain(`--allow ${v.held}`);
+      expect(rein.check(stranger(300), { env, now: NOW + 5 }).held).to.equal(v.held); // a retry is the same hold
+      expect(rein.check(stranger(301), { env, now: NOW + 6 }).held).to.not.equal(v.held); // a different payment isn't
+      expect(await guard.main([AGENT, "--allow", v.held], { log: () => {}, env, input: "nope", now: NOW + 10 })).to.equal(1);
+      expect(await guard.main([AGENT, "--allow", v.held], { log: () => {}, env, input: AGENT.slice(-4), now: NOW + 10 })).to.equal(0);
+      expect(rein.check(stranger(300), { env, now: NOW + 20 })).to.include({ allow: true, reason: "APPROVED" });
+      expect(rein.check(stranger(300), { env, now: NOW + 30 }).allow).to.equal(false); // once
+    });
+
+    it("refuses without a keyboard, and lists what is held", async () => {
+      saved();
+      const v = rein.check(stranger(300), { env, now: Math.floor(Date.now() / 1000) });
+      const lines = [];
+      expect(await guard.main([AGENT, "--deny", v.held], { log: (l) => lines.push(l), env })).to.equal(0);
+      await guard.main([AGENT, "--holds"], { log: (l) => lines.push(l), env });
+      expect(lines.join("\n")).to.contain("Refused").and.contain(`${v.held}  denied`);
+    });
+
+    it("lets a small first payment to a new address through when the owner sets a cap", () => {
+      const file = saved();
+      const g = JSON.parse(fs.readFileSync(file, "utf8"));
+      g.newPayeeCap = 20;
+      fs.writeFileSync(file, JSON.stringify(g));
+      expect(rein.check(stranger(5), { env, now: NOW }).allow).to.equal(true);
+      expect(rein.check(stranger(50), { env, now: NOW + 1 }).allow).to.equal(false);
+    });
+
+    it("posts each new hold to Slack once, with a signed link to approve or refuse it", async () => {
+      saved();
+      const { announce, handler, sign } = require("../scan/approvals");
+      const now = Math.floor(Date.now() / 1000);
+      const v = rein.check(stranger(300), { env, now });
+      const posts = [];
+      const fetch = async (u, init) => posts.push(JSON.parse(init.body).text);
+      const secret = "a-secret-the-agent-cannot-read";
+      expect(await announce({ env, secret, publicUrl: "https://rein.example", webhook: "https://hooks.example/x", fetch, now })).to.equal(1);
+      expect(await announce({ env, secret, publicUrl: "https://rein.example", webhook: "https://hooks.example/x", fetch, now })).to.equal(0);
+      const k = sign(secret, AGENT, v.held);
+      expect(posts[0]).to.contain(`https://rein.example/h/${AGENT}/${v.held}?k=${k}`).and.contain("300 USDC");
+
+      const http = require("http");
+      const server = http.createServer(handler({ env, secret }));
+      await new Promise((r) => server.listen(0, r));
+      const base = `http://127.0.0.1:${server.address().port}`;
+      try {
+        expect((await globalThis.fetch(`${base}/h/${AGENT}/${v.held}?k=${"0".repeat(32)}`)).status).to.equal(403);
+        const view = await globalThis.fetch(`${base}/h/${AGENT}/${v.held}?k=${k}`);
+        expect(await view.text()).to.contain("Approve this payment");
+        expect(guard.loadGuard(AGENT, env).guard.holds.find((h) => h.id === v.held).status).to.equal("waiting"); // looking decides nothing
+        const done = await globalThis.fetch(`${base}/h/${AGENT}/${v.held}/approve?k=${k}`, { method: "POST" });
+        expect(await done.text()).to.contain("Approved");
+      } finally {
+        server.close();
+      }
+      expect(rein.check(stranger(300), { env, now: now + 1 })).to.include({ allow: true, reason: "APPROVED" });
     });
   });
 

@@ -46,6 +46,13 @@ check from `rein_check_payment` with `npx rein-wallet mcp --guard 0xYourAgentWal
 If the agent runs somewhere else, save the limits with `--out rein-guard.json`,
 ship that file with it, and set `REIN_GUARD_FILE=rein-guard.json`.
 
+A payment outside the limits isn't simply refused: it is held, and
+`check` says so (`held: "<id>"`). A person can let that one payment through
+with `rein-wallet guard 0x… --allow <id>`, typed at a terminal, and the agent's
+retry then passes. `rein-wallet approvals` posts each hold to Slack with a link
+to approve or refuse it. `--new-payee-cap 20` lets a first payment of up to 20
+tokens to a new address through without asking.
+
 Run the command again whenever you like. Limits that should tighten do so on
 their own; anything that would widen them (a new payee, a higher ceiling) waits
 for `rein-wallet guard 0x… --approve`. Add `--webhook <Slack or Discord URL>`

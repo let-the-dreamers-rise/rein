@@ -27,6 +27,12 @@ const USAGE = `rein: a wallet your agent can operate and cannot drain.
         const verdict = require("rein-wallet").check(tx)   // { allow, reason }
       Run it again to keep the limits current: they tighten on their own, and
       anything wider waits for rein guard <address> --approve.
+      A payment outside the limits is held: rein guard <address> --allow <id>
+      lets it through once. --new-payee-cap N lets small first payments through.
+
+  rein approvals --public-url URL --webhook <Slack URL>
+      Posts each held payment to Slack with a link to approve or refuse it.
+      Needs REIN_APPROVAL_SECRET, kept where the agent can't read it.
 
   rein fleet <wallets.txt> [--since 30d] [--webhook URL] [--out dir]
       Shadow mode for many agent wallets: learns each one's limits from its
@@ -117,6 +123,8 @@ async function main(argv) {
       return require("../scan/guard").main(rest);
     case "fleet":
       return require("../scan/fleet").main(rest);
+    case "approvals":
+      return require("../scan/approvals").main(rest);
     case "try":
       await require("./try").runTry();
       return 0;

@@ -22,6 +22,7 @@
 //
 // Nothing here signs, spends or holds a key. For limits no code path can
 // skip, the same policy runs in a ReinAccountV3 contract.
+const crypto = require("crypto");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -34,6 +35,7 @@ const { readRouterCall, strangers, readTypedData } = require("./moves");
 
 const DAY = 86400;
 const KEEP_SECONDS = 2 * DAY; // ledger kept for window state; longer than any window the compiler writes
+const HOUR = 3600;
 const VERSION = 2; // 2: payees split from approval spenders, a daily ceiling, swaps and signatures read
 
 // -- where guards live ----------------------------------------------------------
@@ -166,6 +168,8 @@ function learn(history, { days = 30 } = {}) {
     tokens: Object.fromEntries(Object.entries(tokens).map(([a, t]) => [a, { symbol: t.symbol || null, decimals: t.decimals ?? 18 }])),
     ledger: rows.filter((r) => r.ts > now - KEEP_SECONDS).map(ledgerRow),
     pending: [],
+    holds: [],
+    newPayeeCap: 0,
     webhook: null,
   };
   return {
@@ -395,6 +399,31 @@ function judge(guard, ledger, rows, now) {
 const spentSince = (ledger, rows, token, since) =>
   [...ledger, ...rows].filter((r) => r.token === token && r.ts > since && r.kind !== "approve").reduce((a, r) => a + Number(r.amount || 0), 0);
 
+/// The same payment asked for again gives the same fingerprint, so an
+/// approval lets through that payment, not whatever the agent asks next.
+function fingerprint(tx) {
+  const lower = (x) => (typeof x === "string" ? x.toLowerCase() : x);
+  const norm = isTyped(tx)
+    ? { primaryType: tx.primaryType, domain: tx.domain, message: tx.message }
+    : tx.payTo
+      ? { payTo: lower(tx.payTo), asset: lower(tx.asset), amount: String(tx.amount ?? tx.maxAmountRequired) }
+      : { to: lower(tx.to), data: lower(tx.data || tx.input || "0x"), value: String(tx.value ?? 0) };
+  const text = JSON.stringify(norm, (k, v) => (typeof v === "bigint" ? v.toString() : typeof v === "string" ? v.toLowerCase() : v));
+  return crypto.createHash("sha256").update(text).digest("hex");
+}
+
+/// Decides a hold. `decision` is "approved" or "denied"; an approval lets
+/// that one payment through once, within the hour.
+function decide(guard, id, decision, now = Math.floor(Date.now() / 1000)) {
+  const h = (guard.holds || []).find((x) => x.id === id && x.until > now);
+  if (!h) throw new Error(`no hold ${id} is waiting on ${guard.wallet}`);
+  if (h.status !== "waiting") throw new Error(`hold ${id} was already ${h.status}`);
+  h.status = decision;
+  h.decidedAt = new Date(now * 1000).toISOString();
+  h.until = decision === "approved" ? now + HOUR : h.until;
+  return h;
+}
+
 /// Holds one payment to the saved limits before the agent signs it.
 /// Synchronous and local: no network. Takes a transaction ({ to, data,
 /// value }), an x402 payment ({ payTo, asset, amount }) or an EIP-712
@@ -422,18 +451,54 @@ function checkOnce(tx, opts, file, given) {
   const ledger = guard.ledger.filter((r) => r.ts > now - KEEP_SECONDS);
   const { rows, block } = toRows(tx, guard, now);
   const main = rows ? rows[0] : null;
-  const reason = block ? block.reason : judge(guard, ledger, rows, now);
-  const allow = reason === "OK";
+  let reason = block ? block.reason : judge(guard, ledger, rows, now);
+  let allow = reason === "OK";
+  // A first payment to a new address, if it is small, goes through and
+  // counts toward the hour and the day like any other.
+  if (reason === "PAYEE_NOT_ALLOWED" && guard.newPayeeCap > 0 && rows.every((r) => r.derived || r.kind === "call" || Number(r.amount) <= guard.newPayeeCap)) {
+    const extra = rows.map((r) => r.payee).filter(Boolean);
+    const widened = { ...guard, policy: { ...guard.policy, transferPayees: [...guard.policy.transferPayees, ...extra], payees: [...guard.policy.payees, ...extra] } };
+    if (judge(widened, ledger, rows, now) === "OK") (reason = "OK"), (allow = true);
+  }
+  // Anything else outside the limits is held: a person can let this exact
+  // payment through once, and the agent's retry then passes.
+  let hold = null;
+  let approved = null;
+  if (!allow && reason !== "GUARD_ERROR") {
+    const fp = fingerprint(tx);
+    guard.holds = (guard.holds || []).filter((h) => h.until > now);
+    approved = guard.holds.find((h) => h.fp === fp && h.status === "approved" && !h.used);
+    if (approved) {
+      approved.used = new Date(now * 1000).toISOString();
+      allow = true;
+    } else {
+      hold = guard.holds.find((h) => h.fp === fp && h.status === "waiting");
+      if (!hold) {
+        hold = { id: crypto.randomBytes(4).toString("hex"), fp, at: new Date(now * 1000).toISOString(), until: now + DAY, status: "waiting", reason };
+        guard.holds.push(hold);
+        hold.isNew = true;
+      }
+    }
+  }
   const sym = (t) => (t === NATIVE ? "ETH" : guard.tokens[t]?.symbol || t);
   const paid = rows ? rows.find((r) => r.token && r.kind !== "call") : null;
   const verdict = {
     allow,
-    reason,
-    explanation: allow ? "inside this agent's usual payees and limits" : block?.explanation || WORDS[reason] || codes.explain(codes.NAMES.indexOf(reason)) || reason,
+    reason: approved ? "APPROVED" : reason,
+    explanation: approved
+      ? `outside this agent's usual limits (${reason}), and a person approved this payment`
+      : allow
+        ? "inside this agent's usual payees and limits"
+        : block?.explanation || WORDS[reason] || codes.explain(codes.NAMES.indexOf(reason)) || reason,
     wallet: guard.wallet,
     ...(block?.payee ? { payee: block.payee } : main?.payee ? { payee: main.payee } : {}),
     ...(paid ? { amount: paid.amount, token: sym(paid.token) } : {}),
   };
+  if (hold) {
+    Object.assign(hold, { what: verdict.amount != null ? `${money(verdict.amount)} ${verdict.token}${verdict.payee ? ` to ${verdict.payee}` : ""}` : `a call to ${tx.to || "a contract"}`, explanation: verdict.explanation });
+    verdict.held = hold.id;
+    verdict.next = `Held for a person to approve. Don't retry another way. Tell the person, and retry this same payment once it is approved (rein-wallet guard ${guard.wallet} --allow ${hold.id}).`;
+  }
   const tp = paid && guard.policy.tokens[paid.token];
   if (tp) {
     const mine = allow ? rows : [];
@@ -443,15 +508,21 @@ function checkOnce(tx, opts, file, given) {
   if (opts.record !== false && file) {
     if (allow) guard.ledger = [...ledger, ...rows.map(ledgerRow)];
     else guard.blocked = [...(guard.blocked || []), { at: new Date(now * 1000).toISOString(), ...verdict }].slice(-100);
-    saveGuard(guard, file);
   }
-  if (!allow && guard.webhook && opts.alert !== false) alert(guard, verdict, opts.fetch);
+  const isNew = hold && hold.isNew;
+  if (hold) delete hold.isNew;
+  if (opts.record !== false && file) saveGuard(guard, file);
+  // A hold already announced isn't announced again on every retry.
+  if (!allow && guard.webhook && opts.alert !== false && (!hold || isNew) && !guard.approvals) alert(guard, verdict, opts.fetch);
   return verdict;
 }
 
 function alert(guard, v, fetchImpl = globalThis.fetch) {
   const short = (a) => `${a.slice(0, 6)}…${a.slice(-4)}`;
-  const text = `Rein blocked a payment from ${short(guard.wallet)}: ${v.amount != null ? `${money(v.amount)} ${v.token}` : "a call"}${v.payee ? ` to ${v.payee}` : ""}. ${v.reason}: ${v.explanation}.`;
+  const what = `${v.amount != null ? `${money(v.amount)} ${v.token}` : "a call"}${v.payee ? ` to ${v.payee}` : ""}`;
+  const text = v.held
+    ? `Rein is holding a payment from ${short(guard.wallet)}: ${what}. Why: ${v.explanation}.\nTo let this one payment through: npx rein-wallet guard ${guard.wallet} --allow ${v.held}\nTo refuse it: npx rein-wallet guard ${guard.wallet} --deny ${v.held}`
+    : `Rein blocked a payment from ${short(guard.wallet)}: ${what}. ${v.reason}: ${v.explanation}.`;
   // Fire and forget: a slow webhook must never hold up the agent's answer.
   Promise.resolve()
     .then(() => fetchImpl(guard.webhook, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text, content: text }) }))
@@ -499,7 +570,7 @@ function guardClient(which, env = process.env) {
       const decimals = guard.tokens[asset]?.decimals ?? 18;
       const amount = ethers.parseUnits(String(args.amount), decimals).toString();
       const v = check({ payTo: payee, asset, amount }, { guard: w, env });
-      return { ...v, next: v.allow ? "Allowed and counted against this hour. Sign and send it with your own wallet now." : "Do not send it. Tell the person why, or pay less or later." };
+      return { ...v, next: v.next || (v.allow ? "Allowed and counted against this hour. Sign and send it with your own wallet now." : "Do not send it. Tell the person why, or pay less or later.") };
     },
     pay() {
       return {
@@ -538,12 +609,46 @@ function approveAtKeyboard(address, { log, env, input }) {
   }
   log(`Approving widens ${guard.wallet}'s limits:`);
   for (const x of guard.pending) log(`  ${x.what}`);
+  if (!confirmed(guard, { log, input })) return 1;
+  const n = approve(guard);
+  saveGuard(guard, file);
+  log(`Approved ${n} change${n === 1 ? "" : "s"}. The wider limits are in force.`);
+  return 0;
+}
+
+/// --allow / --deny one held payment, at the keyboard like --approve.
+function decideAtKeyboard(address, id, decision, { log, env, input, now }) {
+  const { guard, file } = loadGuard(address, env);
+  const h = (guard.holds || []).find((x) => x.id === id);
+  if (!h) throw new Error(`no hold ${id} on ${guard.wallet}; rein-wallet guard ${guard.wallet} --holds lists them`);
+  log(`${decision === "approved" ? "Letting through" : "Refusing"} ${h.what} (held because ${h.explanation}).`);
+  if (decision === "approved" && !confirmed(guard, { log, input })) return 1;
+  // Refusing can't help an attacker, so it needs no keyboard.
+  withLock(file, () => {
+    const fresh = loadGuard(file, env).guard;
+    decide(fresh, id, decision, now);
+    saveGuard(fresh, file);
+  });
+  log(decision === "approved" ? "Approved. The agent's next try of this same payment, within the hour, goes through once." : "Refused. It stays blocked.");
+  return 0;
+}
+
+function listHolds(address, { log, env }) {
+  const { guard } = loadGuard(address, env);
+  const now = Math.floor(Date.now() / 1000);
+  const live = (guard.holds || []).filter((h) => h.until > now);
+  if (!live.length) log("No held payments.");
+  for (const h of live) log(`  ${h.id}  ${h.status.padEnd(8)}  ${h.at.slice(0, 16).replace("T", " ")}  ${h.what}  (${h.reason})`);
+  return 0;
+}
+
+function confirmed(guard, { log, input }) {
   const want = guard.wallet.slice(-4).toLowerCase();
   let typed = input;
   if (typed == null) {
     if (!process.stdin.isTTY) {
       log("Refused: approving needs a person at a terminal, and this command has no terminal on its input.");
-      return 1;
+      return false;
     }
     process.stdout.write("Type the last four characters of the wallet address to approve: ");
     const buf = Buffer.alloc(64);
@@ -551,12 +656,9 @@ function approveAtKeyboard(address, { log, env, input }) {
   }
   if (String(typed).trim().toLowerCase() !== want) {
     log("Not approved: that didn't match.");
-    return 1;
+    return false;
   }
-  const n = approve(guard);
-  saveGuard(guard, file);
-  log(`Approved ${n} change${n === 1 ? "" : "s"}. The wider limits are in force.`);
-  return 0;
+  return true;
 }
 
 // -- the command ------------------------------------------------------------------------
@@ -571,6 +673,10 @@ function parse(argv) {
     else if (a === "--webhook") o.webhook = argv[++i];
     else if (a === "--out") o.out = argv[++i];
     else if (a === "--approve") o.approve = true;
+    else if (a === "--allow") o.allow = argv[++i];
+    else if (a === "--deny") o.deny = argv[++i];
+    else if (a === "--holds") o.holds = true;
+    else if (a === "--new-payee-cap") o.newPayeeCap = Number(argv[++i]);
     else if (a === "--sample") o.sample = true;
     else if (a === "-h" || a === "--help") o.help = true;
     else if (!a.startsWith("-")) o.address = a;
@@ -581,9 +687,12 @@ function parse(argv) {
 
 const USAGE = `usage: rein guard <address> [--chain base|base-sepolia|ethereum] [--days 30] [--webhook URL] [--out file]
        rein guard <address> --approve     accept the widenings the last update proposed
+       rein guard <address> --holds       payments held for a person to approve
+       rein guard <address> --allow <id>  let one held payment through (--deny <id> refuses it)
+       --new-payee-cap N                  let a first payment to a new address through when it is N tokens or less
        rein guard --sample                try it on Rein's made-up sample wallet`;
 
-async function main(argv, { log = console.log, fetch: fetchImpl, env = process.env, input } = {}) {
+async function main(argv, { log = console.log, fetch: fetchImpl, env = process.env, input, now } = {}) {
   const o = parse(argv);
   if (o.help || (!o.address && !o.sample)) {
     console.error(USAGE);
@@ -596,6 +705,9 @@ async function main(argv, { log = console.log, fetch: fetchImpl, env = process.e
   } else {
     if (!/^0x[0-9a-fA-F]{40}$/.test(o.address)) throw new Error(`"${o.address}" is not a 0x address`);
     if (o.approve) return approveAtKeyboard(o.address, { log, env, input });
+    if (o.allow) return decideAtKeyboard(o.address, o.allow, "approved", { log, env, input, now });
+    if (o.deny) return decideAtKeyboard(o.address, o.deny, "denied", { log, env, input, now });
+    if (o.holds) return listHolds(o.address, { log, env });
     log(`Reading ${o.address}'s history on ${CHAINS[o.chain]?.name || o.api || o.chain}…`);
     history = await fetchHistory(o.address, { chain: o.chain, api: o.api, fetch: fetchImpl });
   }
@@ -620,6 +732,9 @@ async function main(argv, { log = console.log, fetch: fetchImpl, env = process.e
     const { policy, applied, proposed } = evolve(existing, guard);
     guard.policy = policy;
     guard.webhook = o.webhook ?? existing.webhook ?? null;
+    guard.newPayeeCap = o.newPayeeCap ?? existing.newPayeeCap ?? 0;
+    guard.holds = existing.holds || [];
+    guard.approvals = existing.approvals || null;
     guard.pending = proposed;
     guard.ledger = [...new Map([...existing.ledger, ...guard.ledger].map((r) => [JSON.stringify(r), r])).values()];
     log(applied.length ? "Tightened on its own:" : "Nothing needed tightening.");
@@ -630,6 +745,7 @@ async function main(argv, { log = console.log, fetch: fetchImpl, env = process.e
     }
   } else {
     guard.webhook = o.webhook || null;
+    guard.newPayeeCap = o.newPayeeCap ?? 0;
     log(`Limits now in force, learned from all ${guard.learnedFrom.calls} calls:`);
     for (const s of guard.sentences) log(`  ${s}`);
   }
@@ -649,4 +765,4 @@ async function main(argv, { log = console.log, fetch: fetchImpl, env = process.e
   return 0;
 }
 
-module.exports = { judge, WORDS, learn, check, budget, guardClient, evolve, approve, loadGuard, saveGuard, guardPath, toRow, toRows, main, parse, USAGE };
+module.exports = { withLock, home, judge, WORDS, decide, fingerprint, learn, check, budget, guardClient, evolve, approve, loadGuard, saveGuard, guardPath, toRow, toRows, main, parse, USAGE };
