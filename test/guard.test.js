@@ -13,6 +13,12 @@ const { openClient } = require("../mcp/lib/config");
 const rein = require("..");
 
 const ERC20 = new ethers.Interface(["function transfer(address,uint256)"]);
+const APPROVE = new ethers.Interface(["function approve(address,uint256)"]);
+const { readRouterCall, strangers, ROUTER: ROUTER_ABI, ADDRESS_THIS } = require("../scan/moves");
+const { ROUTER: ROUTER_ADDRESS, WETH: WETH_TOKEN } = require("../scan/sample");
+const ROUTER = typeof ROUTER_ADDRESS === "string" ? ROUTER_ADDRESS : ROUTER_ADDRESS.address;
+const WETH = WETH_TOKEN.address;
+const DAY = 86400;
 const usdc = (n) => ethers.parseUnits(String(n), 6).toString();
 const NOW = Math.floor(Date.UTC(2026, 8, 29, 12) / 1000);
 
@@ -110,8 +116,90 @@ describe("rein guard", function () {
       expect(posts[0][1].text).to.contain("Rein blocked a payment").and.contain("5,000 USDC");
     });
 
-    it("says what to do when nothing is guarded yet", () => {
-      expect(() => rein.check({ payTo: PAYEES.inference.address, asset: USDC.address, amount: "1" }, { env })).to.throw(/npx rein-wallet guard/);
+    it("blocks, and says what to do, when nothing is guarded yet or the file can't be read", () => {
+      const pay = () => rein.check({ payTo: PAYEES.inference.address, asset: USDC.address, amount: "1" }, { env, now: NOW });
+      expect(pay()).to.include({ allow: false, reason: "GUARD_ERROR" });
+      expect(pay().explanation).to.match(/npx rein-wallet guard/);
+      fs.writeFileSync(saved(), "{ half a fi");
+      expect(pay()).to.include({ allow: false, reason: "GUARD_ERROR" });
+      const old = JSON.parse(JSON.stringify(learned.guard));
+      old.version = 1;
+      fs.writeFileSync(guard.guardPath(AGENT, env), JSON.stringify(old));
+      expect(pay().explanation).to.contain("older rein-wallet");
+    });
+
+    it("blocks a transfer to an address the agent only gives allowances to, like its swap router", () => {
+      saved();
+      expect(learned.guard.policy.spenders).to.include(ROUTER);
+      expect(learned.guard.policy.transferPayees).to.not.include(ROUTER);
+      const v = rein.check({ to: USDC.address, data: ERC20.encodeFunctionData("transfer", [ROUTER, usdc(750)]) }, { env, now: NOW });
+      expect(v).to.include({ allow: false, reason: "NOT_A_PAYEE" });
+      expect(rein.check({ to: USDC.address, data: APPROVE.encodeFunctionData("approve", [ROUTER, usdc(100)]) }, { env, now: NOW + 1 }).allow).to.equal(true);
+    });
+
+    it("blocks a swap that sends what it buys to anyone but the wallet, and counts the ones it allows", () => {
+      saved();
+      const swap = (to, n) => ({ to: ROUTER, data: ROUTER_ABI.encodeFunctionData("exactInputSingle", [[USDC.address, WETH, 500, to, usdc(n), 0, 0]]) });
+      expect(rein.check(swap(PAYEES.stranger.address, 200), { env, now: NOW })).to.include({ allow: false, reason: "RECIPIENT_NOT_SELF", payee: PAYEES.stranger.address });
+      const limit = learned.guard.policy.tokens[USDC.address].maxPerWindow;
+      const ok = rein.check(swap(AGENT, 200), { env, now: NOW + 1 });
+      expect(ok).to.include({ allow: true, amount: 200, token: "USDC" });
+      expect(ok.leftThisHour).to.be.closeTo(limit - 200, 1e-6);
+      expect(rein.check(swap(AGENT, Math.ceil(limit)), { env, now: NOW + 2 })).to.include({ allow: false, reason: "OUTFLOW_EXCEEDED" });
+    });
+
+    it("reads multicall swaps: output left in the router must be swept back to the wallet", () => {
+      const keep = (n) => ROUTER_ABI.encodeFunctionData("exactInputSingle", [[USDC.address, WETH, 500, ADDRESS_THIS, usdc(n), 0, 0]]);
+      const unwrap = (to) => ROUTER_ABI.encodeFunctionData("unwrapWETH9(uint256,address)", [0, to]);
+      const call = (inner) => readRouterCall(ROUTER_ABI.encodeFunctionData("multicall(uint256,bytes[])", [9999999999, inner]));
+      expect(strangers(call([keep(10), unwrap(AGENT)]), AGENT, ROUTER)).to.equal(null);
+      expect(strangers(call([keep(10)]), AGENT, ROUTER)).to.deep.equal([ROUTER]);
+      expect(strangers(call([keep(10), unwrap(PAYEES.stranger.address)]), AGENT, ROUTER)).to.include(PAYEES.stranger.address);
+      expect(call([keep(10), unwrap(AGENT)]).spends).to.deep.equal([{ token: USDC.address, raw: BigInt(usdc(10)) }]);
+    });
+
+    it("holds signatures to the same payees and limits: x402 authorizations, Permit and Permit2", () => {
+      saved();
+      const typed = (primaryType, message, verifyingContract = USDC.address) => ({ domain: { name: "USD Coin", version: "2", chainId: 8453, verifyingContract }, types: {}, primaryType, message });
+      const auth = (to, n) => typed("TransferWithAuthorization", { from: AGENT, to, value: usdc(n), validAfter: 0, validBefore: 2e9, nonce: ethers.ZeroHash });
+      expect(rein.check(auth(PAYEES.data.address, 5), { env, now: NOW })).to.include({ allow: true, amount: 5 });
+      expect(rein.check(auth(PAYEES.stranger.address, 5), { env, now: NOW + 1 })).to.include({ allow: false, reason: "PAYEE_NOT_ALLOWED" });
+      const MAX = (2n ** 256n - 1n).toString();
+      expect(rein.check(typed("Permit", { owner: AGENT, spender: PAYEES.stranger.address, value: MAX, nonce: 0, deadline: 2e9 }), { env, now: NOW + 2 })).to.include({ allow: false, reason: "SPENDER_NOT_ALLOWED" });
+      expect(rein.check(typed("Permit", { owner: AGENT, spender: ROUTER, value: MAX, nonce: 0, deadline: 2e9 }), { env, now: NOW + 3 })).to.include({ allow: false, reason: "APPROVAL_TOO_LARGE" });
+      const permit2 = typed("PermitSingle", { details: { token: USDC.address, amount: usdc(100), expiration: 0, nonce: 0 }, spender: ROUTER, sigDeadline: 2e9 }, "0x000000000022D473030F116dDEE9F6B43aC78BA3");
+      expect(rein.check(permit2, { env, now: NOW + 4 }).allow).to.equal(true);
+      expect(rein.check(typed("Order", { maker: AGENT }), { env, now: NOW + 5 })).to.include({ allow: false, reason: "SIGNATURE_NOT_UNDERSTOOD" });
+    });
+
+    it("holds the day as well as the hour, so staying under the hourly ceiling can't add up to 24 of them", () => {
+      saved();
+      const { maxPerWindow, maxPerDay } = learned.guard.policy.tokens[USDC.address];
+      expect(maxPerDay).to.be.lessThan(maxPerWindow * 24);
+      const n = Math.floor(maxPerWindow * 0.9);
+      let allowed = 0;
+      for (let h = 0; h < 24; h++) if (rein.check({ payTo: PAYEES.data.address, asset: USDC.address, amount: usdc(n) }, { env, now: NOW + h * 3601 }).allow) allowed += n;
+      expect(allowed).to.be.at.most(maxPerDay);
+      const last = rein.check({ payTo: PAYEES.data.address, asset: USDC.address, amount: usdc(1) }, { env, now: NOW + 23 * 3601 + 60 });
+      expect(last.reason === "TOKEN_PER_DAY" || last.leftToday >= 0).to.equal(true);
+      expect(rein.check({ payTo: PAYEES.data.address, asset: USDC.address, amount: usdc(n) }, { env, now: NOW + 3 * DAY }).allow).to.equal(true);
+    });
+
+    it("keeps the hour right when several processes check at once", async () => {
+      saved();
+      const { spawn } = require("child_process");
+      const script = `const r=require(${JSON.stringify(path.join(__dirname, ".."))});const v=r.check({payTo:${JSON.stringify(PAYEES.data.address)},asset:${JSON.stringify(USDC.address)},amount:${JSON.stringify(usdc(200))}},{now:${NOW}+Number(process.argv[1])});process.stdout.write(v.allow?"A":v.reason)`;
+      const runs = await Promise.all(
+        Array.from({ length: 8 }, (_, i) => new Promise((done) => {
+          const p = spawn(process.execPath, ["-e", script, String(i)], { env: { ...process.env, ...env } });
+          let out = "";
+          p.stdout.on("data", (d) => (out += d));
+          p.on("close", () => done(out));
+        }))
+      );
+      expect(runs.filter((x) => x === "GUARD_ERROR")).to.deep.equal([]);
+      const limit = learned.guard.policy.tokens[USDC.address].maxPerWindow;
+      expect(runs.filter((x) => x === "A").length).to.equal(Math.floor(limit / 200));
     });
   });
 
@@ -121,7 +209,7 @@ describe("rein guard", function () {
       const fresh = JSON.parse(JSON.stringify(learned.guard));
       const tp = fresh.policy.tokens[USDC.address];
       tp.maxPerWindow = old.policy.tokens[USDC.address].maxPerWindow / 2;
-      fresh.policy.payees = [...fresh.policy.payees.filter((p) => p !== PAYEES.contractor.address), PAYEES.stranger.address];
+      fresh.policy.transferPayees = [...fresh.policy.transferPayees.filter((p) => p !== PAYEES.contractor.address), PAYEES.stranger.address];
       fresh.policy.agent.maxCallsPerWindow = old.policy.agent.maxCallsPerWindow + 10;
 
       const { policy, applied, proposed } = guard.evolve(old, fresh);
@@ -133,6 +221,7 @@ describe("rein guard", function () {
 
       const g = { ...old, policy, pending: proposed };
       expect(guard.approve(g)).to.equal(2);
+      expect(g.policy.transferPayees).to.include(PAYEES.stranger.address);
       expect(g.policy.payees).to.include(PAYEES.stranger.address);
       expect(g.policy.agent.maxCallsPerWindow).to.equal(old.policy.agent.maxCallsPerWindow + 10);
       expect(g.pending).to.deep.equal([]);
@@ -151,6 +240,21 @@ describe("rein guard", function () {
       lines.length = 0;
       await guard.main(["--sample"], { log: (l) => lines.push(l), env });
       expect(lines.join("\n")).to.contain("Nothing needed tightening");
+    });
+
+    it("widens only when a person types the wallet's last four characters at a terminal", async () => {
+      const file = saved();
+      const g = JSON.parse(fs.readFileSync(file, "utf8"));
+      g.pending = [{ what: `add payee ${PAYEES.stranger.address}`, path: ["transferPayees"], add: PAYEES.stranger.address }];
+      fs.writeFileSync(file, JSON.stringify(g));
+      const lines = [];
+      const log = (l) => lines.push(l);
+      if (!process.stdin.isTTY) expect(await guard.main([AGENT, "--approve"], { log, env })).to.equal(1); // an agent's shell
+      expect(await guard.main([AGENT, "--approve"], { log, env, input: "0000" })).to.equal(1);
+      expect(guard.loadGuard(AGENT, env).guard.policy.transferPayees).to.not.include(PAYEES.stranger.address);
+      expect(await guard.main([AGENT, "--approve"], { log, env, input: AGENT.slice(-4) })).to.equal(0);
+      expect(guard.loadGuard(AGENT, env).guard.policy.transferPayees).to.include(PAYEES.stranger.address);
+      expect(lines.join("\n")).to.contain("needs a person at a terminal").and.contain(`add payee ${PAYEES.stranger.address}`);
     });
 
     it("answers the MCP tools from the saved limits in guard mode", async () => {

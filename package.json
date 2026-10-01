@@ -1,6 +1,6 @@
 {
   "name": "rein-wallet",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Scan an AI agent's wallet for the spending policy its own history supports, put that policy on Privy, Turnkey or Coinbase CDP, and watch for anything outside it. Plus a smart account an agent can operate and cannot drain.",
   "mcpName": "io.github.let-the-dreamers-rise/rein",
   "keywords": [

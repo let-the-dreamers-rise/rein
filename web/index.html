@@ -226,7 +226,7 @@ footer a{color:var(--ink)}
     <div>
       <span class="eyebrow">For teams whose AI agents sign for money</span>
       <h1>One line that checks every payment your agent makes.</h1>
-      <p class="lede">Rein learns who your agent pays and how much it spends in an hour from its own wallet history. Before the agent signs, <code>rein.check(tx)</code> lets through the payments it always makes and blocks the ones it never would, with the reason. It works for x402 payments too.</p>
+      <p class="lede">Rein learns who your agent pays and how much it spends in an hour and a day from its own wallet history. Before the agent signs, <code>rein.check(tx)</code> blocks payments to addresses it has never paid and amounts past its busiest hour or day, with the reason. It reads swaps and signatures too, x402 included.</p>
       <pre class="cmd hero-cmd">npx rein-wallet guard 0xYourAgentWallet</pre>
       <form class="scanbox" action="scan/" method="get" role="search" aria-label="Scan an agent wallet">
         <input name="address" placeholder="0x… your agent's wallet address" spellcheck="false" autocomplete="off" aria-label="Agent wallet address" required pattern="^0x[0-9a-fA-F]{40}$" title="A 0x address, 42 characters">
@@ -274,7 +274,7 @@ USDC: 754 an hour · 5 calls an hour
         <h3>The limit comes from the agent's own history</h3>
         <ul>
           <li><b>Payees, contracts, functions and hourly ceilings</b> learned from what the wallet already does.</li>
-          <li><b>One line before signing</b> holds every payment to them, x402 included, with a reason the agent can act on.</li>
+          <li><b>One line before signing</b> holds transfers, router swaps and signatures (x402, Permit, Permit2) to them, with a reason the agent can act on.</li>
           <li><b>Measured before you ship it:</b> replayed on recent calls it never saw, with the count that would have been blocked.</li>
           <li><b>One command</b> puts it on Privy, Turnkey or Coinbase CDP. The requests are printed first, so nothing surprises you.</li>
           <li><b>An alert on the first transaction outside it</b>, in Slack or Discord, with no server to run.</li>
@@ -283,7 +283,7 @@ USDC: 754 an hour · 5 calls an hour
     </div>
     <div class="incident">
       <b class="d">May 2026</b>
-      <p>A token sent to a Grok-linked agent wallet on Bankr unlocked more of what the agent was allowed to do, and the agent was then talked into sending funds out. <strong>A policy compiled from that wallet's own history widens for nobody but its owner.</strong> A new "permission" arriving in the wallet changes nothing, and neither does a payment to an address the agent has never paid.</p>
+      <p>A token sent to a Grok-linked agent wallet on Bankr unlocked more of what the agent was allowed to do, and the agent was then talked into sending funds out. <strong>Limits learned from a wallet's own history don't widen because a token or a message says so.</strong> Only the owner can widen them, at a keyboard, and a payment to an address the agent has never paid is blocked until they do.</p>
     </div>
   </div>
 </section>
@@ -433,7 +433,7 @@ Pay Acme 1,000 USDC, 20 times     <span class="no">REFUSED  TOKEN_PER_WINDOW</sp
       <details><summary>We already have a Privy, Turnkey or CDP policy. Does the scan see it?</summary><p>No, and every report says so. A signing policy held off chain is invisible to a scan of the chain. That's why the report says "no on-chain limit" rather than "anyone can take it". The review compares the compiled policy against the one you already have.</p></details>
       <details><summary>What if the compiled policy blocks something the agent needs?</summary><p>Every policy comes with the count of recent calls it would have refused. You see those calls before you apply it. Anything rare, like a payee seen only once, is held back for a person to approve instead of being allowed quietly.</p></details>
       <details><summary>Where does the check run?</summary><p>In your agent's own process, from a small file <code>rein-wallet guard</code> saves. It never calls a server, so it adds no latency and no dependency. That also means an agent whose code is fully taken over can skip it. For a limit nothing can skip, put the same policy on your wallet engine with <code>apply</code>, or on the Rein account.</p></details>
-      <details><summary>What can't it stop?</summary><p>A payment the policy allows. If an attacker steers the agent to pay a payee it already pays, inside the hourly ceiling, that goes through, and the report states how much that could be. Rein bounds how much can move and to whom. It doesn't judge the payments the policy permits.</p></details>
+      <details><summary>What can't it stop?</summary><p>A payment the policy allows. If an attacker steers the agent to pay a payee it already pays, inside the hourly and daily ceilings, that goes through, and the replay states how much that could be. Rein bounds how much can move and to whom. It doesn't judge the payments the policy permits. A signature it can't read is blocked; a call to an unfamiliar contract is blocked; a call to a contract the agent already uses, that Rein can't read, is held only to the contracts and functions the agent normally calls.</p></details>
       <details><summary>What chains and engines?</summary><p>Scans read Base, Base Sepolia and Ethereum. Policies export to Privy, Turnkey and Coinbase CDP, and to the Rein smart account. The code is open source under MIT.</p></details>
       <details><summary>Is the Rein account audited?</summary><p>Not yet. It is verified on Base Sepolia and Whitechain Sepolia, with its test suite in the repository. For money that matters today, use Rein's policies on the engine you already trust. <a href="account/">More about the account</a>.</p></details>
     </div>

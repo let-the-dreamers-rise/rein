@@ -8,12 +8,12 @@
     "source": "github"
   },
   "websiteUrl": "https://github.com/let-the-dreamers-rise/rein",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "rein-wallet",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "transport": { "type": "stdio" },
       "packageArguments": [
         { "type": "positional", "value": "mcp" },

@@ -30,20 +30,67 @@ const { fetchHistory, toTrail, CHAINS, NO_CALLDATA, SELECTOR_NAMES, ERC20 } = re
 const { evaluate, NATIVE } = require("./evaluate");
 const { scanHistory, describe, namer, money } = require("./index");
 const codes = require("../scripts/codes");
+const { readRouterCall, strangers, readTypedData } = require("./moves");
 
 const DAY = 86400;
 const KEEP_SECONDS = 2 * DAY; // ledger kept for window state; longer than any window the compiler writes
-const VERSION = 1;
+const VERSION = 2; // 2: payees split from approval spenders, a daily ceiling, swaps and signatures read
 
 // -- where guards live ----------------------------------------------------------
 
 const home = (env = process.env) => env.REIN_HOME || path.join(os.homedir(), ".rein");
 const guardPath = (wallet, env) => path.join(home(env), "guards", `${wallet.toLowerCase()}.json`);
 
+// A guard file is read and written by every check, possibly from several
+// processes at once, so it is written to a temporary file and renamed into
+// place (a reader sees the old file or the new one, never half of one), and
+// each check holds a lock from read to write, so two checks can't both spend
+// the same hour.
 function saveGuard(g, file) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${JSON.stringify(g, null, 2)}\n`);
-  return file;
+  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(tmp, `${JSON.stringify(g, null, 2)}\n`);
+  for (let i = 0; ; i++) {
+    try {
+      fs.renameSync(tmp, file);
+      return file;
+    } catch (err) {
+      // Windows refuses to replace a file another process has open for a moment.
+      if (i >= 50 || (err.code !== "EPERM" && err.code !== "EACCES" && err.code !== "EBUSY")) {
+        fs.rmSync(tmp, { force: true });
+        throw err;
+      }
+      sleep(10);
+    }
+  }
+}
+
+const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+function withLock(file, fn, { waitMs = 5000, staleMs = 30000 } = {}) {
+  const lock = `${file}.lock`;
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const until = Date.now() + waitMs;
+  for (;;) {
+    try {
+      fs.closeSync(fs.openSync(lock, "wx"));
+      break;
+    } catch (err) {
+      if (err.code !== "EEXIST") throw err;
+      try {
+        if (Date.now() - fs.statSync(lock).mtimeMs > staleMs) fs.rmSync(lock, { force: true }); // left by a crashed process
+      } catch {
+        // gone already
+      }
+      if (Date.now() > until) throw new Error(`another check has held ${lock} for ${waitMs / 1000}s`);
+      sleep(5);
+    }
+  }
+  try {
+    return fn();
+  } finally {
+    fs.rmSync(lock, { force: true });
+  }
 }
 
 /// A guard by wallet address, file path, or object. With nothing given,
@@ -64,7 +111,9 @@ function loadGuard(which, env = process.env) {
     if (!fs.existsSync(file)) throw new Error(`${which} is not guarded yet: run npx rein-wallet guard ${which}`);
   } else file = which;
   const guard = JSON.parse(fs.readFileSync(file, "utf8"));
-  if (guard.version !== VERSION || !guard.policy) throw new Error(`${file} is not a Rein guard file`);
+  if (guard.version !== VERSION || !guard.policy) {
+    throw new Error(guard.version < VERSION ? `${file} was written by an older rein-wallet: run npx rein-wallet guard ${guard.wallet} again` : `${file} is not a Rein guard file`);
+  }
   return { guard, file };
 }
 
@@ -95,6 +144,14 @@ function learn(history, { days = 30 } = {}) {
   const totals = {};
   for (const r of paid) totals[r.token] = (totals[r.token] || 0) + Number(r.amount || 0);
 
+  // The on-chain policy lets a wallet transfer to anyone it may approve,
+  // because the contract checks both against one list. The guard keeps them
+  // apart: an allowance to a router is not permission to send it money,
+  // since anyone can sweep tokens left in a router.
+  const { admitted } = current.compiled.bounds;
+  const policy = { ...current.policy.onchain, transferPayees: [...admitted.payees].sort(), spenders: [...admitted.spenders].sort() };
+  for (const [t, tp] of Object.entries(policy.tokens)) tp.maxPerDay = dailyCeiling(rows, t, tp.maxPerWindow);
+
   const now = Math.floor(Date.now() / 1000);
   const guard = {
     version: VERSION,
@@ -103,8 +160,8 @@ function learn(history, { days = 30 } = {}) {
     chainId: CHAINS[history.chain]?.chainId ?? null,
     learnedAt: new Date().toISOString(),
     learnedFrom: { calls: current.history.calls, from: current.history.from, to: current.history.to },
-    policy: current.policy.onchain,
-    sentences: current.policy.sentences,
+    policy,
+    sentences: [...current.policy.sentences, ...Object.entries(policy.tokens).map(([t, tp]) => `${name(t)}: at most ${money(tp.maxPerDay)} a day`)],
     withheld: current.policy.withheld,
     tokens: Object.fromEntries(Object.entries(tokens).map(([a, t]) => [a, { symbol: t.symbol || null, decimals: t.decimals ?? 18 }])),
     ledger: rows.filter((r) => r.ts > now - KEEP_SECONDS).map(ledgerRow),
@@ -130,6 +187,22 @@ function learn(history, { days = 30 } = {}) {
   };
 }
 
+/// The most the wallet moved of a token in any 24 hours, with the same 25%
+/// headroom the hourly ceiling gets, and never less than one full hour. Without
+/// it an attacker who stays under the hourly ceiling could take 24 of them a day.
+function dailyCeiling(rows, token, hourly) {
+  const out = rows.filter((r) => r.token === token && r.kind !== "approve").sort((a, b) => a.ts - b.ts);
+  let best = 0;
+  let sum = 0;
+  let j = 0;
+  for (let i = 0; i < out.length; i++) {
+    sum += Number(out[i].amount || 0);
+    while (out[i].ts - out[j].ts >= DAY) sum -= Number(out[j++].amount || 0);
+    best = Math.max(best, sum);
+  }
+  return Number(Math.max(hourly, best * 1.25).toFixed(6));
+}
+
 const ledgerRow = (r) => ({ ts: r.ts, target: r.target, selector: r.selector, kind: r.kind, token: r.token, payee: r.payee, amount: r.amount, value: r.value || 0, ...(r.derived ? { derived: true } : {}) });
 
 // -- keeping it current -----------------------------------------------------------
@@ -152,13 +225,15 @@ function evolve(old, fresh) {
     }
     for (const x of added) proposed.push({ what: `add ${label} ${x}`, path: [key], add: x });
   };
-  list("payees", "payee");
+  list("transferPayees", "payee");
+  list("spenders", "approval spender");
   list("targets", "contract");
   for (const [t, sels] of Object.entries(n.selectors)) {
     const had = new Set(p.selectors[t] || []);
     for (const s of sels) if (!had.has(s) && p.targets.includes(t)) proposed.push({ what: `allow ${s} on ${t}`, path: ["selectors", t], add: s });
   }
   for (const t of Object.keys(p.selectors)) if (!p.targets.includes(t)) delete p.selectors[t];
+  p.payees = union(p);
   const number = (obj, nobj, key, label, at) => {
     if (nobj[key] == null || obj[key] == null || nobj[key] === obj[key]) return;
     if (nobj[key] < obj[key]) {
@@ -177,6 +252,7 @@ function evolve(old, fresh) {
     }
     number(p.tokens[t], tp, "maxPerWindow", `${sym} an hour`, ["tokens", t]);
     number(p.tokens[t], tp, "maxApproval", `${sym} approvals`, ["tokens", t]);
+    number(p.tokens[t], tp, "maxPerDay", `${sym} a day`, ["tokens", t]);
   }
   for (const t of Object.keys(p.tokens)) {
     if (!n.tokens[t]) {
@@ -187,6 +263,9 @@ function evolve(old, fresh) {
   return { policy: p, applied, proposed };
 }
 
+// The list the on-chain evaluator checks payees and spenders against.
+const union = (p) => [...new Set([...p.transferPayees, ...p.spenders])].sort();
+
 function approve(g) {
   const p = g.policy;
   for (const x of g.pending) {
@@ -196,6 +275,7 @@ function approve(g) {
       if (!obj.includes(x.add)) obj.push(x.add);
     } else obj[x.key] = x.value;
   }
+  p.payees = union(p);
   const n = g.pending.length;
   g.pending = [];
   return n;
@@ -218,7 +298,7 @@ function toRow(tx, guard, now) {
     if (raw == null) throw new Error("an x402 payment needs amount (or maxAmountRequired) in the token's smallest units");
     return { ts: now, target: token, selector: "transfer", kind: "transfer", token, payee: ethers.getAddress(tx.payTo), amount: units(raw, decimalsOf(token)), value: 0 };
   }
-  if (!tx.to) throw new Error("check needs a transaction ({ to, data, value }) or an x402 payment ({ payTo, asset, amount })");
+  if (!tx.to) throw new Error("check needs a transaction ({ to, data, value }), an x402 payment ({ payTo, asset, amount }) or a typed-data signature ({ domain, types, primaryType, message })");
   const to = ethers.getAddress(tx.to);
   const value = units(tx.value ?? 0, 18);
   const data = tx.data || tx.input || "0x";
@@ -240,9 +320,39 @@ function toRow(tx, guard, now) {
   return { ...base, selector: sel, kind: "call", token: null, payee: null, amount: 0 };
 }
 
+const isTyped = (tx) => tx && tx.primaryType && tx.message && tx.types;
+
+/// Everything one transaction or signature would move, as rows the policy is
+/// held to: the call itself, and for a router swap, the tokens it spends.
+/// Returns { rows } or { block: { reason, explanation, payee? } }.
+function toRows(tx, guard, now) {
+  const decimalsOf = (token) => guard.tokens[token]?.decimals ?? 18;
+  if (isTyped(tx)) {
+    const moves = readTypedData(tx);
+    if (!moves) return { block: { reason: "SIGNATURE_NOT_UNDERSTOOD", explanation: `Rein can't tell what a signature of type ${tx.primaryType} lets someone move, so it is blocked` } };
+    return {
+      rows: moves.map((m) => ({ ts: now, target: m.token, selector: m.kind, kind: m.kind, token: m.token, payee: m.payee, amount: units(m.raw, decimalsOf(m.token)), value: 0, signed: true })),
+    };
+  }
+  const row = toRow(tx, guard, now);
+  if (row.kind !== "call") return { rows: [row] };
+  const r = readRouterCall(tx.data || tx.input);
+  if (!r) return { rows: [row] };
+  const bad = strangers(r, guard.wallet, row.target);
+  if (bad) return { block: { reason: "RECIPIENT_NOT_SELF", explanation: "this swap sends what it buys to an address other than this wallet", payee: bad[0] } };
+  if (r.unreadable) return { block: { reason: "SWAP_NOT_UNDERSTOOD", explanation: "Rein can't read every step of this router call, so it can't tell who it pays" } };
+  // What the router will pull from the wallet counts toward the hour like a payment.
+  const spends = r.spends.map((x) => ({ ts: now, target: x.token, selector: "transfer", kind: "transfer", token: x.token, payee: row.target, amount: units(x.raw, decimalsOf(x.token)), value: 0, derived: true }));
+  return { rows: [row, ...spends] };
+}
+
 const WORDS = {
   PAYEE_NOT_ALLOWED: "this agent has never paid that address often enough for it to be trusted",
+  SPENDER_NOT_ALLOWED: "this agent has never given that address an allowance often enough for it to be trusted",
+  NOT_A_PAYEE: "this agent only gives that address allowances; it has never paid it directly, and tokens sent to a router can be taken by anyone",
   TOKEN_PER_WINDOW: "that would take this agent past its hourly limit for this token",
+  TOKEN_PER_DAY: "that would take this agent past its daily limit for this token",
+  OUTFLOW_EXCEEDED: "the tokens this swap spends would take this agent past its hourly limit, or it doesn't normally spend that token",
   TARGET_NOT_ALLOWED: "this agent does not normally call that contract",
   SELECTOR_NOT_ALLOWED: "this agent does not normally call that function",
   TOKEN_NOT_ALLOWED: "this agent does not normally pay in that token",
@@ -252,32 +362,83 @@ const WORDS = {
   APPROVAL_TOO_LARGE: "a larger allowance than this agent normally grants",
 };
 
-/// Holds one payment to the saved limits. Synchronous and local: no network.
-/// An allowed payment is recorded, so the next check sees the hour it used.
+/// The reason the guard refuses `rows` on top of `ledger`, or "OK".
+function judge(guard, ledger, rows, now) {
+  const p = guard.policy;
+  const payees = new Set(p.transferPayees);
+  const spenders = new Set(p.spenders);
+  for (const r of rows) {
+    if (r.derived) continue;
+    if ((r.kind === "transfer" || r.kind === "transferFrom") && r.token !== NATIVE && !payees.has(r.payee)) return spenders.has(r.payee) ? "NOT_A_PAYEE" : "PAYEE_NOT_ALLOWED";
+    if (r.kind === "approve" && !spenders.has(r.payee)) return "SPENDER_NOT_ALLOWED";
+  }
+  // A signature is not a call: it is held to the token limits, not to the
+  // contracts and functions the agent calls.
+  const policy = { ...p, targets: [...new Set([...p.targets, ...rows.filter((r) => r.signed).map((r) => r.target)])], selectors: { ...p.selectors } };
+  for (const r of rows.filter((x) => x.signed)) policy.selectors[r.target] = [...new Set([...(p.selectors[r.target] || []), r.selector])];
+  const { results } = evaluate(policy, [...ledger, ...rows]);
+  for (const r of rows) {
+    const reason = results.find((x) => x.row === r).reason;
+    if (reason !== "OK") return reason;
+  }
+  for (const t of new Set(rows.filter((r) => r.token && r.token !== NATIVE && r.kind !== "approve").map((r) => r.token))) {
+    const cap = p.tokens[t]?.maxPerDay;
+    if (cap == null) continue;
+    if (spentSince(ledger, rows, t, now - DAY) > cap + 1e-9) return "TOKEN_PER_DAY";
+  }
+  return "OK";
+}
+
+const spentSince = (ledger, rows, token, since) =>
+  [...ledger, ...rows].filter((r) => r.token === token && r.ts > since && r.kind !== "approve").reduce((a, r) => a + Number(r.amount || 0), 0);
+
+/// Holds one payment to the saved limits before the agent signs it.
+/// Synchronous and local: no network. Takes a transaction ({ to, data,
+/// value }), an x402 payment ({ payTo, asset, amount }) or an EIP-712
+/// signature request ({ domain, types, primaryType, message }). An allowed
+/// payment is recorded, so the next check sees the hour it used.
+///
+/// It never throws: anything that stops it checking (no guard file, a file it
+/// can't read, a transaction it can't parse) comes back as a block, so a
+/// `catch` around it can't turn an error into a payment.
 function check(tx, opts = {}) {
-  const { guard, file } = loadGuard(opts.wallet || opts.guard || tx.from || null, opts.env);
-  const now = opts.now ?? Math.floor(Date.now() / 1000);
-  const row = toRow(tx, guard, now);
+  try {
+    const { guard, file } = loadGuard(opts.wallet || opts.guard || tx.from || null, opts.env);
+    return file ? withLock(file, () => checkOnce(tx, opts, file)) : checkOnce(tx, opts, null, guard);
+  } catch (err) {
+    return { allow: false, reason: "GUARD_ERROR", explanation: `Rein could not check this payment, so it is blocked: ${err.message}` };
+  }
+}
+
+function checkOnce(tx, opts, file, given) {
+  // Read again under the lock: another process may have spent the hour since.
+  const guard = file ? loadGuard(file, opts.env).guard : given;
+  // Never earlier than the last payment on record: a clock that runs behind
+  // another process's must not slip a payment into an hour already spent.
+  const now = Math.max(opts.now ?? Math.floor(Date.now() / 1000), ...guard.ledger.map((r) => r.ts));
   const ledger = guard.ledger.filter((r) => r.ts > now - KEEP_SECONDS);
-  const result = evaluate(guard.policy, [...ledger, row]).results.find((x) => x.row === row);
-  const reason = result.reason;
+  const { rows, block } = toRows(tx, guard, now);
+  const main = rows ? rows[0] : null;
+  const reason = block ? block.reason : judge(guard, ledger, rows, now);
   const allow = reason === "OK";
-  const sym = row.token === NATIVE ? "ETH" : guard.tokens[row.token]?.symbol || row.token;
+  const sym = (t) => (t === NATIVE ? "ETH" : guard.tokens[t]?.symbol || t);
+  const paid = rows ? rows.find((r) => r.token && r.kind !== "call") : null;
   const verdict = {
     allow,
     reason,
-    explanation: allow ? "inside this agent's usual payees and hourly limit" : WORDS[reason] || codes.explain(codes.NAMES.indexOf(reason)) || reason,
+    explanation: allow ? "inside this agent's usual payees and limits" : block?.explanation || WORDS[reason] || codes.explain(codes.NAMES.indexOf(reason)) || reason,
     wallet: guard.wallet,
-    ...(row.payee ? { payee: row.payee } : {}),
-    ...(row.token ? { amount: row.amount, token: sym } : {}),
+    ...(block?.payee ? { payee: block.payee } : main?.payee ? { payee: main.payee } : {}),
+    ...(paid ? { amount: paid.amount, token: sym(paid.token) } : {}),
   };
-  const tp = row.token && guard.policy.tokens[row.token];
+  const tp = paid && guard.policy.tokens[paid.token];
   if (tp) {
-    const spent = [...ledger, ...(allow ? [row] : [])].filter((r) => r.token === row.token && r.ts > now - tp.windowSeconds && r.kind !== "approve").reduce((a, r) => a + Number(r.amount || 0), 0);
-    verdict.leftThisHour = Math.max(0, Number((tp.maxPerWindow - spent).toFixed(6)));
+    const mine = allow ? rows : [];
+    verdict.leftThisHour = Math.max(0, Number((tp.maxPerWindow - spentSince(ledger, mine, paid.token, now - tp.windowSeconds)).toFixed(6)));
+    if (tp.maxPerDay != null) verdict.leftToday = Math.max(0, Number((tp.maxPerDay - spentSince(ledger, mine, paid.token, now - DAY)).toFixed(6)));
   }
   if (opts.record !== false && file) {
-    if (allow) guard.ledger = [...ledger, ledgerRow(row)];
+    if (allow) guard.ledger = [...ledger, ...rows.map(ledgerRow)];
     else guard.blocked = [...(guard.blocked || []), { at: new Date(now * 1000).toISOString(), ...verdict }].slice(-100);
     saveGuard(guard, file);
   }
@@ -302,7 +463,13 @@ function budget(which, { env, now = Math.floor(Date.now() / 1000) } = {}) {
   const tokens = {};
   for (const [t, tp] of Object.entries(guard.policy.tokens)) {
     const spent = ledger.filter((r) => r.token === t && r.ts > now - tp.windowSeconds && r.kind !== "approve").reduce((a, r) => a + Number(r.amount || 0), 0);
-    tokens[guard.tokens[t]?.symbol || t] = { token: t, limitPerHour: tp.maxPerWindow, leftThisHour: Math.max(0, Number((tp.maxPerWindow - spent).toFixed(6))) };
+    const today = spentSince(ledger, [], t, now - DAY);
+    tokens[guard.tokens[t]?.symbol || t] = {
+      token: t,
+      limitPerHour: tp.maxPerWindow,
+      leftThisHour: Math.max(0, Number((tp.maxPerWindow - spent).toFixed(6))),
+      ...(tp.maxPerDay != null ? { limitPerDay: tp.maxPerDay, leftToday: Math.max(0, Number((tp.maxPerDay - today).toFixed(6))) } : {}),
+    };
   }
   const calls = guard.policy.agent.maxCallsPerWindow;
   const used = ledger.filter((r) => r.ts > now - guard.policy.agent.windowSeconds && !r.derived).length;
@@ -351,8 +518,42 @@ function guardClient(which, env = process.env) {
     limits: guard.sentences,
     tokens: Object.keys(bySymbol),
     howToPay: "Call rein_check_payment with the payee address, amount and token. Send only what it allows, with your own wallet.",
+    limit: "Rein sees only the payments checked here. A payment sent without checking first is not held to these limits, so check every one.",
   };
   return { client, info, sandbox: false, guard: true };
+}
+
+/// Widening is the one thing an attacker inside the agent wants, and most
+/// agents can run shell commands. So `--approve` shows what it would widen and
+/// waits for a person to type the wallet's last four characters at a terminal;
+/// a command run by an agent, with no terminal on its input, is refused.
+function approveAtKeyboard(address, { log, env, input }) {
+  const { guard, file } = loadGuard(address, env);
+  if (!guard.pending.length) {
+    log("Nothing is waiting for approval.");
+    return 0;
+  }
+  log(`Approving widens ${guard.wallet}'s limits:`);
+  for (const x of guard.pending) log(`  ${x.what}`);
+  const want = guard.wallet.slice(-4).toLowerCase();
+  let typed = input;
+  if (typed == null) {
+    if (!process.stdin.isTTY) {
+      log("Refused: approving needs a person at a terminal, and this command has no terminal on its input.");
+      return 1;
+    }
+    process.stdout.write("Type the last four characters of the wallet address to approve: ");
+    const buf = Buffer.alloc(64);
+    typed = buf.toString("utf8", 0, fs.readSync(0, buf, 0, 64, null));
+  }
+  if (String(typed).trim().toLowerCase() !== want) {
+    log("Not approved: that didn't match.");
+    return 1;
+  }
+  const n = approve(guard);
+  saveGuard(guard, file);
+  log(`Approved ${n} change${n === 1 ? "" : "s"}. The wider limits are in force.`);
+  return 0;
 }
 
 // -- the command ------------------------------------------------------------------------
@@ -379,7 +580,7 @@ const USAGE = `usage: rein guard <address> [--chain base|base-sepolia|ethereum] 
        rein guard <address> --approve     accept the widenings the last update proposed
        rein guard --sample                try it on Rein's made-up sample wallet`;
 
-async function main(argv, { log = console.log, fetch: fetchImpl, env = process.env } = {}) {
+async function main(argv, { log = console.log, fetch: fetchImpl, env = process.env, input } = {}) {
   const o = parse(argv);
   if (o.help || (!o.address && !o.sample)) {
     console.error(USAGE);
@@ -391,13 +592,7 @@ async function main(argv, { log = console.log, fetch: fetchImpl, env = process.e
     history = sampleHistory();
   } else {
     if (!/^0x[0-9a-fA-F]{40}$/.test(o.address)) throw new Error(`"${o.address}" is not a 0x address`);
-    if (o.approve) {
-      const { guard, file } = loadGuard(o.address, env);
-      const n = approve(guard);
-      saveGuard(guard, file);
-      log(n ? `Approved ${n} change${n === 1 ? "" : "s"}. The wider limits are in force.` : "Nothing was waiting for approval.");
-      return 0;
-    }
+    if (o.approve) return approveAtKeyboard(o.address, { log, env, input });
     log(`Reading ${o.address}'s history on ${CHAINS[o.chain]?.name || o.api || o.chain}…`);
     history = await fetchHistory(o.address, { chain: o.chain, api: o.api, fetch: fetchImpl });
   }
@@ -451,4 +646,4 @@ async function main(argv, { log = console.log, fetch: fetchImpl, env = process.e
   return 0;
 }
 
-module.exports = { learn, check, budget, guardClient, evolve, approve, loadGuard, saveGuard, guardPath, toRow, main, parse, USAGE };
+module.exports = { learn, check, budget, guardClient, evolve, approve, loadGuard, saveGuard, guardPath, toRow, toRows, main, parse, USAGE };

@@ -51,6 +51,13 @@ their own; anything that would widen them (a new payee, a higher ceiling) waits
 for `rein-wallet guard 0x… --approve`. Add `--webhook <Slack or Discord URL>`
 to hear about every blocked payment.
 
+What it reads: token transfers and approvals, Uniswap V2 and V3 router swaps
+(the recipient must be the wallet itself, and what a swap spends counts toward
+the hour), x402 / EIP-3009 authorizations, and Permit and Permit2 signatures.
+Limits hold per hour and per day. A signature it can't read is blocked, and so
+is anything when the limits file is missing or unreadable: `check` never
+throws, so a `catch` can't turn an error into a payment.
+
 The check runs in your agent's process, so an agent whose code is fully
 compromised can skip it. For limits nothing can skip, the same policy runs on
 chain in a Rein account (below).
