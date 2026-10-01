@@ -23,6 +23,14 @@ describe("rein checkup", function () {
     expect(c.headline).to.match(/^Rein would have held this payment: on 20 Aug 2026 this wallet sent 12,500 USDC \(\$13k\) to 0x7946…2773, an address it had never paid before\./);
     expect(c.headline).to.contain("Someone is trying to trick this wallet: 24 fake transfers");
     expect(c.attack.fakeTransfers).to.equal(24);
+    // Dated, so a person can tell whether it is still going on.
+    expect(c.attack.last).to.be.a("string");
+    expect(c.attack.lookalikes[0]).to.include.keys("times", "last", "tx");
+    expect(cu.text(c)).to.match(/fake transfers? in .* from \d+ \w+ 2026 to \d+ \w+ 2026/);
+    // The fleet report counts poisoned wallets too.
+    const r = fleet.shadow(poisonedSampleHistory(), { since: 0 });
+    expect(r.poisoned).to.include({ fakeTransfers: 24 });
+    expect(fleet.slackText([r], { sinceLabel: "this month" })).to.contain("Being address-poisoned: 1 of 1 wallet");
     // The poisoners copy the one-off payee too, not only the usual ones.
     expect(c.attack.lookalikes.map((x) => x.real)).to.include(c.biggest.payee).and.include(PAYEES.inference.address);
     expect(c.habits.join(" ")).to.contain("Pays 4 addresses").and.contain("Makes at most 5 transactions an hour");

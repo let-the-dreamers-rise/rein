@@ -243,7 +243,7 @@ function toTrail(history, { payments = false } = {}) {
     if (!own.has(t.transaction_hash)) {
       const why = poisoned(t, { chain: history.chain, interacted });
       if (why) {
-        ignored.push({ tx: t.transaction_hash, token: t.token?.symbol || null, payee: t.to?.hash ? ethers.getAddress(t.to.hash) : null, why });
+        ignored.push({ tx: t.transaction_hash, token: t.token?.symbol || null, payee: t.to?.hash ? ethers.getAddress(t.to.hash) : null, when: t.timestamp || null, why });
         continue;
       }
     }

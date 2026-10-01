@@ -99,11 +99,16 @@ const before = (history, since) => ({
 /// from (a first payment over $100 to a new address, or a burst, is held), or
 /// "quiet". `guard` is the guard it was judged by (left out of reports).
 function shadow(history, { since, cohort = null }) {
-  const { rows, tokens } = toTrail(history, { payments: true });
+  const { rows, tokens, ignored = [] } = toTrail(history, { payments: true });
   const name = namer(history, tokens);
   const after = rows.filter((r) => r.ts >= since);
   const lastActive = rows.length ? new Date(rows[rows.length - 1].ts * 1000).toISOString() : null;
-  const base = { address: history.address, checked: after.length, held: [], learnedFrom: 0, lastActive, measured: measure(rows, tokens, history, since) };
+  // Address poisoning: transfers it never sent, to addresses that start and
+  // end like ones it really pays.
+  const real = [...new Set(rows.filter((r) => !r.derived && r.payee && r.kind !== "approve").map((r) => r.payee))];
+  const fakes = ignored.filter((x) => x.payee && real.some((p) => looksLike(p, x.payee)));
+  const poisoned = fakes.length ? { fakeTransfers: fakes.length, lookalikes: new Set(fakes.map((x) => x.payee)).size, last: fakes.map((x) => x.when).filter(Boolean).sort().pop() || null } : null;
+  const base = { address: history.address, checked: after.length, held: [], learnedFrom: 0, lastActive, poisoned, measured: measure(rows, tokens, history, since) };
   if (!after.length) return { ...base, status: "quiet" };
   let guard;
   let status = "ok";
@@ -197,7 +202,7 @@ function totals(results) {
 function fleetNumbers(results) {
   const m = results.map((r) => r.measured).filter(Boolean);
   const add = (k) => m.reduce((a, x) => a + x[k], 0);
-  return { wallets: m.length, payments: add("payments"), firstOver100: add("firstOver100"), burstHours: add("burstHours"), wouldHold: add("wouldHold") };
+  return { wallets: m.length, payments: add("payments"), firstOver100: add("firstOver100"), burstHours: add("burstHours"), wouldHold: add("wouldHold"), poisoned: results.filter((r) => r.poisoned).length };
 }
 
 function numbersLine(results, sinceLabel) {
@@ -227,7 +232,9 @@ function slackText(results, { sinceLabel, explorer, limit = 15 }) {
     lines.push(`• ${h.when.slice(0, 16).replace("T", " ")}  ${short(h.wallet)}  ${h.what}: ${h.why}${link}`);
   }
   if (held.length > limit) lines.push(`…and ${held.length - limit} more in the report.`);
-  if (quiet.length) lines.push(`Quiet ${sinceLabel}: ${quiet.slice(0, 5).map((r) => `${short(r.address)} (last active ${r.lastActive ? r.lastActive.slice(0, 10) : "never"})`).join(", ")}${quiet.length > 5 ? ` and ${quiet.length - 5} more` : ""}.`);
+  const poisoned = results.filter((r) => r.poisoned);
+  if (poisoned.length) lines.push(`Being address-poisoned: ${poisoned.length} of ${n} wallet${n === 1 ? "" : "s"} received fake transfers from addresses dressed up as ones they pay (${poisoned.slice(0, 5).map((r) => `${short(r.address)}, ${r.poisoned.fakeTransfers}, latest ${r.poisoned.last ? r.poisoned.last.slice(0, 10) : "unknown"}`).join("; ")}${poisoned.length > 5 ? ` and ${poisoned.length - 5} more` : ""}). Rein ignores those transfers and holds any payment to a lookalike.`);
+    if (quiet.length) lines.push(`Quiet ${sinceLabel}: ${quiet.slice(0, 5).map((r) => `${short(r.address)} (last active ${r.lastActive ? r.lastActive.slice(0, 10) : "never"})`).join(", ")}${quiet.length > 5 ? ` and ${quiet.length - 5} more` : ""}.`);
   const simple = results.filter((r) => r.status === "simple rules").length;
   if (simple) lines.push(`${simple} wallet${simple === 1 ? " has" : "s have"} too little history for limits of ${simple === 1 ? "its" : "their"} own, so ${simple === 1 ? "it was" : "they were"} held to the two simple rules: a first payment over $100 to a new address, or 3× its busiest hour.`);
   const young = results.filter((r) => r.status === "too new").length;

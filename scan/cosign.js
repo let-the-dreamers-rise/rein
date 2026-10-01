@@ -40,6 +40,8 @@ const path = require("path");
 const { ethers } = require("ethers");
 const sign = require("./sign");
 const { check, loadGuard, home } = require("./guard");
+const { ensureGuard } = require("./protect");
+const { CHAINS } = require("./blockscout");
 
 const http = require("http");
 
@@ -71,10 +73,24 @@ function readActivity(a) {
     const send = i.ethSendTransactionIntent || i.ethSendTransactionIntentV2;
     if (send) {
       const calls = send.calls || [{ to: send.to, value: send.value, data: send.data }];
-      if (calls.length !== 1) return { unreadable: `it batches ${calls.length} calls, and Rein checks one at a time` };
-      const c = calls[0];
-      return { tx: { from: ethers.getAddress(send.from), to: c.to, data: c.data || "0x", value: String(c.value ?? 0) }, chainId: caip2(send.caip2) };
+      if (!calls.length) return { unreadable: "it carries no calls" };
+      const from = ethers.getAddress(send.from);
+      const txs = calls.map((c) => ({ from, to: c.to, data: c.data || "0x", value: String(c.value ?? 0) }));
+      // Several calls under one signature are judged together, as one payment.
+      return { tx: txs.length > 1 ? { from, calls: txs } : txs[0], chainId: caip2(send.caip2) };
     }
+    // A typed-data signature (x402, Permit): Turnkey's viem signer sends it as
+    // a raw payload whose encoding says it is EIP-712, and the payload is the
+    // typed data itself, so Rein can read what it moves.
+    const raw = i.signRawPayloadIntentV2;
+    if (raw && raw.encoding === "PAYLOAD_ENCODING_EIP712") {
+      if (!isAddress(raw.signWith)) return { unreadable: "it signs with a key id, not a wallet address Rein guards" };
+      const td = JSON.parse(raw.payload);
+      if (!td || !td.primaryType || !td.message || !td.types) return { unreadable: "its EIP-712 payload isn't typed data Rein can read" };
+      const chainId = td.domain?.chainId != null ? Number(td.domain.chainId) : null;
+      return { tx: { from: ethers.getAddress(raw.signWith), domain: td.domain, types: td.types, primaryType: td.primaryType, message: td.message }, chainId };
+    }
+    if (raw && raw.encoding === "PAYLOAD_ENCODING_EIP7702_AUTHORIZATION") return { unreadable: "it hands the wallet's code to a contract (EIP-7702), which isn't a payment" };
   } catch (err) {
     return { unreadable: `Rein couldn't decode it (${err.message})` };
   }
@@ -117,7 +133,7 @@ function saveState(state, file) {
 
 /// One pass over the signing requests waiting on Rein. Returns what it did:
 /// { approved, rejected, held, left } as lists of activity ids.
-async function tick({ client, organizationId, env = process.env, webhook = null, fetch: fetchImpl = globalThis.fetch, log = () => {}, now = () => Math.floor(Date.now() / 1000) }) {
+async function tick({ client, organizationId, env = process.env, webhook = null, fetch: fetchImpl = globalThis.fetch, log = () => {}, now = () => Math.floor(Date.now() / 1000), learn = true, cohort = null }) {
   const file = statePath(organizationId, env);
   const state = loadState(file);
   const done = { approved: [], rejected: [], held: [], left: [] };
@@ -142,8 +158,23 @@ async function tick({ client, organizationId, env = process.env, webhook = null,
     try {
       guard = loadGuard(r.tx.from, env).guard;
     } catch {
-      leave(`Rein has no guard for ${r.tx.from} on this machine (rein guard ${r.tx.from} sets one up)`);
-      continue;
+      // A wallet Rein hasn't seen: learn its limits from its history (or start
+      // it from the cohort, or in learning mode), so a platform with many
+      // wallets sets nothing up per wallet.
+      if (learn) {
+        try {
+          const chain = Object.keys(CHAINS).find((k) => CHAINS[k].chainId === r.chainId) || "base";
+          await ensureGuard(r.tx.from, { chain, env, fetch: fetchImpl, cohort });
+          guard = loadGuard(r.tx.from, env).guard;
+          log(`set up a guard for ${r.tx.from}`);
+        } catch (err) {
+          leave(`Rein couldn't set up a guard for ${r.tx.from}: ${err.message}`);
+          continue;
+        }
+      } else {
+        leave(`Rein has no guard for ${r.tx.from} on this machine (rein guard ${r.tx.from} sets one up)`);
+        continue;
+      }
     }
     if (guard.chainId && r.chainId && guard.chainId !== r.chainId) {
       leave(`it is for chain ${r.chainId}, and ${guard.wallet}'s limits were learned on chain ${guard.chainId}`);
@@ -344,7 +375,7 @@ function keygen() {
 // -- command line --------------------------------------------------------------------
 
 function parse(argv) {
-  const o = { cmd: argv[0], vendor: null, organization: null, agentUser: null, send: false, every: 3, once: false, webhook: process.env.REIN_WEBHOOK || null, port: Number(process.env.PORT) || 8788, vars: {} };
+  const o = { cmd: argv[0], vendor: null, learn: true, cohort: null, organization: null, agentUser: null, send: false, every: 3, once: false, webhook: process.env.REIN_WEBHOOK || null, port: Number(process.env.PORT) || 8788, vars: {} };
   for (let i = 1; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--organization") o.organization = argv[++i];
@@ -352,6 +383,8 @@ function parse(argv) {
     else if (a === "--send") o.send = true;
     else if (a === "--every") o.every = Number(argv[++i]);
     else if (a === "--once") o.once = true;
+    else if (a === "--cohort") o.cohort = argv[++i];
+    else if (a === "--no-learn") o.learn = false;
     else if (a === "--webhook") o.webhook = argv[++i];
     else if (a === "--port") o.port = Number(argv[++i]);
     else if (a === "--wallet") o.vars.privy_wallet_id = argv[++i];
@@ -369,8 +402,10 @@ const USAGE = `usage: rein cosign keygen                      a key for Rein's c
        rein cosign setup turnkey --organization <org id> --agent-user <user id> [--send]
                                                make Rein the second key (needs REIN_TURNKEY_PUBLIC_KEY, and
                                                TURNKEY_API_PUBLIC_KEY/PRIVATE_KEY of an admin to --send)
-       rein cosign turnkey --organization <org id> [--webhook URL] [--every 3] [--once]
-                                               run the co-signer (needs REIN_TURNKEY_PUBLIC_KEY/PRIVATE_KEY)
+       rein cosign turnkey --organization <org id> [--webhook URL] [--every 3] [--once] [--cohort cohort.json] [--no-learn]
+                                               run the co-signer (needs REIN_TURNKEY_PUBLIC_KEY/PRIVATE_KEY). A wallet it
+                                               hasn't seen gets limits learned from its history, else the cohort's, else
+                                               learning mode; --no-learn leaves those for a person instead
        rein cosign setup privy --wallet <wallet id> --policy <learned policy id> --agent-key <key> --admin-key <key> [--send]
                                                keys are base64 P-256 public keys (needs REIN_PRIVY_PUBLIC_KEY, and
                                                PRIVY_APP_ID/SECRET plus the wallet owner's PRIVY_AUTHORIZATION_KEY to --send)
@@ -452,7 +487,8 @@ async function main(argv, { log = console.log, env = process.env, fetch: fetchIm
     if (!o.organization) throw new Error("--organization is required");
     if (!env.REIN_TURNKEY_PUBLIC_KEY || !env.REIN_TURNKEY_PRIVATE_KEY) throw new Error("set REIN_TURNKEY_PUBLIC_KEY and REIN_TURNKEY_PRIVATE_KEY (rein cosign keygen)");
     const client = turnkeyClient({ organizationId: o.organization, publicKey: env.REIN_TURNKEY_PUBLIC_KEY, privateKey: env.REIN_TURNKEY_PRIVATE_KEY, fetch: fetchImpl });
-    const run = () => tick({ client, organizationId: o.organization, env, webhook: o.webhook, fetch: fetchImpl, log });
+    const cohort = o.cohort ? JSON.parse(fs.readFileSync(o.cohort, "utf8")) : null;
+    const run = () => tick({ client, organizationId: o.organization, env, webhook: o.webhook, fetch: fetchImpl, log, learn: o.learn, cohort });
     if (o.once) {
       const d = await run();
       log(`approved ${d.approved.length}, rejected ${d.rejected.length}, holding ${d.held.length}, left for a person ${d.left.length}`);

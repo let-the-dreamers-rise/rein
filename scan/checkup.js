@@ -49,13 +49,23 @@ function checkup(history, { days = 30 } = {}) {
   const pairs = new Map();
   for (const x of ignored) {
     const real = x.payee && realPayees.find((p) => looksLike(p, x.payee));
-    if (real && !pairs.has(x.payee.toLowerCase())) pairs.set(x.payee.toLowerCase(), { fake: x.payee, real, realName: name(real) });
+    if (!real) continue;
+    const k = x.payee.toLowerCase();
+    if (!pairs.has(k)) pairs.set(k, { fake: x.payee, real, realName: name(real), times: 0, last: null, tx: x.tx });
+    const p = pairs.get(k);
+    p.times += 1;
+    if (x.when && (!p.last || x.when > p.last)) Object.assign(p, { last: x.when, tx: x.tx });
   }
+  const dates = ignored.map((x) => x.when).filter(Boolean).sort();
   const attack = ignored.length
     ? {
         fakeTransfers: ignored.length,
         fakeTokens: [...new Set(ignored.map((x) => x.token).filter(Boolean))],
-        lookalikes: [...pairs.values()],
+        // Most recent first: what a person checking "is it still going on?" needs.
+        lookalikes: [...pairs.values()].sort((a, b) => String(b.last).localeCompare(String(a.last))),
+        first: dates[0] || null,
+        last: dates[dates.length - 1] || null,
+        lastWeek: dates.filter((d) => Date.parse(d) > Date.parse(dates[dates.length - 1]) - 7 * DAY * 1000).length,
       }
     : null;
 
@@ -247,8 +257,8 @@ function text(c) {
   const L = [c.headline, ""];
   if (c.synthetic) L.push("(Rein's made-up sample wallet, not a real one.)", "");
   if (c.attack) {
-    L.push(`Being tricked: ${plural(c.attack.fakeTransfers, "fake transfer")} in ${list(c.attack.fakeTokens.map(fakeName))}, which Rein ignores.`);
-    for (const x of c.attack.lookalikes.slice(0, 5)) L.push(`  ${x.fake} pretends to be ${x.realName.startsWith("0x") ? x.real : `${x.realName} (${x.real})`}`);
+    L.push(`Being tricked: ${plural(c.attack.fakeTransfers, "fake transfer")} in ${list(c.attack.fakeTokens.map(fakeName))}, which Rein ignores${c.attack.first ? `, from ${day(c.attack.first)} to ${day(c.attack.last)}` : ""}.`);
+    for (const x of c.attack.lookalikes.slice(0, 5)) L.push(`  ${x.fake} pretends to be ${x.realName.startsWith("0x") ? x.real : `${x.realName} (${x.real})`}${x.last ? `, ${plural(x.times, "time")}, latest ${day(x.last)}` : ""}`);
     L.push("");
   }
   if (c.biggest) L.push(`Its biggest first payment to a new address: ${money(c.biggest.amount)} ${c.biggest.symbol} (${dollars(c.biggest.usd)}) to ${c.biggest.payee} on ${day(c.biggest.when)}${c.biggest.tx ? `, tx ${c.biggest.tx}` : ""}. Rein holds a first payment like that for a person.`, "");

@@ -4,7 +4,7 @@
 //   const { protect } = require("rein-wallet");
 //   const wallet = protect(createWalletClient({ account, chain: base, transport: http() }));
 //
-// Every sendTransaction, writeContract, signTransaction and signTypedData is
+// Every sendTransaction, writeContract, signTransaction, signTypedData and sendCalls is
 // checked before it is signed. A payment outside the agent's habits throws a
 // ReinHeld error that says why, with the id a person approves it with:
 //   npx rein-wallet guard 0xAgent --allow <id>
@@ -21,6 +21,7 @@
 const { ethers } = require("ethers");
 const { fetchHistory, toTrail, CHAINS } = require("./blockscout");
 const guardLib = require("./guard");
+const { guardFromCohort } = require("./cohort");
 
 // Stablecoins a starter guard knows, by chain: address, symbol, decimals.
 const STABLES = {
@@ -92,7 +93,7 @@ function starterGuard(wallet, { chain = "base", perPayment = 25, perHour = 100, 
 /// Makes sure `wallet` has a guard on this machine, learning one from its
 /// history if it has enough, or starting it in learning mode. Returns where
 /// it is saved and how it was made.
-async function ensureGuard(wallet, { chain = "base", api, env = process.env, fetch: fetchImpl = globalThis.fetch, starter = {} } = {}) {
+async function ensureGuard(wallet, { chain = "base", api, env = process.env, fetch: fetchImpl = globalThis.fetch, starter = {}, cohort = null } = {}) {
   const file = guardLib.guardPath(wallet, env);
   try {
     guardLib.loadGuard(file, env);
@@ -116,6 +117,13 @@ async function ensureGuard(wallet, { chain = "base", api, env = process.env, fet
     }
   }
   const paid = history ? [...new Set(toTrail(history, { payments: true }).rows.filter((r) => !r.derived && r.payee && r.kind !== "approve").map((r) => r.payee))] : [];
+  // A platform's own wallets know better than a starter: what its grown
+  // wallets share (rein fleet --out writes it).
+  if (cohort) {
+    const g = guardFromCohort(cohort, ethers.getAddress(wallet), { chain, chainId: CHAINS[chain]?.chainId ?? null });
+    guardLib.saveGuard({ ...g, paid, newPayeeCap: starter.perPayment ?? g.newPayeeCap ?? 0 }, file);
+    return { file, made: "cohort" };
+  }
   guardLib.saveGuard(starterGuard(wallet, { chain, paid, ...starter }), file);
   return { file, made: "starter" };
 }
@@ -123,6 +131,8 @@ async function ensureGuard(wallet, { chain = "base", api, env = process.env, fet
 /// What the client is about to sign, as check() reads it.
 function toCheck(method, args) {
   const a = args[0] || {};
+  // EIP-5792 sendCalls: several calls under one signature, judged together.
+  if (method === "sendCalls") return { calls: (a.calls || []).map((c) => toCheck(c.abi ? "writeContract" : "sendTransaction", [c.abi ? { ...c, address: c.to } : c])) };
   if (method === "signTypedData") return { domain: a.domain, types: a.types, primaryType: a.primaryType, message: a.message };
   if (method === "writeContract") {
     const data = new ethers.Interface(a.abi).encodeFunctionData(a.functionName, a.args || []);
@@ -131,7 +141,7 @@ function toCheck(method, args) {
   return { to: a.to, data: a.data || "0x", value: String(a.value ?? 0) };
 }
 
-const CHECKED = new Set(["sendTransaction", "writeContract", "signTransaction", "signTypedData"]);
+const CHECKED = new Set(["sendTransaction", "writeContract", "signTransaction", "signTypedData", "sendCalls"]);
 
 /// Wraps a viem wallet client so nothing leaves it unchecked.
 function protect(client, opts = {}) {

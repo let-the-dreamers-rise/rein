@@ -26,6 +26,28 @@ const signing = (id, to, amount, chainId) => ({
   intent: { signTransactionIntentV2: { signWith: AGENT, unsignedTransaction: unsigned(to, amount, chainId), type: "TRANSACTION_TYPE_ETHEREUM" } },
 });
 
+// What Turnkey's viem signer sends for signTypedData: a raw payload whose
+// encoding says EIP-712, and the typed data itself as the payload.
+const typed = (id, to, amount) => ({
+  id,
+  fingerprint: `fp-${id}`,
+  type: "ACTIVITY_TYPE_SIGN_RAW_PAYLOAD_V2",
+  canApprove: true,
+  intent: {
+    signRawPayloadIntentV2: {
+      signWith: AGENT,
+      encoding: "PAYLOAD_ENCODING_EIP712",
+      hashFunction: "HASH_FUNCTION_NO_OP",
+      payload: JSON.stringify({
+        domain: { name: "USD Coin", version: "2", chainId: 8453, verifyingContract: USDC.address },
+        types: { EIP712Domain: [], TransferWithAuthorization: [{ name: "from", type: "address" }, { name: "to", type: "address" }, { name: "value", type: "uint256" }] },
+        primaryType: "TransferWithAuthorization",
+        message: { from: AGENT, to, value: String(usdc(amount)) },
+      }),
+    },
+  },
+});
+
 /// A Turnkey that keeps a list of waiting activities and records each vote.
 function fakeTurnkey(key) {
   const t = { waiting: [], votes: [], posts: [], requests: [] };
@@ -73,7 +95,7 @@ describe("rein cosign (Turnkey)", function () {
     client = cosign.turnkeyClient({ organizationId: "org-1", publicKey: key.publicKey, privateKey: key.privateKey, fetch: tk.fetch });
   });
 
-  const run = () => cosign.tick({ client, organizationId: "org-1", env, webhook: "https://hooks.example/x", fetch: tk.fetch });
+  const run = (o = {}) => cosign.tick({ client, organizationId: "org-1", env, webhook: "https://hooks.example/x", fetch: tk.fetch, ...o });
 
   it("reads what a waiting request would sign, and says why when it can't", () => {
     const r = cosign.readActivity(signing("a", PAYEES.inference.address, 5));
@@ -82,8 +104,12 @@ describe("rein cosign (Turnkey)", function () {
     expect(r.chainId).to.equal(8453);
     const send = cosign.readActivity({ intent: { ethSendTransactionIntent: { from: AGENT, caip2: "eip155:8453", to: USDC.address, value: "0", data: "0x" } } });
     expect(send).to.deep.include({ chainId: 8453 });
-    expect(cosign.readActivity({ intent: { ethSendTransactionIntentV2: { from: AGENT, caip2: "eip155:8453", calls: [{ to: AGENT }, { to: AGENT }] } } }).unreadable).to.contain("batches 2 calls");
+    expect(cosign.readActivity({ intent: { ethSendTransactionIntentV2: { from: AGENT, caip2: "eip155:8453", calls: [{ to: AGENT }, { to: AGENT }] } } }).tx.calls).to.have.length(2);
     expect(cosign.readActivity({ intent: { signRawPayloadIntentV2: { signWith: AGENT, payload: "0x00" } } }).unreadable).to.contain("raw signature");
+    const x402 = cosign.readActivity(typed("t", PAYEES.inference.address, 5));
+    expect(x402).to.deep.include({ chainId: 8453 });
+    expect(x402.tx).to.include({ from: AGENT, primaryType: "TransferWithAuthorization" });
+    expect(cosign.readActivity({ intent: { signRawPayloadIntentV2: { signWith: AGENT, encoding: "PAYLOAD_ENCODING_EIP7702_AUTHORIZATION", payload: "0x00" } } }).unreadable).to.contain("EIP-7702");
     expect(cosign.readActivity({ intent: { signTransactionIntentV2: { signWith: "key-123", unsignedTransaction: "00" } } }).unreadable).to.contain("key id");
   });
 
@@ -117,13 +143,51 @@ describe("rein cosign (Turnkey)", function () {
       signing("mainnet", PAYEES.inference.address, 5, 1),
       { ...signing("voted", PAYEES.inference.address, 5), canApprove: false },
     ];
-    const d = await run();
+    const d = await run({ learn: false });
     expect(d.left).to.deep.equal(["raw", "other", "mainnet"]);
     expect(tk.votes).to.deep.equal([]);
     expect(tk.posts).to.have.length(3);
     expect(tk.posts.join("\n")).to.contain("raw signature").and.contain("no guard for 0x1111").and.contain("chain 1");
-    await run();
+    await run({ learn: false });
     expect(tk.posts).to.have.length(3);
+  });
+
+  it("judges x402 signatures as payments, the way Turnkey's viem signer sends them", async () => {
+    tk.waiting = [typed("usual", PAYEES.inference.address, 5), typed("stranger", "0x8888888888888888888888888888888888888888", 300)];
+    const d = await run();
+    expect(d.approved).to.deep.equal(["usual"]);
+    expect(d.held).to.deep.equal(["stranger"]);
+  });
+
+  it("judges a batch as one payment: one bad call holds the whole batch, and their sum counts against the hour", async () => {
+    const limit = Object.values(learned.policy.tokens)[0].maxPerWindow;
+    const call = (to, amount) => ({ to: USDC.address, value: "0", data: ERC20.encodeFunctionData("transfer", [to, usdc(amount)]) });
+    const batch = (id, calls) => ({ id, fingerprint: `fp-${id}`, canApprove: true, intent: { ethSendTransactionIntentV2: { from: AGENT, caip2: "eip155:8453", calls } } });
+    const half = Math.floor(limit * 0.6);
+    tk.waiting = [
+      batch("fine", [call(PAYEES.inference.address, 1), call(PAYEES.data.address, 1)]),
+      batch("sneaky", [call(PAYEES.inference.address, 1), call("0x8888888888888888888888888888888888888888", 3)]),
+      batch("split", [call(PAYEES.inference.address, half), call(PAYEES.data.address, half)]),
+    ];
+    const d = await run();
+    expect(d.approved).to.deep.equal(["fine"]);
+    expect(d.held).to.deep.equal(["sneaky", "split"]);
+    const holds = guard.loadGuard(AGENT, env).guard.holds;
+    expect(holds.map((h) => h.what)).to.include("a batch of 2 calls that includes 1 USDC to " + PAYEES.inference.address);
+    // A person's yes lets that batch through once, as a whole.
+    await guard.main([AGENT, "--allow", holds[0].id], { log: () => {}, env, input: AGENT.slice(-4) });
+    expect((await run()).approved).to.deep.equal(["sneaky"]);
+  });
+
+  it("sets up a guard the first time it sees a wallet, so a platform configures nothing per wallet", async () => {
+    const fresh = "0x" + "4".repeat(40);
+    const pay = (id, to, amount) => ({ ...signing(id, to, amount), intent: { ethSendTransactionIntent: { from: fresh, caip2: "eip155:8453", to: USDC.address, value: "0", data: ERC20.encodeFunctionData("transfer", [to, usdc(amount)]) } } });
+    const offline = async (url, init) => (url.includes("blockscout") ? Promise.reject(new Error("offline")) : tk.fetch(url, init));
+    tk.waiting = [pay("small", PAYEES.inference.address, 10), pay("big", PAYEES.data.address, 400)];
+    const d = await run({ fetch: offline });
+    expect(d.approved).to.deep.equal(["small"]);
+    expect(d.held).to.deep.equal(["big"]);
+    expect(guard.loadGuard(fresh, env).guard.learning).to.equal(true);
   });
 
   it("sets Turnkey up: a co-signer user, then a policy needing both the agent and Rein", async () => {

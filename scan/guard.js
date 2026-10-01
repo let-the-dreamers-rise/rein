@@ -376,6 +376,18 @@ const isTyped = (tx) => tx && tx.primaryType && tx.message && tx.types;
 /// held to: the call itself, and for a router swap, the tokens it spends.
 /// Returns { rows } or { block: { reason, explanation, payee? } }.
 function toRows(tx, guard, now) {
+  // A batch (one signature over several calls) is judged as a whole: every
+  // call's payments count together toward the hour and the day.
+  if (Array.isArray(tx?.calls)) {
+    if (!tx.calls.length) return { block: { reason: "TX_NOT_UNDERSTOOD", explanation: "this batch carries no calls" } };
+    const all = [];
+    for (const c of tx.calls) {
+      const r = toRows(c, guard, now);
+      if (r.block) return r;
+      all.push(...r.rows);
+    }
+    return { rows: all };
+  }
   const decimalsOf = (token) => guard.tokens[token]?.decimals ?? 18;
   if (isTyped(tx)) {
     const moves = readTypedData(tx);
@@ -458,6 +470,7 @@ const spentSince = (ledger, rows, token, since) =>
 /// approval lets through that payment, not whatever the agent asks next.
 function fingerprint(tx) {
   const lower = (x) => (typeof x === "string" ? x.toLowerCase() : x);
+  if (Array.isArray(tx?.calls)) return ethers.sha256(ethers.toUtf8Bytes(JSON.stringify({ calls: tx.calls.map(fingerprint) }))).slice(2);
   const norm = isTyped(tx)
     ? { primaryType: tx.primaryType, domain: tx.domain, message: tx.message }
     : tx.payTo
@@ -570,7 +583,7 @@ function checkOnce(tx, opts, file, given) {
     ...(paid ? { amount: paid.amount, token: sym(paid.token) } : {}),
   };
   if (hold) {
-    Object.assign(hold, { what: verdict.amount != null ? `${money(verdict.amount)} ${verdict.token}${verdict.payee ? ` to ${verdict.payee}` : ""}` : `a call to ${tx.to || "a contract"}`, explanation: verdict.explanation });
+    Object.assign(hold, { what: (Array.isArray(tx?.calls) && tx.calls.length > 1 ? `a batch of ${tx.calls.length} calls that includes ` : "") + (verdict.amount != null ? `${money(verdict.amount)} ${verdict.token}${verdict.payee ? ` to ${verdict.payee}` : ""}` : `a call to ${tx.to || tx.calls?.[0]?.to || "a contract"}`), explanation: verdict.explanation });
     verdict.held = hold.id;
     verdict.next = `Held for a person to approve. Don't retry another way. Tell the person, and retry this same payment once it is approved (rein-wallet guard ${guard.wallet} --allow ${hold.id}).`;
   }
@@ -595,7 +608,7 @@ function checkOnce(tx, opts, file, given) {
       guard.policy.payees = [...new Set([...guard.policy.payees, ...add])];
       guard.paid = [...new Set([...(guard.paid || []), ...add])];
     }
-    else guard.blocked = [...(guard.blocked || []), { at: new Date(now * 1000).toISOString(), ...verdict }].slice(-100);
+    if (!allow) guard.blocked = [...(guard.blocked || []), { at: new Date(now * 1000).toISOString(), ...verdict }].slice(-100);
   }
   const isNew = hold && hold.isNew;
   if (hold) delete hold.isNew;

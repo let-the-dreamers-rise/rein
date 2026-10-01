@@ -23,6 +23,7 @@ function fakeClient(address) {
     sendTransaction: async (tx) => (sent.push(["send", tx]), "0xhash"),
     writeContract: async (call) => (sent.push(["write", call]), "0xhash"),
     signTypedData: async (td) => (sent.push(["sign", td]), "0xsig"),
+    sendCalls: async (b) => (sent.push(["calls", b]), { id: "0xbatch" }),
     getAddresses: async () => [address],
   };
   return { client, sent };
@@ -63,6 +64,11 @@ describe("protect(walletClient)", function () {
     // A token it doesn't know is held too, and nothing held was sent.
     const odd = await wallet.sendTransaction({ to: someone("a token"), data: ERC20.encodeFunctionData("transfer", [a, 1n]) }).catch((e) => e);
     expect(odd).to.be.instanceOf(ReinHeld);
+    expect(sent).to.have.length(2);
+
+    // A batch is judged as a whole: one stranger in it holds all of it.
+    const batch = await wallet.sendCalls({ calls: [{ to: USDC.address, data: ERC20.encodeFunctionData("transfer", [a, usdc(1)]) }, { to: USDC.address, abi: ERC20_ABI, functionName: "transfer", args: [someone("c"), usdc(300)] }] }).catch((e) => e);
+    expect(batch).to.be.instanceOf(ReinHeld);
     expect(sent).to.have.length(2);
 
     // Everything else passes straight through.
