@@ -100,6 +100,23 @@ const TOOLS = [
     inputSchema: { type: "object", properties: {} },
   },
   {
+    name: "rein_check_wallet",
+    description:
+      "Check any agent wallet in seconds from its public history: whether someone is trying to trick it (address poisoning, fake tokens), " +
+      "what it normally does (who it pays, how much an hour and a day), and which of its recent transactions Rein would have held for a person. " +
+      'Pass "payments" in plain words ("send 500 USDC to 0x…") to hear whether each would go through or be held, and why. ' +
+      'Read-only; signs and spends nothing, needs no Rein account. Address "sample" is a made-up wallet under attack, with no network.',
+    inputSchema: {
+      type: "object",
+      properties: {
+        address: { type: "string", description: 'The wallet address (0x...), or "sample".' },
+        chain: { type: "string", enum: ["base", "base-sepolia", "ethereum"], description: "Default base." },
+        payments: { type: "array", items: { type: "string" }, description: 'Optional payments to ask about, e.g. ["send 40 USDC to 0x…"].' },
+      },
+      required: ["address"],
+    },
+  },
+  {
     name: "rein_scan_wallet",
     description:
       "Scan any agent wallet's public history and report the spending policy that history supports: who it pays, how much an hour, " +
@@ -169,6 +186,17 @@ async function callTool(name, args) {
       return (await rein()).client.budget();
     case "rein_policy":
       return (await rein()).client.policy();
+    case "rein_check_wallet": {
+      const cu = require("../scan/checkup");
+      const addr = String(args.address || "").trim();
+      const history =
+        addr.toLowerCase() === "sample"
+          ? require("../scan/sample").poisonedSampleHistory()
+          : await require("../scan/blockscout").fetchHistory(addr, { chain: args.chain || "base" });
+      const c = cu.checkup(history);
+      const asked = (Array.isArray(args.payments) ? args.payments : []).map((q) => `> ${q}\n${cu.ask(c, String(q)).answer}`);
+      return [cu.text(c), ...asked].join("\n");
+    }
     case "rein_scan_wallet": {
       // Required here rather than at the top: the scanner is not needed to
       // answer any other tool, and a server that only pays should not load it.

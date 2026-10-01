@@ -36,9 +36,14 @@ const KEEP = 2 * DAY;
 const HELD_WORDS = {
   ...WORDS,
   NEW_ADDRESS: "the first payment this agent ever made to that address",
+  NEW_ADDRESS_OVER_100: "a first-ever payment of over $100 to an address this agent had never paid",
+  BURST: "more in one hour than three times this agent's busiest hour before",
 };
 
 const STABLES = /^(USDC|USDbC|USDT|DAI|USDS|EURC|PYUSD)$/i;
+
+// Public RPCs to fall back on when the explorer's RPC turns a reader away.
+const PUBLIC_RPC = { base: ["https://mainnet.base.org", "https://base-rpc.publicnode.com"] };
 
 /// The numbers an outreach note quotes, by two plain rules anyone can check
 /// on a block explorer: a first-ever payment over $100 to an address the
@@ -73,7 +78,11 @@ function measure(rows, tokens, history, since) {
   }
   const bursts = Object.values(later).filter((h) => peak[h.token] > 0 && h.total > 3 * peak[h.token]);
   const flagged = new Set([...firstOver100, ...bursts.flatMap((h) => h.rows)]);
-  return { payments: after.length, firstOver100: firstOver100.length, burstHours: new Set(bursts.map((h) => h.rows[0].ts - (h.rows[0].ts % 3600))).size, wouldHold: flagged.size };
+  const out = { payments: after.length, firstOver100: firstOver100.length, burstHours: new Set(bursts.map((h) => h.rows[0].ts - (h.rows[0].ts % 3600))).size, wouldHold: flagged.size };
+  // Which rows, and by which rule, for a wallet too new for the full guard.
+  const first = new Set(firstOver100);
+  Object.defineProperty(out, "rows", { value: [...flagged].sort((a, b) => a.ts - b.ts).map((r) => ({ row: r, reason: first.has(r) ? "NEW_ADDRESS" : "BURST" })) });
+  return out;
 }
 
 /// The history as it stood before `since`.
@@ -86,20 +95,36 @@ const before = (history, since) => ({
 /// What a second key would have held in one wallet's history since `since`.
 /// Returns { address, status, learnedFrom, checked, held: [...] }; status is
 /// "ok", "cohort" when it was too new and `cohort` stood in for its own
-/// history, or "too new" when there is too little before `since` to learn
-/// from. `guard` is the guard it was judged by (left out of reports).
+/// history, "simple rules" when there is too little before `since` to learn
+/// from (a first payment over $100 to a new address, or a burst, is held), or
+/// "quiet". `guard` is the guard it was judged by (left out of reports).
 function shadow(history, { since, cohort = null }) {
   const { rows, tokens } = toTrail(history, { payments: true });
   const name = namer(history, tokens);
   const after = rows.filter((r) => r.ts >= since);
-  const base = { address: history.address, checked: after.length, held: [], learnedFrom: 0, measured: measure(rows, tokens, history, since) };
+  const lastActive = rows.length ? new Date(rows[rows.length - 1].ts * 1000).toISOString() : null;
+  const base = { address: history.address, checked: after.length, held: [], learnedFrom: 0, lastActive, measured: measure(rows, tokens, history, since) };
   if (!after.length) return { ...base, status: "quiet" };
   let guard;
   let status = "ok";
   try {
     guard = learn(before(history, since)).guard;
   } catch (err) {
-    if (!cohort) return { ...base, status: "too new", note: err.message };
+    // Too little history for its own limits and no cohort: the two simple
+    // rules still hold a first big payment to a new address, or a burst.
+    if (!cohort) {
+      const held = base.measured.rows.map(({ row: r, reason }) => ({
+        when: new Date(r.ts * 1000).toISOString(),
+        tx: r.tx || null,
+        what: describe(r, name),
+        reason,
+        why: HELD_WORDS[reason === "NEW_ADDRESS" ? "NEW_ADDRESS_OVER_100" : reason],
+        amount: r.amount,
+        token: r.token === NATIVE ? "ETH" : name(r.token),
+        payee: r.payee,
+      }));
+      return { ...base, status: "simple rules", held, note: err.message };
+    }
   }
   // As `rein guard` does: a cohort stands in until the wallet has enough of its own.
   if (cohort && (!guard || guard.learnedFrom.calls < COHORT_UNTIL)) {
@@ -128,7 +153,7 @@ function shadow(history, { since, cohort = null }) {
       if (r.payee && r.kind !== "approve" && !r.derived) paidBefore.add(r.payee);
       continue;
     }
-    if (reason === "PAYEE_NOT_ALLOWED" && guard.policy.transferPayees.some((p) => looksLike(p, r.payee))) reason = "LOOKALIKE_PAYEE";
+    if (reason === "PAYEE_NOT_ALLOWED" && [...guard.policy.transferPayees, ...paidBefore].some((p) => looksLike(p, r.payee))) reason = "LOOKALIKE_PAYEE";
     else if (reason === "PAYEE_NOT_ALLOWED" && !paidBefore.has(r.payee)) reason = "NEW_ADDRESS";
     if (r.payee && r.kind !== "approve" && !r.derived) paidBefore.add(r.payee);
     skipped.add(r);
@@ -154,7 +179,7 @@ function shadowFleet(entries) {
   let cohort = null;
   if (learned.length >= 3) {
     cohort = cohortFrom(learned);
-    for (const [i, r] of results.entries()) if (r.status === "too new" || (r.status === "ok" && !grown(r))) results[i] = shadow(entries[i].history, { since: entries[i].since, cohort });
+    for (const [i, r] of results.entries()) if (r.status === "simple rules" || (r.status === "ok" && !grown(r))) results[i] = shadow(entries[i].history, { since: entries[i].since, cohort });
   }
   return { results: results.map(({ guard, ...r }) => r), cohort };
 }
@@ -178,7 +203,9 @@ function fleetNumbers(results) {
 function numbersLine(results, sinceLabel) {
   const n = fleetNumbers(results);
   const share = n.payments ? ` (${Math.round((100 * n.wouldHold) / n.payments)}%)` : "";
-  return `${n.wallets} wallet${n.wallets === 1 ? "" : "s"} read. ${n.payments} payment${n.payments === 1 ? "" : "s"} ${sinceLabel}: ${n.firstOver100} first-ever payment${n.firstOver100 === 1 ? "" : "s"} over $100 to an address that wallet had never paid, and ${n.burstHours} hour${n.burstHours === 1 ? "" : "s"} where a wallet sent more than 3× its own earlier peak. By those two simple rules alone, ${n.wouldHold} of the ${n.payments} payments${share} would have waited; the full guard above holds more.`;
+  const held = results.reduce((a, r) => a + r.held.length, 0);
+  const tail = held > n.wouldHold ? ` The full guard held ${held}, above.` : "";
+  return `${n.wallets} wallet${n.wallets === 1 ? "" : "s"} read. ${n.payments} payment${n.payments === 1 ? "" : "s"} ${sinceLabel}: ${n.firstOver100} first-ever payment${n.firstOver100 === 1 ? "" : "s"} over $100 to an address that wallet had never paid, and ${n.burstHours} hour${n.burstHours === 1 ? "" : "s"} where a wallet sent more than 3× its own earlier peak. By those two simple rules, ${n.wouldHold} of the ${n.payments} payment${n.payments === 1 ? "" : "s"}${share} would have waited.${tail}`;
 }
 
 /// The Slack message: a headline, then the held payments, newest first.
@@ -186,16 +213,23 @@ function slackText(results, { sinceLabel, explorer, limit = 15 }) {
   const held = results.flatMap((r) => r.held.map((h) => ({ ...h, wallet: r.address }))).sort((a, b) => b.when.localeCompare(a.when));
   const wallets = results.filter((r) => r.held.length).length;
   const sum = totals(results);
+  const quiet = results.filter((r) => r.status === "quiet");
+  const n = results.length;
   const lines = [
     held.length
-      ? `*Rein shadow mode:* ${held.length} payment${held.length === 1 ? "" : "s"} or approval${held.length === 1 ? "" : "s"} from ${wallets} of ${results.length} agent wallet${results.length === 1 ? "" : "s"} would have waited for a person ${sinceLabel}${sum.length ? ` (${sum.join(", ")})` : ""}.`
-      : `*Rein shadow mode:* nothing from ${results.length} agent wallet${results.length === 1 ? "" : "s"} would have been held ${sinceLabel}.`,
+      ? `*Rein shadow mode:* ${held.length} payment${held.length === 1 ? "" : "s"} or approval${held.length === 1 ? "" : "s"} from ${wallets} of ${n} agent wallet${n === 1 ? "" : "s"} would have waited for a person ${sinceLabel}${sum.length ? ` (${sum.join(", ")})` : ""}.`
+      : quiet.length === n
+        ? `*Rein shadow mode:* ${n === 1 ? "this agent wallet" : `none of the ${n} agent wallets`} made a transaction ${sinceLabel}, so there was nothing to hold.`
+        : `*Rein shadow mode:* everything the ${n - quiet.length} active agent wallet${n - quiet.length === 1 ? "" : "s"} did ${sinceLabel} fit ${n - quiet.length === 1 ? "its" : "their"} habits; nothing would have been held.`,
   ];
   for (const h of held.slice(0, limit)) {
     const link = h.tx && explorer ? ` <${explorer}/tx/${h.tx}|tx>` : "";
     lines.push(`• ${h.when.slice(0, 16).replace("T", " ")}  ${short(h.wallet)}  ${h.what}: ${h.why}${link}`);
   }
   if (held.length > limit) lines.push(`…and ${held.length - limit} more in the report.`);
+  if (quiet.length) lines.push(`Quiet ${sinceLabel}: ${quiet.slice(0, 5).map((r) => `${short(r.address)} (last active ${r.lastActive ? r.lastActive.slice(0, 10) : "never"})`).join(", ")}${quiet.length > 5 ? ` and ${quiet.length - 5} more` : ""}.`);
+  const simple = results.filter((r) => r.status === "simple rules").length;
+  if (simple) lines.push(`${simple} wallet${simple === 1 ? " has" : "s have"} too little history for limits of ${simple === 1 ? "its" : "their"} own, so ${simple === 1 ? "it was" : "they were"} held to the two simple rules: a first payment over $100 to a new address, or 3× its busiest hour.`);
   const young = results.filter((r) => r.status === "too new").length;
   const cohort = results.filter((r) => r.status === "cohort").length;
   if (cohort) lines.push(`${cohort} new wallet${cohort === 1 ? " was" : "s were"} held to the limits the others share, having too little history of ${cohort === 1 ? "its" : "their"} own.`);
@@ -227,6 +261,7 @@ function parse(argv) {
     else if (a === "--sample") o.sample = true;
     else if (a === "--always") o.always = true;
     else if (a === "--olas") o.olas = Number(argv[++i]);
+    else if (a === "--rpc") o.rpc = argv[++i];
     else if (a === "-h" || a === "--help") o.help = true;
     else if (!a.startsWith("-")) o.file = a;
     else throw new Error(`unknown flag ${a}`);
@@ -236,7 +271,7 @@ function parse(argv) {
 
 const USAGE = `usage: rein fleet <wallets.txt> [--since 30d] [--chain base|base-sepolia|ethereum] [--webhook URL] [--out dir]
        rein fleet --sample             Rein's made-up sample wallets: one drained, one brand new
-       rein fleet --olas 20            the newest 20 deployed Olas agent services' wallets on Base
+       rein fleet --olas 20 [--rpc URL]  the newest 20 deployed Olas agent services' wallets on Base
   wallets.txt: one address per line (a CSV's first column works).
   --since 30m from cron posts only when something would have been held (add --always to post every run).`;
 
@@ -251,7 +286,7 @@ async function main(argv, { log = console.log, fetch: fetchImpl = globalThis.fet
   else if (o.sample) list = sampleFleet();
   else if (o.olas) {
     log(`Reading the newest ${o.olas} deployed Olas services on ${CHAINS[o.chain]?.name || o.chain}…`);
-    list = await olasWallets(o.olas, { chain: o.chain, api: o.api, fetch: fetchImpl });
+    list = await olasWallets(o.olas, { chain: o.chain, api: o.api, rpc: o.rpc, fetch: fetchImpl });
     if (o.out) fs.mkdirSync(o.out, { recursive: true }), fs.writeFileSync(path.join(o.out, "wallets.txt"), `${list.join("\n")}\n`);
   } else list = readWallets(o.file);
   if (!list.length) throw new Error(`no addresses found in ${o.file || "the registry"}`);
@@ -312,16 +347,28 @@ const DEPLOYED = 4;
 
 /// The multisigs of the newest `n` deployed Olas services, newest first,
 /// read through the explorer's JSON-RPC endpoint.
-async function olasWallets(n, { chain = "base", api = null, fetch: fetchImpl = globalThis.fetch } = {}) {
+async function olasWallets(n, { chain = "base", api = null, rpc = null, fetch: fetchImpl = globalThis.fetch } = {}) {
   const registry = OLAS[chain];
   if (!registry) throw new Error(`Olas's registry is read on ${Object.keys(OLAS).join(", ")} only`);
-  const rpc = `${(api || CHAINS[chain].api).replace(/\/$/, "")}/api/eth-rpc`;
+  // The explorer's RPC first, then a public one: the explorer rate-limits
+  // some addresses from the first request.
+  const rpcs = [rpc || `${(api || CHAINS[chain].api).replace(/\/$/, "")}/api/eth-rpc`, ...(rpc ? [] : PUBLIC_RPC[chain] || [])];
+  let at = 0;
   let id = 0;
+  const failures = [];
   const call = async (fn, args = []) => {
-    const res = await fetchImpl(rpc, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: ++id, method: "eth_call", params: [{ to: registry, data: OLAS_ABI.encodeFunctionData(fn, args) }, "latest"] }) });
-    const body = await res.json();
-    if (!res.ok || body.error) throw new Error(`${rpc} answered ${res.status}${body.error ? `: ${body.error.message}` : ""}`);
-    return OLAS_ABI.decodeFunctionResult(fn, body.result);
+    for (;;) {
+      const url = rpcs[at];
+      try {
+        const res = await fetchImpl(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: ++id, method: "eth_call", params: [{ to: registry, data: OLAS_ABI.encodeFunctionData(fn, args) }, "latest"] }) });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok || body.error || body.result == null) throw new Error(`answered ${res.status}${body.error ? `: ${body.error.message}` : ""}`);
+        return OLAS_ABI.decodeFunctionResult(fn, body.result);
+      } catch (err) {
+        failures.push(`${url} ${err.message}`);
+        if (++at >= rpcs.length) throw new Error(`couldn't read Olas's registry: ${failures.join("; ")}. Pass --rpc <a Base RPC URL> to use your own.`);
+      }
+    }
   };
   const total = Number((await call("totalSupply"))[0]);
   const out = [];

@@ -22,13 +22,13 @@
 //
 // Nothing here signs, spends or holds a key. For limits no code path can
 // skip, the same policy runs in a ReinAccountV3 contract.
-const crypto = require("crypto");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { ethers } = require("ethers");
 const { fetchHistory, toTrail, CHAINS, NO_CALLDATA, SELECTOR_NAMES, ERC20 } = require("./blockscout");
 const { evaluate, NATIVE } = require("./evaluate");
+const { rollingSums, HEADROOM } = require("./compile");
 const { scanHistory, describe, namer, money } = require("./index");
 const codes = require("../scripts/codes");
 const { readRouterCall, strangers, readTypedData } = require("./moves");
@@ -158,7 +158,20 @@ function learn(history, { days = 30 } = {}) {
   // verify, so the guard file doesn't claim it.
   const { requireIntent, ...agent } = current.policy.onchain.agent;
   const policy = { ...current.policy.onchain, agent, transferPayees: [...admitted.payees].sort(), spenders: [...admitted.spenders].sort() };
-  for (const [t, tp] of Object.entries(policy.tokens)) tp.maxPerDay = dailyCeiling(rows, t, tp.maxPerWindow);
+  // A one-off payment to an address the agent doesn't normally pay is held
+  // anyway, so it mustn't set the limits for everything else: one 1.25M USDC
+  // transfer would otherwise let 1.5M an hour go to its usual payees.
+  const trusted = new Set(policy.transferPayees);
+  const usual = rows.filter((r) => r.kind !== "approve" && (r.derived || !r.payee || trusted.has(r.payee)));
+  const tightened = {};
+  for (const [t, tp] of Object.entries(policy.tokens)) {
+    const points = usual.filter((r) => r.token === t && (r.kind === "transfer" || r.kind === "transferFrom")).map((r) => [r.ts, Number(r.amount || 0)]);
+    const busiest = Math.max(0, ...rollingSums(points, HOUR));
+    const tight = Number((busiest * HEADROOM).toFixed(6));
+    if (tight < tp.maxPerWindow) tightened[t] = tight;
+    tp.maxPerWindow = Math.min(tp.maxPerWindow, tight);
+    tp.maxPerDay = dailyCeiling(usual, t, tp.maxPerWindow);
+  }
 
   const now = Math.floor(Date.now() / 1000);
   const guard = {
@@ -169,7 +182,15 @@ function learn(history, { days = 30 } = {}) {
     learnedAt: new Date().toISOString(),
     learnedFrom: { calls: current.history.calls, from: current.history.from, to: current.history.to },
     policy,
-    sentences: [...current.policy.sentences, ...Object.entries(policy.tokens).map(([t, tp]) => `${name(t)}: at most ${money(tp.maxPerDay)} a day`)],
+    // Every address it has ever paid, trusted or not: a lookalike of any of
+    // them is the mark of poisoning (they copy one-off payees too).
+    paid: [...new Set(rows.filter((r) => !r.derived && r.payee && r.kind !== "approve").map((r) => r.payee))].sort(),
+    sentences: [
+      ...current.policy.sentences.map((x) => {
+        const t = Object.keys(tightened).find((k) => x.startsWith(`${name(k)}: at most`));
+        return t ? `${name(t)}: at most ${money(tightened[t])} an hour, learned only from payments to addresses it normally pays` : x;
+      }),
+      ...Object.entries(policy.tokens).map(([t, tp]) => `${name(t)}: at most ${money(tp.maxPerDay)} a day`)],
     withheld: current.policy.withheld,
     tokens: Object.fromEntries(Object.entries(tokens).map(([a, t]) => [a, { symbol: t.symbol || null, decimals: t.decimals ?? 18 }])),
     ledger: rows.filter((r) => r.ts > now - KEEP_SECONDS).map(ledgerRow),
@@ -384,7 +405,7 @@ const looksLike = (a, b) => {
 };
 
 const WORDS = {
-  LOOKALIKE_PAYEE: "this address starts and ends like one the agent pays, but it is a different address: the mark of address poisoning",
+  LOOKALIKE_PAYEE: "this address starts and ends like one the agent has paid, but it is a different address: the mark of address poisoning",
   PAYEE_NOT_ALLOWED: "this agent has never paid that address often enough for it to be trusted",
   SPENDER_NOT_ALLOWED: "this agent has never given that address an allowance often enough for it to be trusted",
   NOT_A_PAYEE: "this agent only gives that address allowances; it has never paid it directly, and tokens sent to a router can be taken by anyone",
@@ -443,7 +464,7 @@ function fingerprint(tx) {
       ? { payTo: lower(tx.payTo), asset: lower(tx.asset), amount: String(tx.amount ?? tx.maxAmountRequired) }
       : { to: lower(tx.to), data: lower(tx.data || tx.input || "0x"), value: String(tx.value ?? 0) };
   const text = JSON.stringify(norm, (k, v) => (typeof v === "bigint" ? v.toString() : typeof v === "string" ? v.toLowerCase() : v));
-  return crypto.createHash("sha256").update(text).digest("hex");
+  return ethers.sha256(ethers.toUtf8Bytes(text)).slice(2); // ethers, not node:crypto, so the browser page runs it too
 }
 
 /// Decides a hold. `decision` is "approved" or "denied"; an approval lets
@@ -487,7 +508,8 @@ function checkOnce(tx, opts, file, given) {
   const main = rows ? rows[0] : null;
   let reason = block ? block.reason : judge(guard, ledger, rows, now);
   // An address that starts and ends like one the agent pays, but isn't it.
-  const lookalike = reason === "PAYEE_NOT_ALLOWED" && rows.some((r) => r.payee && guard.policy.transferPayees.some((p) => looksLike(p, r.payee)));
+  const known = [...guard.policy.transferPayees, ...(guard.paid || [])];
+  const lookalike = reason === "PAYEE_NOT_ALLOWED" && rows.some((r) => r.payee && known.some((p) => looksLike(p, r.payee)));
   if (lookalike) reason = "LOOKALIKE_PAYEE";
   let allow = reason === "OK";
   // The first payment to a new address, if it is small, goes through and
@@ -527,7 +549,7 @@ function checkOnce(tx, opts, file, given) {
     } else if (!refused) {
       hold = guard.holds.find((h) => h.fp === fp && h.status === "waiting");
       if (!hold) {
-        hold = { id: crypto.randomBytes(4).toString("hex"), fp, at: new Date(now * 1000).toISOString(), until: now + DAY, status: "waiting", reason };
+        hold = { id: ethers.hexlify(ethers.randomBytes(4)).slice(2), fp, at: new Date(now * 1000).toISOString(), until: now + DAY, status: "waiting", reason };
         guard.holds.push(hold);
         hold.isNew = true;
       }
@@ -891,6 +913,16 @@ async function main(argv, { log = console.log, fetch: fetchImpl, env = process.e
   log("");
   log(`Saved to ${file}`);
   log("");
+  // Limits that would have stopped most of what the agent really did would
+  // break it. Say so, rather than "on".
+  const r = learned?.replay;
+  if (r && r.total >= 5 && r.allowed < r.total * 0.8) {
+    log(`Not ready to switch on: these limits would have stopped ${r.total - r.allowed} of its last ${r.total} calls, so they would get in your agent's way.`);
+    log(`  Watch first, with nothing stopped: npx rein-wallet fleet <file with ${guard.wallet}> --since 30d`);
+    log(`  Or switch it on and let each held payment through once with rein guard ${guard.wallet} --allow <id>;`);
+    log(`  run rein guard ${guard.wallet} again in a week, once it has seen more.`);
+    return 0;
+  }
   log(`Guard is on. Hold every payment to these limits with one line before your agent signs:`);
   log("");
   log(`  const verdict = require("rein-wallet").check(tx, { wallet: "${guard.wallet}" });   // { allow, reason, explanation }`);

@@ -216,7 +216,7 @@ footer a{color:var(--ink)}
       <li><a href="account/">Rein account</a></li>
       <li><a href="https://github.com/let-the-dreamers-rise/rein">GitHub</a></li>
     </ul>
-    <a class="btn btn-ink" href="scan/">Scan a wallet</a>
+    <a class="btn btn-ink" href="scan/">Check a wallet</a>
   </div>
 </nav>
 
@@ -226,13 +226,12 @@ footer a{color:var(--ink)}
     <div>
       <span class="eyebrow">For platforms running AI agent wallets</span>
       <h1>A second key for every agent wallet you run.</h1>
-      <p class="lede">Rein learns each agent's payees and its usual hour and day of spending from its own wallet history. Inside that, the agent signs alone. A first payment to an address it has never paid, or more than its history supports, waits for Rein's co-signature or a person's yes. Turnkey or Privy enforces it, so a hijacked agent can't skip it.</p>
-      <pre class="cmd hero-cmd">npx rein-wallet fleet wallets.txt</pre>
-      <form class="scanbox" action="scan/" method="get" role="search" aria-label="Scan an agent wallet">
-        <input name="address" placeholder="0x… your agent's wallet address" spellcheck="false" autocomplete="off" aria-label="Agent wallet address" required pattern="^0x[0-9a-fA-F]{40}$" title="A 0x address, 42 characters">
-        <button class="btn btn-ink" type="submit">See its limits</button>
+      <p class="lede">Paste any agent wallet. In seconds, Rein shows whether someone is trying to trick it, what it normally does, and which payments it would have held for a person. Then make Rein its second key: the agent signs normal payments alone, and Turnkey or Privy make the unusual ones wait.</p>
+      <form class="scanbox" action="scan/" method="get" role="search" aria-label="Check an agent wallet">
+        <input name="address" placeholder="0x… any agent's wallet address" spellcheck="false" autocomplete="off" aria-label="Agent wallet address" required pattern="^0x[0-9a-fA-F]{40}$" title="A 0x address, 42 characters">
+        <button class="btn btn-ink" type="submit">Check it</button>
       </form>
-      <p class="fine">Shadow mode first: what a second key would have held across your wallets in the last 30 days, from public chain data. No keys, no integration, nothing signed. Or check one wallet in your browser. <a href="scan/">See a sample report</a>.</p>
+      <p class="fine">No wallet handy? <a href="scan/?sample=1">Try one that's under attack</a>. Running many? <code>npx rein-wallet fleet wallets.txt</code> shows what a second key would have held across all of them. Public chain data only: no keys, nothing signed.</p>
     </div>
     <figure class="term" aria-label="Example guard output, on Rein's made-up sample wallet">
       <div class="term-bar"><i></i><i></i><i></i><span>npx rein-wallet fleet --sample</span></div>
@@ -385,7 +384,7 @@ Pay Acme 1,000 USDC, 20 times     <span class="no">REFUSED  TOKEN_PER_WINDOW</sp
           <li>Policy files for Privy, Turnkey and CDP</li>
           <li><code>apply</code> and <code>watch</code>, open source</li>
         </ul>
-        <a class="btn" href="scan/">Scan a wallet</a>
+        <a class="btn" href="scan/">Check a wallet</a>
       </div>
       <div class="plan hot">
         <span class="flag">first five teams</span>

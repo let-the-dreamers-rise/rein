@@ -3,6 +3,8 @@
 // It reads the explorer straight from the visitor's browser; nothing passes
 // through a Rein server, and nothing is signed.
 const { scan, scanHistory, summary, exportPolicy, CHAINS } = require("./index");
-const { sampleHistory } = require("./sample");
+const { sampleHistory, poisonedSampleHistory } = require("./sample");
+const { fetchHistory } = require("./blockscout");
+const checkup = require("./checkup");
 
-module.exports = { scan, scanHistory, summary, exportPolicy, sampleHistory, CHAINS };
+module.exports = { scan, scanHistory, summary, exportPolicy, sampleHistory, poisonedSampleHistory, fetchHistory, checkup, CHAINS };

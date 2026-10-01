@@ -112,7 +112,7 @@ describe("rein guard", function () {
       expect(lines.join("\n")).to.contain("Ignored 40 transfers this wallet never sent").and.contain("address poisoning");
       const v = rein.check({ payTo: look(real, "7"), asset: USDC.address, amount: usdc(5) }, { env, now: NOW });
       expect(v).to.include({ allow: false, reason: "LOOKALIKE_PAYEE" });
-      expect(v.explanation).to.contain("starts and ends like one the agent pays");
+      expect(v.explanation).to.contain("starts and ends like one the agent has paid");
       expect(rein.check({ payTo: real, asset: USDC.address, amount: usdc(5) }, { env, now: NOW }).allow).to.equal(true);
     });
 

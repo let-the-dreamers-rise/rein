@@ -2,6 +2,41 @@
 
 [![test](https://github.com/let-the-dreamers-rise/rein/actions/workflows/test.yml/badge.svg)](https://github.com/let-the-dreamers-rise/rein/actions/workflows/test.yml)
 
+**A second key for AI agent wallets.** Rein learns what each agent normally
+pays from its own wallet history. Normal payments go through on the agent's
+key alone; an unusual one (a first payment to a new address, an address that
+only looks like one it pays, more than its history supports) waits for a
+person. Turnkey or Privy enforce it, so a hijacked agent can't skip it.
+
+## Start here: check any agent wallet in seconds
+
+```
+npx rein-wallet 0xAnyAgentWallet        # or try it offline: npx rein-wallet checkup --sample
+```
+
+Or paste the address at [rein-nine.vercel.app/scan](https://rein-nine.vercel.app/scan/).
+Nothing is signed; it reads public chain data. On the made-up sample wallet:
+
+```
+Rein would have held this payment: on 20 Aug 2026 this wallet sent 12,500 USDC ($13k)
+to 0x7946…2773, an address it had never paid before. Someone is trying to trick this
+wallet: 24 fake transfers point it at addresses dressed up as ones it really pays.
+
+Asked about a few payments, Rein says:
+  > Send 38 USDC to Data vendor
+    Goes through. 38 USDC to Data vendor fits this agent's habits, with 716.79 USDC left in its hour.
+  > Send 38 USDC to 0x7946eEEEeeeeeEEEeEEEEeeEEeeEeEEeeeee2773
+    Held for a person: this address starts and ends like one the agent has paid, but it is
+    a different address: the mark of address poisoning.
+```
+
+Then ask about any payment in plain words (`--ask "send 500 USDC to 0x…"`),
+switch it on for one agent with `npx rein-wallet guard 0x…`, or see what a
+second key would have held across a whole fleet with `npx rein-wallet fleet
+wallets.txt`. In Claude, the `rein_check_wallet` tool does the same.
+
+## The Rein account: limits in the contract itself
+
 A smart account an autonomous agent can operate and cannot drain.
 
 **Live on two public EVM testnets, same bytecode, same result.** Chain-agnostic

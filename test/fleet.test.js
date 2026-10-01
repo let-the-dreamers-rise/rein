@@ -42,10 +42,12 @@ describe("rein fleet (shadow mode)", function () {
     await fleet.main(["--sample", "--webhook", "https://hooks.example/x"], { log: () => {}, fetch });
     expect(posts).to.have.length(1);
     expect(posts[0]).to.contain("*Rein shadow mode:* 10 payments or approvals from 4 of 4 agent wallets");
-    await fleet.main(["--sample", "--since", "1m", "--webhook", "https://hooks.example/x"], { log: () => {}, fetch });
+    // After the sample's last day nobody did anything, so nothing is posted, and --always says they were quiet.
+    await fleet.main(["--sample", "--since", "2026-09-01", "--webhook", "https://hooks.example/x"], { log: () => {}, fetch });
     expect(posts).to.have.length(1);
-    await fleet.main(["--sample", "--since", "1m", "--always", "--webhook", "https://hooks.example/x"], { log: () => {}, fetch });
-    expect(posts[1]).to.contain("nothing from 4 agent wallets would have been held in the last 1 minute");
+    await fleet.main(["--sample", "--since", "2026-09-01", "--always", "--webhook", "https://hooks.example/x"], { log: () => {}, fetch });
+    expect(posts[1]).to.contain("none of the 4 agent wallets made a transaction since 2026-09-01, so there was nothing to hold");
+    expect(posts[1]).to.contain("Quiet since 2026-09-01: 0xF8CB…5057 (last active 2026-08-29)");
   });
 
   it("reads a list of wallets from a file, and says which are too new to learn from", async () => {
@@ -56,8 +58,12 @@ describe("rein fleet (shadow mode)", function () {
     const { results } = JSON.parse(fs.readFileSync(path.join(out, "fleet.json"), "utf8"));
     expect(results).to.have.length(1);
     expect(results[0].held.length).to.be.greaterThan(0);
+    // Too little before --since to learn from: the two simple rules still hold
+    // a first payment over $100 to an address it had never paid.
     const young = fleet.shadow(sampleHistory(), { since: Date.parse("2026-07-01T12:00:00Z") / 1000 });
-    expect(young.status).to.equal("too new");
+    expect(young.status).to.equal("simple rules");
+    expect(young.held.length).to.equal(young.measured.wouldHold).and.be.greaterThan(0);
+    expect(young.held[0].why).to.contain("over $100 to an address this agent had never paid");
   });
 
   it("holds a wallet too new to learn from to the limits its siblings share, and saves them as cohort.json", async () => {

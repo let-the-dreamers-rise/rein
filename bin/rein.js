@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 // One command for everything Rein does from a terminal.
 //
-//   npx rein-wallet scan 0xAgentWallet
+//   npx rein-wallet 0xAgentWallet
 //
+//   rein checkup 0x…         in seconds: is something tricking this wallet, what
+//                            does it normally do, what would Rein have held;
+//                            then ask about any payment (also `rein 0x…`)
 //   rein guard 0x…           learn the wallet's limits from its history and
 //                            hold every payment to them with rein.check(tx)
 //   rein fleet wallets.txt   what a second key would have held across many
@@ -19,7 +22,12 @@
 //   rein api [--sandbox]     the HTTP API
 //
 // Reading and watching sign nothing and need no key.
-const USAGE = `rein: a wallet your agent can operate and cannot drain.
+const USAGE = `rein: a second key for agent wallets.
+
+  rein <address>   (or rein checkup <address>; rein checkup --sample to try it)
+      In seconds: is someone trying to trick this agent wallet, what does it
+      normally do, and what would Rein have held in its last 30 days. Then ask
+      about any payment in plain words: --ask "send 500 USDC to 0x…".
 
   rein guard <address> [--chain base|base-sepolia|ethereum] [--webhook URL]
       Learns the wallet's payees and hourly limits from its own history, shows
@@ -137,6 +145,8 @@ function parseApply(argv) {
 async function main(argv) {
   const [cmd, ...rest] = argv;
   switch (cmd) {
+    case "checkup":
+      return require("../scan/checkup").main(rest);
     case "guard":
       return require("../scan/guard").main(rest);
     case "fleet":
@@ -188,8 +198,8 @@ async function main(argv) {
       console.error(USAGE);
       return cmd ? 0 : 2;
     default:
-      // `rein 0x…` is the scan most people mean.
-      if (/^0x[0-9a-fA-F]{40}$/.test(cmd)) return require("../scan/cli").main(argv);
+      // `rein 0x…`: the checkup, the one-minute answer most people want.
+      if (/^0x[0-9a-fA-F]{40}$/.test(cmd)) return require("../scan/checkup").main(argv);
       console.error(`rein: unknown command "${cmd}"\n\n${USAGE}`);
       return 2;
   }

@@ -19,8 +19,11 @@ esbuild
     target: "es2020",
     minify: true,
     legalComments: "eof",
-    // v2/export.js reads files only when run as a command, never here.
-    alias: { fs: "./scripts/empty.js", path: "./scripts/empty.js" },
+    // v2/export.js and the guard read files only when run as a command or
+    // given a file, never here: the page hands the guard its limits in memory.
+    alias: { fs: "./scripts/empty.js", path: "./scripts/empty.js", os: "./scripts/empty.js", child_process: "./scripts/empty.js", readline: "./scripts/empty.js" },
+    // A page has no process; code that reads settings from it finds none.
+    define: { "process.env": "{}" },
     banner: { js: "// Rein wallet scanner, bundled from scan/ in github.com/let-the-dreamers-rise/rein by scripts/build-web.js. Read the source there." },
     logLevel: "warning",
   })
