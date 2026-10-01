@@ -55,7 +55,8 @@ const USAGE = `rein: a wallet your agent can operate and cannot drain.
       payment since that a second key would have held for a person to approve.
       Wallets too new to learn from are held to what three or more others share;
       --out also saves that as cohort.json. Read-only.
-      rein fleet --sample shows it on made-up wallets, one drained and one brand new.
+      rein fleet --sample shows it on made-up wallets, one drained and one brand new;
+      rein fleet --olas 20 reads the newest 20 Olas agent wallets on Base.
 
   rein try
       A hijacked agent against a real Rein account on a private chain inside

@@ -138,6 +138,47 @@ describe("rein fleet (shadow mode)", function () {
     expect(now.pending.map((x) => x.what).join(" ")).to.contain("add payee");
   });
 
+  it("counts the outreach numbers: first-ever payments over $100, and hours over 3x the wallet's earlier peak", async () => {
+    const T = 1000 * 3600;
+    const row = (h, payee, amount) => ({ ts: (T + h) * 3600 + 60, kind: "transfer", token: USDC.address, payee, amount });
+    const [a, b, c] = ["0x" + "a".repeat(40), "0x" + "b".repeat(40), "0x" + "c".repeat(40)];
+    const tokens = { [USDC.address]: { symbol: "USDC", rate: null } };
+    const rows = [row(0, a, 50), row(1, a, 40), row(10, a, 60), row(11, b, 101), row(12, b, 500), row(13, c, 40), row(13, a, 100)];
+    const m = fleet.measure(rows, tokens, {}, (T + 10) * 3600);
+    // Earlier peak 50 an hour: hour 12 (500) is a burst; hour 13 (140) is not. b's first payment is over $100; c's isn't.
+    expect(m).to.deep.equal({ payments: 5, firstOver100: 1, burstHours: 1, wouldHold: 2 });
+    const lines = [];
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), "rein-fleet-"));
+    await fleet.main(["--sample", "--out", out], { log: (l) => lines.push(l) });
+    expect(lines.join("\n")).to.contain("4 wallets read.").and.contain("first-ever payments over $100");
+    expect(JSON.parse(fs.readFileSync(path.join(out, "fleet.json"), "utf8")).numbers).to.include({ wallets: 4, firstOver100: 5 });
+  });
+
+  it("lists the newest deployed Olas services' wallets from the registry on Base", async () => {
+    const { ethers } = require("ethers");
+    const iface = new ethers.Interface([
+      "function totalSupply() view returns (uint256)",
+      "function getService(uint256 serviceId) view returns ((uint96 securityDeposit, address multisig, bytes32 configHash, uint32 threshold, uint32 maxNumAgentInstances, uint32 numAgentInstances, uint8 state, uint32[] agentIds))",
+    ]);
+    const safe = (i) => ethers.getAddress("0x" + String(i).padStart(40, "5"));
+    const calls = [];
+    const fetch = async (url, init) => {
+      const { params } = JSON.parse(init.body);
+      expect(url).to.equal("https://base.blockscout.com/api/eth-rpc");
+      expect(params[0].to).to.equal("0x3C1fF68f5aa342D296d4DEe4Bb1cACCA912D95fE");
+      const tx = iface.parseTransaction({ data: params[0].data });
+      calls.push(tx.name);
+      const result =
+        tx.name === "totalSupply"
+          ? iface.encodeFunctionResult("totalSupply", [10])
+          : iface.encodeFunctionResult("getService", [[0, Number(tx.args[0]) === 9 ? ethers.ZeroAddress : safe(tx.args[0]), ethers.ZeroHash, 1, 1, 1, Number(tx.args[0]) === 8 ? 5 : 4, [1]]]);
+      return { ok: true, status: 200, json: async () => ({ jsonrpc: "2.0", id: 1, result }) };
+    };
+    // 10 is deployed; 9 has no Safe yet; 8 is terminated.
+    expect(await fleet.olasWallets(3, { fetch })).to.deep.equal([safe(10), safe(7), safe(6)]);
+    expect(calls[0]).to.equal("totalSupply");
+  });
+
   it("is a rein command", async () => {
     const lines = [];
     const log = console.log;

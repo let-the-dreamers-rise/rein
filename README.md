@@ -87,7 +87,12 @@ reports what would have happened. Run it with `--since 30m` every 15 minutes
 from cron or a scheduled GitHub Action, and each new one lands in Slack as it
 happens. `--out dir` writes the full list. `npx rein-wallet fleet --sample`
 shows it on made-up wallets: one that got drained, and one too new to have
-habits of its own.
+habits of its own. `npx rein-wallet fleet --olas 20` reads the newest 20
+deployed Olas agent services' wallets from the registry on Base.
+
+Each run also reports two numbers anyone can check on an explorer: first-ever
+payments over $100 to an address the wallet had never paid, and hours in which
+a wallet sent more than 3× its own busiest earlier hour.
 
 A wallet with fewer than 20 calls has too little history to learn from, so
 once three or more wallets in the list have enough, Rein holds the new ones to

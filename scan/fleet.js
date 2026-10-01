@@ -38,6 +38,44 @@ const HELD_WORDS = {
   NEW_ADDRESS: "the first payment this agent ever made to that address",
 };
 
+const STABLES = /^(USDC|USDbC|USDT|DAI|USDS|EURC|PYUSD)$/i;
+
+/// The numbers an outreach note quotes, by two plain rules anyone can check
+/// on a block explorer: a first-ever payment over $100 to an address the
+/// wallet had never paid, and an hour in which it sent more than 3× its own
+/// busiest hour before `since`. Dollar values use today's prices.
+function measure(rows, tokens, history, since) {
+  const rate = (t) => (t === NATIVE ? (history.info?.exchange_rate != null ? Number(history.info.exchange_rate) : null) : tokens[t]?.rate ?? (STABLES.test(tokens[t]?.symbol || "") ? 1 : null));
+  const isPayment = (r) => !r.derived && r.payee && (r.kind === "transfer" || r.kind === "transferFrom") && Number(r.amount) > 0;
+  const paid = new Set();
+  const peak = {}; // token -> busiest hour before since
+  const hours = {}; // `${token}:${hour}` -> total, before since
+  const firstOver100 = [];
+  const after = [];
+  for (const r of rows) {
+    if (!isPayment(r)) continue;
+    if (r.ts < since) {
+      const k = `${r.token}:${Math.floor(r.ts / 3600)}`;
+      hours[k] = (hours[k] || 0) + Number(r.amount);
+      peak[r.token] = Math.max(peak[r.token] || 0, hours[k]);
+    } else {
+      after.push(r);
+      const usd = rate(r.token) != null ? Number(r.amount) * rate(r.token) : null;
+      if (!paid.has(r.payee) && usd != null && usd > 100) firstOver100.push(r);
+    }
+    paid.add(r.payee);
+  }
+  const later = {};
+  for (const r of after) {
+    const k = `${r.token}:${Math.floor(r.ts / 3600)}`;
+    (later[k] ||= { token: r.token, total: 0, rows: [] }).total += Number(r.amount);
+    later[k].rows.push(r);
+  }
+  const bursts = Object.values(later).filter((h) => peak[h.token] > 0 && h.total > 3 * peak[h.token]);
+  const flagged = new Set([...firstOver100, ...bursts.flatMap((h) => h.rows)]);
+  return { payments: after.length, firstOver100: firstOver100.length, burstHours: new Set(bursts.map((h) => h.rows[0].ts - (h.rows[0].ts % 3600))).size, wouldHold: flagged.size };
+}
+
 /// The history as it stood before `since`.
 const before = (history, since) => ({
   ...history,
@@ -54,7 +92,7 @@ function shadow(history, { since, cohort = null }) {
   const { rows, tokens } = toTrail(history, { payments: true });
   const name = namer(history, tokens);
   const after = rows.filter((r) => r.ts >= since);
-  const base = { address: history.address, checked: after.length, held: [], learnedFrom: 0 };
+  const base = { address: history.address, checked: after.length, held: [], learnedFrom: 0, measured: measure(rows, tokens, history, since) };
   if (!after.length) return { ...base, status: "quiet" };
   let guard;
   let status = "ok";
@@ -129,6 +167,19 @@ function totals(results) {
   return Object.entries(by).map(([t, v]) => `${money(v)} ${t}`);
 }
 
+/// [W], [P], [N], [B], [H] across the fleet.
+function fleetNumbers(results) {
+  const m = results.map((r) => r.measured).filter(Boolean);
+  const add = (k) => m.reduce((a, x) => a + x[k], 0);
+  return { wallets: m.length, payments: add("payments"), firstOver100: add("firstOver100"), burstHours: add("burstHours"), wouldHold: add("wouldHold") };
+}
+
+function numbersLine(results, sinceLabel) {
+  const n = fleetNumbers(results);
+  const share = n.payments ? ` (${Math.round((100 * n.wouldHold) / n.payments)}%)` : "";
+  return `${n.wallets} wallet${n.wallets === 1 ? "" : "s"} read. ${n.payments} payment${n.payments === 1 ? "" : "s"} ${sinceLabel}: ${n.firstOver100} first-ever payment${n.firstOver100 === 1 ? "" : "s"} over $100 to an address that wallet had never paid, and ${n.burstHours} hour${n.burstHours === 1 ? "" : "s"} where a wallet sent more than 3× its own earlier peak. ${n.wouldHold} of the ${n.payments}${share} would have waited for a second key by those two rules alone.`;
+}
+
 /// The Slack message: a headline, then the held payments, newest first.
 function slackText(results, { sinceLabel, explorer, limit = 15 }) {
   const held = results.flatMap((r) => r.held.map((h) => ({ ...h, wallet: r.address }))).sort((a, b) => b.when.localeCompare(a.when));
@@ -153,9 +204,9 @@ function slackText(results, { sinceLabel, explorer, limit = 15 }) {
 }
 
 function markdownReport(results, { sinceLabel }) {
-  const L = [`# Rein shadow mode`, "", slackText(results, { sinceLabel, limit: 0 }).split("\n")[0].replace(/\*/g, "**"), ""];
-  L.push("| wallet | status | learned from | checked since | would have held |", "|---|---|---:|---:|---:|");
-  for (const r of results) L.push(`| ${r.address} | ${r.status} | ${r.learnedFrom} | ${r.checked} | ${r.held.length} |`);
+  const L = [`# Rein shadow mode`, "", slackText(results, { sinceLabel, limit: 0 }).split("\n")[0].replace(/\*/g, "**"), "", numbersLine(results, sinceLabel), ""];
+  L.push("| wallet | status | learned from | checked since | would have held | payments | first-ever over $100 | hours over 3× peak |", "|---|---|---:|---:|---:|---:|---:|---:|");
+  for (const r of results) L.push(`| ${r.address} | ${r.status} | ${r.learnedFrom} | ${r.checked} | ${r.held.length} | ${r.measured?.payments ?? ""} | ${r.measured?.firstOver100 ?? ""} | ${r.measured?.burstHours ?? ""} |`);
   for (const r of results.filter((x) => x.held.length)) {
     L.push("", `## ${r.address}`, "", "| when (UTC) | what | why | tx |", "|---|---|---|---|");
     for (const h of r.held) L.push(`| ${h.when.slice(0, 16).replace("T", " ")} | ${h.what} | ${h.why} | ${h.tx || ""} |`);
@@ -174,6 +225,7 @@ function parse(argv) {
     else if (a === "--out") o.out = argv[++i];
     else if (a === "--sample") o.sample = true;
     else if (a === "--always") o.always = true;
+    else if (a === "--olas") o.olas = Number(argv[++i]);
     else if (a === "-h" || a === "--help") o.help = true;
     else if (!a.startsWith("-")) o.file = a;
     else throw new Error(`unknown flag ${a}`);
@@ -183,20 +235,25 @@ function parse(argv) {
 
 const USAGE = `usage: rein fleet <wallets.txt> [--since 30d] [--chain base|base-sepolia|ethereum] [--webhook URL] [--out dir]
        rein fleet --sample             Rein's made-up sample wallets: one drained, one brand new
+       rein fleet --olas 20            the newest 20 deployed Olas agent services' wallets on Base
   wallets.txt: one address per line (a CSV's first column works).
   --since 30m from cron posts only when something would have been held (add --always to post every run).`;
 
 async function main(argv, { log = console.log, fetch: fetchImpl = globalThis.fetch, histories } = {}) {
   const o = parse(argv);
-  if (o.help || (!o.file && !o.sample && !histories)) {
+  if (o.help || (!o.file && !o.sample && !o.olas && !histories)) {
     console.error(USAGE);
     return o.help ? 0 : 2;
   }
   let list;
   if (histories) list = histories;
   else if (o.sample) list = sampleFleet();
-  else list = readWallets(o.file);
-  if (!list.length) throw new Error(`no addresses found in ${o.file}`);
+  else if (o.olas) {
+    log(`Reading the newest ${o.olas} deployed Olas services on ${CHAINS[o.chain]?.name || o.chain}…`);
+    list = await olasWallets(o.olas, { chain: o.chain, api: o.api, fetch: fetchImpl });
+    if (o.out) fs.mkdirSync(o.out, { recursive: true }), fs.writeFileSync(path.join(o.out, "wallets.txt"), `${list.join("\n")}\n`);
+  } else list = readWallets(o.file);
+  if (!list.length) throw new Error(`no addresses found in ${o.file || "the registry"}`);
 
   const latest = (h) => Math.max(...h.transactions.map((t) => Date.parse(t.timestamp) / 1000));
   const entries = [];
@@ -223,9 +280,11 @@ async function main(argv, { log = console.log, fetch: fetchImpl = globalThis.fet
   const text = slackText(results, { sinceLabel, explorer });
   log("");
   log(text.replace(/\*/g, "").replace(/<[^|>]+\|tx>/g, ""));
+  log("");
+  log(numbersLine(results, sinceLabel));
   if (o.out) {
     fs.mkdirSync(o.out, { recursive: true });
-    fs.writeFileSync(path.join(o.out, "fleet.json"), `${JSON.stringify({ since: o.since, results }, null, 2)}\n`);
+    fs.writeFileSync(path.join(o.out, "fleet.json"), `${JSON.stringify({ since: o.since, numbers: fleetNumbers(results), results }, null, 2)}\n`);
     fs.writeFileSync(path.join(o.out, "fleet.md"), markdownReport(results, { sinceLabel }));
     if (cohort) fs.writeFileSync(path.join(o.out, "cohort.json"), `${JSON.stringify(cohort, null, 2)}\n`);
     log(`\nWrote ${path.join(o.out, "fleet.md")}, fleet.json${cohort ? " and cohort.json (rein guard <new wallet> --cohort cohort.json starts a new wallet from it)" : ""}`);
@@ -237,6 +296,39 @@ async function main(argv, { log = console.log, fetch: fetchImpl = globalThis.fet
     log("Posted to the webhook.");
   }
   return 0;
+}
+
+// -- public agent wallets -------------------------------------------------------------
+
+// Olas registers every agent service on chain; each one's Safe is the wallet
+// the agent pays from. ServiceRegistryL2 on Base.
+const OLAS = { base: "0x3C1fF68f5aa342D296d4DEe4Bb1cACCA912D95fE" };
+const OLAS_ABI = new (require("ethers").Interface)([
+  "function totalSupply() view returns (uint256)",
+  "function getService(uint256 serviceId) view returns ((uint96 securityDeposit, address multisig, bytes32 configHash, uint32 threshold, uint32 maxNumAgentInstances, uint32 numAgentInstances, uint8 state, uint32[] agentIds))",
+]);
+const DEPLOYED = 4;
+
+/// The multisigs of the newest `n` deployed Olas services, newest first,
+/// read through the explorer's JSON-RPC endpoint.
+async function olasWallets(n, { chain = "base", api = null, fetch: fetchImpl = globalThis.fetch } = {}) {
+  const registry = OLAS[chain];
+  if (!registry) throw new Error(`Olas's registry is read on ${Object.keys(OLAS).join(", ")} only`);
+  const rpc = `${(api || CHAINS[chain].api).replace(/\/$/, "")}/api/eth-rpc`;
+  let id = 0;
+  const call = async (fn, args = []) => {
+    const res = await fetchImpl(rpc, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: ++id, method: "eth_call", params: [{ to: registry, data: OLAS_ABI.encodeFunctionData(fn, args) }, "latest"] }) });
+    const body = await res.json();
+    if (!res.ok || body.error) throw new Error(`${rpc} answered ${res.status}${body.error ? `: ${body.error.message}` : ""}`);
+    return OLAS_ABI.decodeFunctionResult(fn, body.result);
+  };
+  const total = Number((await call("totalSupply"))[0]);
+  const out = [];
+  for (let s = total; s >= 1 && out.length < n && total - s < n * 5; s--) {
+    const [svc] = await call("getService", [s]);
+    if (Number(svc.state) === DEPLOYED && svc.multisig !== "0x0000000000000000000000000000000000000000" && !out.includes(svc.multisig)) out.push(svc.multisig);
+  }
+  return out;
 }
 
 /// The sample wallet; a copy of it whose last week includes a drain (a run of
@@ -282,4 +374,4 @@ function transferData(to, raw) {
   return new ethers.Interface(["function transfer(address,uint256)"]).encodeFunctionData("transfer", [to, BigInt(raw)]);
 }
 
-module.exports = { shadow, shadowFleet, slackText, markdownReport, main, parse, sampleFleet, USAGE };
+module.exports = { olasWallets, measure, fleetNumbers, shadow, shadowFleet, slackText, markdownReport, main, parse, sampleFleet, USAGE };
