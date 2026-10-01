@@ -29,6 +29,12 @@ const USAGE = `rein: a second key for agent wallets.
       normally do, and what would Rein have held in its last 30 days. Then ask
       about any payment in plain words: --ask "send 500 USDC to 0x…".
 
+  rein safe <safe address> [--webhook URL] [--every 300]
+      Before the last signature: checks every transaction queued in a Safe
+      against what that Safe has paid before, and flags lookalike addresses
+      (address poisoning), first payments to new addresses, unusual amounts,
+      delegatecalls and owner changes. Holds no key and needs none.
+
   rein guard <address> [--chain base|base-sepolia|ethereum] [--webhook URL]
       Learns the wallet's payees and hourly limits from its own history, shows
       what they would have allowed over the last 30 days, and saves them. Then
@@ -151,6 +157,8 @@ async function main(argv) {
       return require("../scan/guard").main(rest);
     case "fleet":
       return require("../scan/fleet").main(rest);
+    case "safe":
+      return require("../scan/safe").main(rest);
     case "approvals":
       return require("../scan/approvals").main(rest);
     case "cosign":

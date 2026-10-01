@@ -1,0 +1,371 @@
+// rein safe: a second look at a Safe's queue before the last signature.
+//
+//   npx rein-wallet safe 0xYourSafe --webhook "$SLACK_OR_DISCORD_WEBHOOK_URL"
+//
+// On a multisig, one person proposes a payment and the others sign what the
+// screen shows them. None of them pasted the address, so a lookalike (address
+// poisoning) or a first-ever payment to a stranger is easy to sign. Rein reads
+// the Safe's queued transactions from Safe's transaction service and checks
+// each payee against what that Safe has actually paid before, from public
+// chain data. It flags:
+//   - a payee that starts and ends like one the Safe has paid, or like an
+//     owner, but is a different address (address poisoning);
+//   - a payee that only ever appears in fake transfers made to look like the
+//     Safe sent them;
+//   - a first payment to an address it has never paid, over --min-usd;
+//   - a payment far above anything it has sent in that token;
+//   - a delegatecall to anything but Safe's own MultiSend, and changes to
+//     the Safe's owners, threshold, modules or guard.
+// It holds no key and signs nothing: it can only warn. Each flagged
+// transaction is posted once.
+const fs = require("fs");
+const path = require("path");
+const { ethers } = require("ethers");
+const { fetchHistory, toTrail, CHAINS } = require("./blockscout");
+const { NATIVE } = require("./evaluate");
+const { namer, money } = require("./index");
+const { looksLike, home } = require("./guard");
+
+const SAFE_API = "https://api.safe.global/tx-service";
+// Safe's client gateway, which the Safe{Wallet} app itself reads: public, no key.
+const SAFE_GATEWAY = "https://safe-client.safe.global";
+const SHORT = { base: "base", ethereum: "eth", "base-sepolia": "basesep" };
+// Safe's own batching contracts (v1.3.0 and v1.4.1): a delegatecall to these
+// is how the Safe app sends several calls at once.
+const MULTISEND = new Set(
+  ["0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761", "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D", "0x998739BFdAAdde7C933B942a68053933098f9EDa", "0xA1dabEF33b3B82c7814B6D82A79e50F4AC44102B", "0x38869bf66a61cF6bDB996A6aE40D5853Fd43B526", "0x9641d764fc13c8B624c04430C7356C1C7C8102e2"].map((a) => a.toLowerCase()),
+);
+const CONTROL = new Set(["addOwnerWithThreshold", "removeOwner", "swapOwner", "changeThreshold", "enableModule", "disableModule", "setGuard", "setModuleGuard", "setFallbackHandler"]);
+const STABLES = /^(USDC|USDbC|USDT|DAI|USDS|EURC|PYUSD)$/i;
+const ERC20 = new ethers.Interface(["function transfer(address to, uint256 value)", "function approve(address spender, uint256 value)", "function transferFrom(address from, address to, uint256 value)"]);
+const MULTI = new ethers.Interface(["function multiSend(bytes transactions)"]);
+
+const short = (a) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const dollars = (n) => (n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e4 ? `$${Math.round(n / 1e3)}k` : `$${Math.round(n).toLocaleString("en-US")}`);
+
+// -- Safe's transaction service ---------------------------------------------------
+
+function safeApi(chain, { url = null, apiKey = null, fetch: fetchImpl = globalThis.fetch } = {}) {
+  if (!url && !apiKey) return safeGateway(chain, { fetch: fetchImpl });
+  const base = (url || (SHORT[chain] ? `${SAFE_API}/${SHORT[chain]}/api` : null))?.replace(/\/$/, "");
+  if (!base) throw new Error(`Safe's transaction service has no "${chain}"; pass --safe-api <url>`);
+  if (!url && !apiKey) throw new Error("Safe's transaction service needs an API key: get one free at developer.safe.global and set SAFE_API_KEY (or pass --safe-api for your own service)");
+  const get = async (p) => {
+    const res = await fetchImpl(`${base}${p}`, { headers: { accept: "application/json", ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}) } });
+    if (res.status === 404) throw new Error("Safe's transaction service has no Safe at that address on this chain");
+    if (!res.ok) throw new Error(`Safe's transaction service answered ${res.status}`);
+    return res.json();
+  };
+  return {
+    info: (safe) => get(`/v1/safes/${safe}/`),
+    queue: async (safe, nonce) => (await get(`/v1/safes/${safe}/multisig-transactions/?executed=false&nonce__gte=${nonce}&ordering=nonce&limit=100`)).results || [],
+  };
+}
+
+/// The same, from Safe's client gateway, shaped like the transaction service's
+/// answers. No key needed, so a Safe's owners set up nothing but the webhook.
+function safeGateway(chain, { url = SAFE_GATEWAY, fetch: fetchImpl = globalThis.fetch } = {}) {
+  const chainId = CHAINS[chain]?.chainId;
+  if (!chainId) throw new Error(`unknown chain "${chain}"`);
+  const base = `${url.replace(/\/$/, "")}/v1/chains/${chainId}`;
+  const get = async (p) => {
+    const res = await fetchImpl(`${base}${p}`, { headers: { accept: "application/json" } });
+    if (res.status === 404) throw new Error("Safe has no Safe at that address on this chain");
+    if (!res.ok) throw new Error(`Safe's gateway answered ${res.status}`);
+    return res.json();
+  };
+  const value = (x) => (x && typeof x === "object" ? x.value : x);
+  return {
+    info: async (safe) => {
+      const i = await get(`/safes/${safe}`);
+      return { nonce: i.nonce, threshold: i.threshold, owners: (i.owners || []).map(value) };
+    },
+    queue: async (safe) => {
+      const page = await get(`/safes/${safe}/transactions/queued`);
+      const ids = (page.results || []).filter((x) => x.type === "TRANSACTION" && x.transaction?.id).map((x) => x.transaction.id);
+      const out = [];
+      for (const id of ids) {
+        const d = await get(`/transactions/${id}`);
+        const t = d.txData || {};
+        const e = d.detailedExecutionInfo || {};
+        out.push({
+          nonce: e.nonce,
+          safeTxHash: e.safeTxHash || id,
+          to: value(t.to),
+          value: t.value || "0",
+          data: t.hexData || "0x",
+          operation: t.operation || 0,
+          dataDecoded: t.dataDecoded || null,
+          confirmations: e.confirmations || [],
+          confirmationsRequired: e.confirmationsRequired,
+          isExecuted: d.txStatus === "SUCCESS",
+        });
+      }
+      return out;
+    },
+  };
+}
+
+// -- reading a queued transaction -------------------------------------------------
+
+/// The calls a queued Safe transaction makes: one, or each call of a MultiSend.
+function callsOf(tx) {
+  const to = ethers.getAddress(tx.to);
+  const op = Number(tx.operation || 0);
+  if (op === 1) {
+    if (!MULTISEND.has(to.toLowerCase())) return { calls: [], danger: `it hands control of the Safe to the contract ${to} for one call (a delegatecall), which can move anything` };
+    try {
+      const [packed] = MULTI.decodeFunctionData("multiSend", tx.data);
+      return { calls: unpackMultiSend(packed) };
+    } catch {
+      return { calls: [], danger: "it batches calls Rein can't read" };
+    }
+  }
+  return { calls: [{ to, value: BigInt(tx.value || 0), data: tx.data || "0x", operation: 0 }] };
+}
+
+/// MultiSend's packed bytes: operation (1), to (20), value (32), length (32), data.
+function unpackMultiSend(hex) {
+  const b = ethers.getBytes(hex);
+  const out = [];
+  let i = 0;
+  while (i < b.length) {
+    const operation = b[i];
+    const to = ethers.getAddress(ethers.hexlify(b.slice(i + 1, i + 21)));
+    const value = BigInt(ethers.hexlify(b.slice(i + 21, i + 53)));
+    const len = Number(BigInt(ethers.hexlify(b.slice(i + 53, i + 85))));
+    const data = ethers.hexlify(b.slice(i + 85, i + 85 + len));
+    out.push({ to, value, data, operation });
+    i += 85 + len;
+  }
+  return out;
+}
+
+/// What one call moves: { kind, token, payee, raw } or a plain contract call.
+function moveOf(c) {
+  if (c.data && c.data !== "0x" && c.data.length >= 10) {
+    try {
+      const d = ERC20.parseTransaction({ data: c.data });
+      if (d.name === "transfer") return { kind: "transfer", token: c.to, payee: ethers.getAddress(d.args[0]), raw: d.args[1] };
+      if (d.name === "transferFrom") return { kind: "transfer", token: c.to, payee: ethers.getAddress(d.args[1]), raw: d.args[2] };
+      if (d.name === "approve") return { kind: "approve", token: c.to, payee: ethers.getAddress(d.args[0]), raw: d.args[1] };
+    } catch {
+      // not a token call
+    }
+    return { kind: "call", target: c.to, selector: c.data.slice(0, 10) };
+  }
+  return { kind: "transfer", token: NATIVE, payee: c.to, raw: c.value };
+}
+
+// -- what the Safe has done -------------------------------------------------------
+
+/// What Rein knows about a Safe from its public history: who it has paid, the
+/// largest it has sent in each token, who it has approved, and the addresses
+/// that appear only in fake transfers made to look like it sent them.
+function habits(history, { owners = [] } = {}) {
+  const { rows, tokens, ignored = [] } = toTrail(history, { payments: true });
+  const own = rows.filter((r) => !r.derived);
+  const paid = new Map();
+  const largest = {};
+  const spenders = new Set();
+  for (const r of own) {
+    if (!r.payee) continue;
+    if (r.kind === "approve") spenders.add(r.payee.toLowerCase());
+    else if (r.kind === "transfer" || r.kind === "transferFrom") {
+      paid.set(r.payee.toLowerCase(), (paid.get(r.payee.toLowerCase()) || 0) + 1);
+      if (r.token) largest[r.token.toLowerCase()] = Math.max(largest[r.token.toLowerCase()] || 0, Number(r.amount));
+    }
+  }
+  const fakes = new Set(ignored.map((x) => x.payee && x.payee.toLowerCase()).filter(Boolean));
+  const rate = (t) => (t === NATIVE ? (history.info?.exchange_rate != null ? Number(history.info.exchange_rate) : null) : tokens[t]?.rate ?? (STABLES.test(tokens[t]?.symbol || "") ? 1 : null));
+  return { paid, largest, spenders, fakes, tokens, rate, owners: owners.map((o) => ethers.getAddress(o)), name: namer(history, tokens), payments: own.length, ignored };
+}
+
+/// The findings for one queued transaction: [{ level: "danger" | "warn", why }].
+function judge(tx, h, { safe, minUsd = 1000 }) {
+  const found = [];
+  const { calls, danger } = callsOf(tx);
+  if (danger) found.push({ level: "danger", why: danger });
+  const what = [];
+  for (const c of calls) {
+    if (c.operation === 1) found.push({ level: "danger", why: `one of its calls is a delegatecall to ${c.to}, which can move anything the Safe holds` });
+    const m = moveOf(c);
+    if (m.kind === "call") {
+      if (c.to.toLowerCase() === safe.toLowerCase()) {
+        let name = null;
+        try {
+          name = tx.dataDecoded?.method || new ethers.Interface(["function addOwnerWithThreshold(address,uint256)", "function removeOwner(address,address,uint256)", "function swapOwner(address,address,address)", "function changeThreshold(uint256)", "function enableModule(address)", "function disableModule(address,address)", "function setGuard(address)", "function setFallbackHandler(address)"]).parseTransaction({ data: c.data })?.name;
+        } catch {
+          name = null;
+        }
+        if (name && CONTROL.has(name)) found.push({ level: "warn", why: `it changes who controls the Safe (${name})` });
+        what.push(name ? `${name} on the Safe` : "a call to the Safe itself");
+      } else what.push(`a call to ${h.name(c.to)}`);
+      continue;
+    }
+    const known = h.tokens[m.token] || h.tokens[ethers.getAddress(m.token === NATIVE ? ethers.ZeroAddress : m.token)];
+    const decimals = m.token === NATIVE ? 18 : known?.decimals;
+    const symbol = m.token === NATIVE ? "ETH" : known?.symbol || short(m.token);
+    const amount = decimals != null ? Number(ethers.formatUnits(m.raw, decimals)) : null;
+    const rate = h.rate(m.token);
+    const usd = amount != null && rate != null ? amount * rate : null;
+    const shown = `${amount != null ? money(amount) : "an unknown amount of"} ${symbol}${usd != null && usd >= 1 && !STABLES.test(symbol) ? ` (${dollars(usd)})` : ""}`;
+    const payee = m.payee;
+    const key = payee.toLowerCase();
+    if (m.kind === "approve") {
+      what.push(`let ${h.name(payee)} spend ${m.raw === ethers.MaxUint256 ? `all its ${symbol}` : shown}`);
+      if (!h.spenders.has(key) && !h.paid.has(key)) found.push({ level: "warn", why: `it lets ${payee} spend the Safe's ${symbol}, and the Safe has never approved that address before` });
+      continue;
+    }
+    what.push(`pay ${shown} to ${h.name(payee)}`);
+    const twin = [...h.paid.keys()].map((p) => ethers.getAddress(p)).find((p) => looksLike(p, payee)) || h.owners.find((o) => looksLike(o, payee));
+    if (twin) {
+      const owner = h.owners.some((o) => o === twin);
+      const label = h.name(twin);
+      found.push({ level: "danger", why: `${payee} starts and ends like ${label.startsWith("0x") ? twin : `${label} (${twin})`}, ${owner ? "one of the Safe's owners" : "an address the Safe has paid"}, but it is a different address: the mark of address poisoning. Check every character before signing` });
+    } else if (h.fakes.has(key)) {
+      found.push({ level: "danger", why: `${payee} has only ever appeared in fake transfers made to look like the Safe sent them: address poisoning` });
+    } else if (!h.paid.has(key) && (usd == null || usd >= minUsd)) {
+      found.push({ level: "warn", why: `the Safe has never paid ${payee} before${usd != null ? `, and this is ${dollars(usd)}` : ", and Rein can't price this token"}. Confirm the address with the payee through another channel` });
+    }
+    const top = h.largest[m.token.toLowerCase()];
+    if (h.paid.has(key) && top && amount != null && amount > 3 * top && (usd == null || usd >= minUsd)) {
+      found.push({ level: "warn", why: `${shown} is more than 3× the most this Safe has ever sent in ${symbol} (${money(top)})` });
+    }
+  }
+  return { what: what.join(", then ") || "nothing Rein can read", found };
+}
+
+// -- one pass ---------------------------------------------------------------------
+
+const statePath = (safe, env) => path.join(home(env), "safes", `${safe.toLowerCase()}.json`);
+function loadState(file) {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    return { posted: {} };
+  }
+}
+function saveState(state, file) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, `${JSON.stringify(state, null, 2)}\n`);
+  fs.renameSync(tmp, file);
+}
+
+/// Reads the queue and judges each pending transaction. Returns
+/// { safe, threshold, owners, nonce, queue: [{ nonce, safeTxHash, signed, needed, what, found }], fresh }
+/// where `fresh` are the flagged ones not posted before.
+async function watchOnce(address, { chain = "base", api = null, safeApi: given = null, apiKey = null, safeUrl = null, fetch: fetchImpl = globalThis.fetch, env = process.env, minUsd = 1000, history = null } = {}) {
+  const safe = ethers.getAddress(address);
+  const service = given || safeApi(chain, { url: safeUrl, apiKey, fetch: fetchImpl });
+  const info = await service.info(safe);
+  const nonce = Number(info.nonce || 0);
+  const pending = await service.queue(safe, nonce);
+  const hist = history || (await fetchHistory(safe, { chain, api, fetch: fetchImpl }));
+  const h = habits(hist, { owners: info.owners || [] });
+  const queue = pending
+    .filter((t) => !t.isExecuted && Number(t.nonce) >= nonce)
+    .map((t) => ({
+      nonce: Number(t.nonce),
+      safeTxHash: t.safeTxHash,
+      signed: (t.confirmations || []).length,
+      needed: Number(t.confirmationsRequired || info.threshold || 0),
+      proposer: t.proposer || null,
+      ...judge(t, h, { safe, minUsd }),
+    }));
+  const file = statePath(safe, env);
+  const state = loadState(file);
+  const fresh = queue.filter((q) => q.found.length && state.posted[q.safeTxHash] !== q.found.map((f) => f.why).join("|"));
+  for (const q of fresh) state.posted[q.safeTxHash] = q.found.map((f) => f.why).join("|");
+  // Forget what has left the queue (executed or replaced).
+  const live = new Set(queue.map((q) => q.safeTxHash));
+  for (const k of Object.keys(state.posted)) if (!live.has(k)) delete state.posted[k];
+  saveState(state, file);
+  return { safe, chain, threshold: Number(info.threshold || 0), owners: info.owners || [], nonce, payments: h.payments, poisoning: h.ignored.length, queue, fresh };
+}
+
+function text(r, { only = null } = {}) {
+  const L = [];
+  const list = only || r.queue;
+  if (!only) {
+    L.push(`Safe ${r.safe} on ${CHAINS[r.chain]?.name || r.chain}: ${r.threshold} of ${r.owners.length} owners sign. Rein knows ${plural(r.payments, "payment")} it has made${r.poisoning ? `, and ignored ${plural(r.poisoning, "fake transfer")} made to look like it sent them (address poisoning)` : ""}.`);
+    if (!list.length) L.push("Nothing is waiting to be signed.");
+  }
+  for (const q of list) {
+    const mark = q.found.some((f) => f.level === "danger") ? "DON'T SIGN YET" : q.found.length ? "Check first" : "Looks normal";
+    L.push(`#${q.nonce} (${q.signed} of ${q.needed} signed): ${q.what}. ${mark}${q.found.length ? ":" : "."}`);
+    for (const f of q.found) L.push(`  - ${f.why}.`);
+  }
+  return L.join("\n");
+}
+
+function alertText(r) {
+  const n = r.fresh.length;
+  return [`*Rein, before you sign:* ${plural(n, "transaction")} in the queue of Safe ${short(r.safe)} need${n === 1 ? "s" : ""} a second look.`, text(r, { only: r.fresh })].join("\n");
+}
+
+// -- command line ---------------------------------------------------------------------
+
+const USAGE = `usage: rein safe <safe address> [--chain base|ethereum|base-sepolia] [--webhook URL] [--every 300] [--min-usd 1000] [--json]
+  Reads the Safe's queued transactions and checks each payee against what the Safe has paid before.
+  Flags lookalike addresses (address poisoning), first payments to new addresses over --min-usd,
+  amounts far above its usual, delegatecalls and changes to owners or threshold. Holds no key.
+  Reads the queue from Safe's public gateway; with SAFE_API_KEY (developer.safe.global) or --safe-api <url>
+  it uses Safe's transaction service instead.
+  --webhook posts each flagged transaction once to Slack, Discord or Telegram; --every keeps watching.`;
+
+function parse(argv) {
+  const o = { address: null, chain: "base", api: null, safeUrl: null, webhook: process.env.REIN_WEBHOOK || null, every: 0, minUsd: 1000, json: false };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--chain") o.chain = argv[++i];
+    else if (a === "--api") o.api = argv[++i];
+    else if (a === "--safe-api") o.safeUrl = argv[++i];
+    else if (a === "--webhook") o.webhook = argv[++i];
+    else if (a === "--every") o.every = Number(argv[++i]);
+    else if (a === "--min-usd") o.minUsd = Number(argv[++i]);
+    else if (a === "--json") o.json = true;
+    else if (a === "-h" || a === "--help") o.help = true;
+    else if (!a.startsWith("-") && !o.address) o.address = a;
+    else throw new Error(`unknown flag ${a}`);
+  }
+  if (!o.help && !o.address) throw new Error("which Safe? rein safe 0x…");
+  if (o.address && !ethers.isAddress(o.address)) throw new Error(`${o.address} isn't an address`);
+  if (!Number.isFinite(o.minUsd) || o.minUsd < 0) throw new Error("--min-usd takes a number of dollars");
+  if (o.webhook && !/^https:\/\//.test(o.webhook)) throw new Error("--webhook must be an https URL");
+  return o;
+}
+
+async function post(webhook, textBody, fetchImpl) {
+  // Slack reads "text", Discord "content", Telegram's sendMessage "text" (with chat_id in the URL).
+  const res = await fetchImpl(webhook, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: textBody, content: textBody.slice(0, 2000) }) });
+  if (!res.ok) throw new Error(`the webhook answered ${res.status}`);
+}
+
+async function main(argv, { log = console.log, env = process.env, fetch: fetchImpl = globalThis.fetch } = {}) {
+  const o = parse(argv);
+  if (o.help) {
+    log(USAGE);
+    return 0;
+  }
+  const run = async () => {
+    const r = await watchOnce(o.address, { chain: o.chain, api: o.api, safeUrl: o.safeUrl, apiKey: env.SAFE_API_KEY || null, fetch: fetchImpl, env, minUsd: o.minUsd });
+    if (o.json) log(JSON.stringify(r, null, 2));
+    else log(text(r));
+    if (o.webhook && r.fresh.length) await post(o.webhook, alertText(r), fetchImpl).catch((err) => log(`could not post the alert: ${err.message}`));
+    return r;
+  };
+  if (!o.every) {
+    const r = await run();
+    return r.queue.some((q) => q.found.some((f) => f.level === "danger")) ? 1 : 0;
+  }
+  log(`Watching Safe ${o.address}'s queue every ${o.every}s.`);
+  for (;;) {
+    await run().catch((err) => log(`could not check: ${err.message}`));
+    await new Promise((res) => setTimeout(res, o.every * 1000));
+  }
+}
+
+module.exports = { main, parse, watchOnce, judge, habits, callsOf, unpackMultiSend, safeApi, safeGateway, text, alertText, USAGE };
