@@ -12,7 +12,9 @@
 // Credentials come from the environment, named as each vendor's SDK names
 // them, and never leave this machine except as the signed request:
 //
-//   Privy         PRIVY_APP_ID, PRIVY_APP_SECRET (Basic auth)
+//   Privy         PRIVY_APP_ID, PRIVY_APP_SECRET (Basic auth), and
+//                 PRIVY_AUTHORIZATION_KEY when the wallet has an owner whose
+//                 signature a change needs
 //   Turnkey       TURNKEY_API_PUBLIC_KEY, TURNKEY_API_PRIVATE_KEY (each request stamped)
 //   Coinbase CDP  CDP_API_KEY_ID, CDP_API_KEY_SECRET, and CDP_WALLET_SECRET for
 //                 the attach (a JWT per request; see scan/sign.js)
@@ -53,7 +55,12 @@ const NEEDS = {
 function authHeaders(vendor, req, body, env) {
   const h = { "content-type": "application/json" };
   if (vendor === "privy") {
-    return { ...h, "privy-app-id": env.PRIVY_APP_ID, authorization: `Basic ${Buffer.from(`${env.PRIVY_APP_ID}:${env.PRIVY_APP_SECRET}`).toString("base64")}` };
+    const out = { ...h, "privy-app-id": env.PRIVY_APP_ID, authorization: `Basic ${Buffer.from(`${env.PRIVY_APP_ID}:${env.PRIVY_APP_SECRET}`).toString("base64")}` };
+    // A wallet that has an owner changes only with the owner's signature.
+    if (env.PRIVY_AUTHORIZATION_KEY && req.method === "PATCH" && /\/wallets\//.test(req.url)) {
+      out["privy-authorization-signature"] = sign.privySignature({ method: req.method, url: req.url, body: JSON.parse(body), headers: { "privy-app-id": env.PRIVY_APP_ID } }, env.PRIVY_AUTHORIZATION_KEY);
+    }
+    return out;
   }
   if (vendor === "turnkey") {
     return { ...h, "X-Stamp": sign.turnkeyStamp(body, { publicKey: env.TURNKEY_API_PUBLIC_KEY, privateKey: env.TURNKEY_API_PRIVATE_KEY }) };
@@ -76,7 +83,7 @@ function created(vendor, body) {
   const a = body.activity || {};
   if (a.status && a.status !== "ACTIVITY_STATUS_COMPLETED") return { pending: a.status, activityId: a.id };
   const r = a.result || {};
-  return { id: r.createPolicyResult?.policyId || r.createSmartContractInterfaceResult?.smartContractInterfaceId };
+  return { id: r.createPolicyResult?.policyId || r.createSmartContractInterfaceResult?.smartContractInterfaceId || r.createApiOnlyUsersResult?.userIds?.[0] };
 }
 
 /// Runs (or, without `send`, prints) a plan. Resolves with the ids created.

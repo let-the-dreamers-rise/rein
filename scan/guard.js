@@ -472,14 +472,18 @@ function checkOnce(tx, opts, file, given) {
   // payment through once, and the agent's retry then passes.
   let hold = null;
   let approved = null;
+  let refused = null;
   if (!allow && reason !== "GUARD_ERROR") {
     const fp = fingerprint(tx);
     guard.holds = (guard.holds || []).filter((h) => h.until > now);
     approved = guard.holds.find((h) => h.fp === fp && h.status === "approved" && !h.used);
+    // A payment a person refused stays refused until the hold runs out,
+    // rather than asking them again on every retry.
+    refused = approved ? null : guard.holds.find((h) => h.fp === fp && h.status === "denied");
     if (approved) {
       approved.used = new Date(now * 1000).toISOString();
       allow = true;
-    } else {
+    } else if (!refused) {
       hold = guard.holds.find((h) => h.fp === fp && h.status === "waiting");
       if (!hold) {
         hold = { id: crypto.randomBytes(4).toString("hex"), fp, at: new Date(now * 1000).toISOString(), until: now + DAY, status: "waiting", reason };
@@ -507,6 +511,10 @@ function checkOnce(tx, opts, file, given) {
     verdict.held = hold.id;
     verdict.next = `Held for a person to approve. Don't retry another way. Tell the person, and retry this same payment once it is approved (rein-wallet guard ${guard.wallet} --allow ${hold.id}).`;
   }
+  if (refused) {
+    verdict.refused = refused.id;
+    verdict.next = "A person refused this payment. Don't retry it, or try it another way.";
+  }
   const tp = paid && guard.policy.tokens[paid.token];
   if (tp) {
     const mine = allow ? rows : [];
@@ -521,7 +529,7 @@ function checkOnce(tx, opts, file, given) {
   if (hold) delete hold.isNew;
   if (opts.record !== false && file) saveGuard(guard, file);
   // A hold already announced isn't announced again on every retry.
-  if (!allow && guard.webhook && opts.alert !== false && (!hold || isNew) && !guard.approvals) alert(guard, verdict, opts.fetch);
+  if (!allow && !refused && guard.webhook && opts.alert !== false && (!hold || isNew) && !guard.approvals) alert(guard, verdict, opts.fetch);
   return verdict;
 }
 

@@ -103,6 +103,37 @@ It stays on the shared limits until it has 20 calls of its own. Then its own
 limits take over the same way any update does: tighter ones at once, wider ones
 only after you run `--approve`.
 
+## Rein as a second key the wallet enforces
+
+`check` runs in the agent's own process, so an agent that has been talked into
+it can skip it. On Turnkey or Privy, Rein can be a second key instead: the
+wallet's own policy engine lets the agent sign alone inside the limits Rein
+learned, and anything else needs Rein's approval too. Rein's co-signer runs the
+same guard (hourly and daily totals included, which stateless vendor policies
+can't hold), approves what fits, and holds the rest for a person.
+
+```bash
+npx rein-wallet cosign keygen      # Rein's key: keep it where only the co-signer can read it
+
+# Turnkey: a co-signer user, and a policy needing both the agent and Rein outside the learned limits
+npx rein-wallet cosign setup turnkey --organization <org id> --agent-user <agent user id> --send
+npx rein-wallet cosign turnkey --organization <org id> --webhook "$SLACK_WEBHOOK_URL"
+
+# Privy: the agent alone signs inside the learned policy; the wallet's owner is any two of agent, Rein, admin
+npx rein-wallet cosign setup privy --wallet <id> --policy <learned policy id> --agent-key <key> --admin-key <key> --send
+npx rein-wallet cosign privy --port 8788
+```
+
+On Turnkey the co-signer watches for signing requests waiting on it and
+approves or rejects them there. On Privy the agent sends the request it is
+about to make to the co-signer's `/sign` and adds the signature it gets back;
+a 202 means a person is deciding. Rein only ever co-signs payments: never a
+change to the wallet, its owner or its policies, a raw signature, or an
+EIP-7702 delegation. For it to hold, the agent must not be in Turnkey's root
+quorum or have any other way to sign alone, and must not be able to read
+Rein's key. Both setups are written against Turnkey's and Privy's published
+API types and tested against fakes of them, not yet against a live account.
+
 ## Try it in Claude, with nothing to set up
 
 Give Claude a Rein account holding 50,000 test USDC, then try to talk it into

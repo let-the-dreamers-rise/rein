@@ -24,9 +24,9 @@ const { ethers } = require("ethers");
 const { NATIVE } = require("./evaluate");
 
 const CHAINS = {
-  base: { name: "Base", api: "https://base.blockscout.com", explorer: "https://base.blockscout.com" },
-  "base-sepolia": { name: "Base Sepolia", api: "https://base-sepolia.blockscout.com", explorer: "https://base-sepolia.blockscout.com" },
-  ethereum: { name: "Ethereum", api: "https://eth.blockscout.com", explorer: "https://eth.blockscout.com" },
+  base: { name: "Base", chainId: 8453, api: "https://base.blockscout.com", explorer: "https://base.blockscout.com" },
+  "base-sepolia": { name: "Base Sepolia", chainId: 84532, api: "https://base-sepolia.blockscout.com", explorer: "https://base-sepolia.blockscout.com" },
+  ethereum: { name: "Ethereum", chainId: 1, api: "https://eth.blockscout.com", explorer: "https://eth.blockscout.com" },
 };
 
 const ERC20 = new ethers.Interface([

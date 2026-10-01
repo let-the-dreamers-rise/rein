@@ -227,6 +227,10 @@ describe("rein guard", function () {
       expect(await guard.main([AGENT, "--deny", v.held], { log: (l) => lines.push(l), env })).to.equal(0);
       await guard.main([AGENT, "--holds"], { log: (l) => lines.push(l), env });
       expect(lines.join("\n")).to.contain("Refused").and.contain(`${v.held}  denied`);
+      // Asking again doesn't open a new hold: the refusal stands.
+      const again = rein.check(stranger(300), { env, now: Math.floor(Date.now() / 1000) + 5 });
+      expect(again).to.include({ allow: false, refused: v.held });
+      expect(again.held).to.equal(undefined);
     });
 
     it("lets a small first payment to a new address through when the owner sets a cap", () => {

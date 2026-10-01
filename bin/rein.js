@@ -7,6 +7,7 @@
 //                            hold every payment to them with rein.check(tx)
 //   rein fleet wallets.txt   what a second key would have held across many
 //                            agent wallets, posted to Slack (shadow mode)
+//   rein cosign turnkey      Rein as the second key the wallet vendor enforces
 //   rein try                 a hijacked agent against a real Rein account, in a
 //                            sandbox inside this process
 //   rein scan 0x…            the policy a wallet's history supports, and what it
@@ -35,6 +36,18 @@ const USAGE = `rein: a wallet your agent can operate and cannot drain.
   rein approvals --public-url URL --webhook <Slack URL>
       Posts each held payment to Slack with a link to approve or refuse it.
       Needs REIN_APPROVAL_SECRET, kept where the agent can't read it.
+
+  rein cosign setup turnkey --organization <org id> --agent-user <user id> [--send]
+  rein cosign turnkey --organization <org id> [--webhook URL]
+      Rein as a second key Turnkey enforces: the agent signs alone inside its
+      learned limits, and anything else waits for Rein's co-signer, which
+      approves what fits the hourly and daily limits and holds the rest for a
+      person. rein cosign keygen makes Rein's key.
+  rein cosign setup privy --wallet <id> --policy <id> --agent-key <key> --admin-key <key> [--send]
+  rein cosign privy [--port 8788]
+      The same for Privy, with key quorums: the agent signs alone inside its
+      learned policy, and anything else needs Rein's signature, which the
+      co-signer gives only to what fits.
 
   rein fleet <wallets.txt> [--since 30d] [--webhook URL] [--out dir]
       Shadow mode for many agent wallets: learns each one's limits from its
@@ -129,6 +142,8 @@ async function main(argv) {
       return require("../scan/fleet").main(rest);
     case "approvals":
       return require("../scan/approvals").main(rest);
+    case "cosign":
+      return require("../scan/cosign").main(rest);
     case "try":
       await require("./try").runTry();
       return 0;
