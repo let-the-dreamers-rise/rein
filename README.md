@@ -628,6 +628,10 @@ npm install
 npm test
 ```
 
+To release (Windows, from the repository folder): `scripts\release.cmd` pulls
+the release branch, publishes the npm package if its version isn't out yet,
+and redeploys the site.
+
 ## Chains
 
 Rein is not tied to a chain. The policy is plain Solidity compiled for the
