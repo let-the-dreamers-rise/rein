@@ -2,13 +2,51 @@
 
 [![test](https://github.com/let-the-dreamers-rise/rein/actions/workflows/test.yml/badge.svg)](https://github.com/let-the-dreamers-rise/rein/actions/workflows/test.yml)
 
-**A second key for AI agent wallets.** Rein learns what each agent normally
-pays from its own wallet history. Normal payments go through on the agent's
-key alone; an unusual one (a first payment to a new address, an address that
-only looks like one it pays, more than its history supports) waits for a
-person. Turnkey or Privy enforce it, so a hijacked agent can't skip it.
+**Know your payee before the last signature.** Rein checks every payment
+waiting in a Safe multisig against who that Safe has actually paid, and how
+much. It flags an address dressed up as one the Safe pays (address
+poisoning), a first payment to a stranger, an amount far above the usual for
+that payee, and changes to who controls the Safe, and it can tell your team's
+chat before anyone signs. Free, read-only, no keys.
 
-## Start here: check any agent wallet in seconds
+The same check runs as **a second key for AI agent wallets**: normal payments
+go through on the agent's key alone, and an unusual one waits for a person,
+enforced by Turnkey or Privy.
+
+## Start here: check a Safe's queue in seconds
+
+One person queues a payment and the others sign what the screen shows them.
+None of them pasted the address, so a lookalike is easy to sign. Rein checks
+every queued transaction against what the Safe has paid before:
+
+```
+npx rein-wallet safe 0xYourSafe          # or offline: npx rein-wallet safe --sample
+```
+
+```
+#41 (1 of 2 signed): pay 15 USDC to Inference API. Looks normal.
+#42 (1 of 2 signed): pay 48,000 USDC to 0xc64F…e299. DON'T SIGN YET:
+  - 0xc64F…e299 starts and ends like Inference API (0xC64f…e299), an address the Safe
+    has paid, but it is a different address: the mark of address poisoning.
+#43 (0 of 2 signed): pay 6,500 USDC to 0x6320…8F82. Check first:
+  - the Safe has never paid 0x6320…8F82 before, and this is $6,500.
+```
+
+Or paste the Safe at [rein-nine.vercel.app/safe](https://rein-nine.vercel.app/safe/).
+`--webhook URL --every 300` posts each flagged transaction once to Slack,
+Discord or Telegram, and [scan/safe-action.yml](scan/safe-action.yml) does the
+same from a GitHub Action with no server. It holds no key and needs none.
+
+In Safe{Wallet}, add `https://rein-nine.vercel.app/safe/` under Apps, My
+custom apps, Add custom Safe App: it opens on the Safe you're in and checks its
+queue, read-only.
+
+How this differs from what Safe{Wallet} shows: Safe's lookalike warning
+compares against each signer's own address book, not the Safe's history, and
+its "New recipient" label is moving to Safe Pro, Safe's paid plan. Neither checks
+the amount against what the Safe usually pays that payee.
+
+## An agent wallet: check it in seconds
 
 ```
 npx rein-wallet 0xAnyAgentWallet        # or try it offline: npx rein-wallet checkup --sample
@@ -34,30 +72,6 @@ Then ask about any payment in plain words (`--ask "send 500 USDC to 0x…"`),
 or see what a
 second key would have held across a whole fleet with `npx rein-wallet fleet
 wallets.txt`. In Claude, the `rein_check_wallet` tool does the same.
-
-## On a Safe multisig: check the queue before you sign
-
-One person queues a payment and the others sign what the screen shows them.
-None of them pasted the address, so a lookalike is easy to sign. Rein checks
-every queued transaction against what the Safe has paid before:
-
-```
-npx rein-wallet safe 0xYourSafe          # or offline: npx rein-wallet safe --sample
-```
-
-```
-#41 (1 of 2 signed): pay 15 USDC to Inference API. Looks normal.
-#42 (1 of 2 signed): pay 48,000 USDC to 0xc64F…e299. DON'T SIGN YET:
-  - 0xc64F…e299 starts and ends like Inference API (0xC64f…e299), an address the Safe
-    has paid, but it is a different address: the mark of address poisoning.
-#43 (0 of 2 signed): pay 6,500 USDC to 0x6320…8F82. Check first:
-  - the Safe has never paid 0x6320…8F82 before, and this is $6,500.
-```
-
-Or paste the Safe at [rein-nine.vercel.app/safe](https://rein-nine.vercel.app/safe/).
-`--webhook URL --every 300` posts each flagged transaction once to Slack,
-Discord or Telegram, and [scan/safe-action.yml](scan/safe-action.yml) does the
-same from a GitHub Action with no server. It holds no key and needs none.
 
 ## Switch it on: one line
 

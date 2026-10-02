@@ -1,9 +1,13 @@
 {
   "name": "rein-wallet",
   "version": "0.1.1",
-  "description": "Scan an AI agent's wallet for the spending policy its own history supports, put that policy on Privy, Turnkey or Coinbase CDP, and watch for anything outside it. Plus a smart account an agent can operate and cannot drain.",
+  "description": "Check every payment waiting in a Safe multisig against who that Safe has actually paid, and how much: lookalike addresses, first payments to strangers, unusual amounts, owner changes. The same check runs as a second key for AI agent wallets on Privy or Turnkey. Read-only, no keys.",
   "mcpName": "io.github.let-the-dreamers-rise/rein",
   "keywords": [
+    "safe",
+    "gnosis-safe",
+    "multisig",
+    "address-poisoning",
     "ai-agent",
     "agent-wallet",
     "wallet-policy",
