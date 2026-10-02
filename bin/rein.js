@@ -151,6 +151,10 @@ function parseApply(argv) {
 async function main(argv) {
   const [cmd, ...rest] = argv;
   switch (cmd) {
+    case "--version":
+    case "-v":
+      console.log(require("../package.json").version);
+      return 0;
     case "checkup":
       return require("../scan/checkup").main(rest);
     case "guard":

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rein · Terms</title>
+<meta name="description" content="The terms for the Rein website, the rein-wallet package, the Safe app and the GitHub Action.">
+<meta name="theme-color" content="#ff6a1a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23ff6a1a'/%3E%3Cpath d='M9 23V9h8.5a4.5 4.5 0 0 1 1.6 8.7L23 23h-3.6l-3.5-4.8H12V23z' fill='%23141210'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:oklch(0.985 0 0);
+  --surface:#fff;
+  --sunken:oklch(0.955 0.004 60);
+  --ink:oklch(0.21 0.012 60);
+  --ink-2:oklch(0.40 0.012 60);
+  --ink-3:oklch(0.55 0.010 60);
+  --hair:oklch(0.89 0.006 60);
+  --brand:oklch(0.70 0.20 45);
+  --brand-strong:oklch(0.64 0.21 42);
+  --brand-deep:oklch(0.50 0.16 40);
+  --brand-tint:oklch(0.96 0.03 55);
+  --ok:oklch(0.52 0.14 150);
+  --ok-tint:oklch(0.95 0.04 150);
+  --no:oklch(0.55 0.19 35);
+  --display:"Bricolage Grotesque","Helvetica Neue",Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--display);font-size:17px;line-height:1.55;-webkit-font-smoothing:antialiased}
+a{color:var(--brand-deep);text-decoration:none}
+a:hover{text-decoration:underline;text-underline-offset:3px}
+:focus-visible{outline:3px solid var(--brand);outline-offset:3px;border-radius:2px}
+h1,h2,h3{margin:0;font-weight:700;letter-spacing:-.02em;line-height:1.08;text-wrap:balance}
+p{margin:0;text-wrap:pretty}
+code,.mono{font-family:var(--mono);font-size:.88em}
+code{background:var(--sunken);padding:.1em .4em;border-radius:4px;overflow-wrap:anywhere}
+.wrap{max-width:980px;margin:0 auto;padding:0 clamp(16px,4vw,40px)}
+.tape{height:10px;background:repeating-linear-gradient(-45deg,var(--brand) 0 18px,var(--ink) 18px 36px)}
+.nav{border-bottom:1px solid var(--hair);background:var(--bg)}
+.nav .wrap{display:flex;align-items:center;gap:20px;height:60px}
+.mark{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px;color:var(--ink)}
+.mark svg{width:26px;height:26px}
+.nav .links{margin-left:auto;display:flex;gap:20px;font-size:15px}
+.nav .links a{color:var(--ink-2)}
+
+footer{border-top:1px solid var(--hair);padding:28px 0 40px;font-size:14px;color:var(--ink-3)}
+footer a{color:var(--ink-2)}
+main{padding:clamp(40px,7vw,72px) 0 56px}
+main h1{font-size:clamp(2rem,4.6vw,3rem);font-weight:800;letter-spacing:-.03em}
+main .doc{max-width:68ch;margin-top:24px;display:grid;gap:16px;color:var(--ink-2)}
+main .doc b{color:var(--ink)}
+@media(max-width:560px){.nav .links{gap:14px;font-size:14px}}
+</style>
+</head>
+<body>
+<div class="tape" role="presentation"></div>
+<nav class="nav" aria-label="Primary">
+  <div class="wrap">
+    <a class="mark" href="../" aria-label="Rein, home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--brand)"/><path d="M9 23V9h8.5a4.5 4.5 0 0 1 1.6 8.7L23 23h-3.6l-3.5-4.8H12V23z" fill="var(--ink)"/></svg>
+      Rein
+    </a>
+    <div class="links"><a href="../safe/">Check a Safe</a><a href="https://github.com/let-the-dreamers-rise/rein">GitHub</a></div>
+  </div>
+</nav>
+<main>
+  <div class="wrap">
+    <h1>Rein terms</h1>
+    <div class="doc">
+      <p>Last updated: 2 October 2026</p>
+      <p>Rein checks payments before you approve them. It reads public blockchain data and tells you when a payment looks unusual compared with your own history. These terms cover the Rein website, the <code>rein-wallet</code> package, the Safe app and the GitHub Action.</p>
+      <p><b>What Rein does.</b> Rein reads public data (your Safe's queue and history, public transactions) and gives you a result such as "Looks normal", "Check first" or "Don't sign yet". It can warn you or hold a payment for a person to approve. It can't send, move or freeze your money, and it never asks for your private keys or seed phrase.</p>
+      <p><b>What Rein doesn't promise.</b> Rein is a second opinion. It can miss things, and it can warn about payments that are fine. "Looks normal" means nothing matched Rein's checks; it doesn't mean a payment is safe. You decide whether to sign, and you're responsible for the payments you approve.</p>
+      <p><b>No warranty.</b> Rein is provided "as is", without warranties of any kind. The code is open source under the MIT License.</p>
+      <p><b>Limits on our liability.</b> To the extent the law allows, Rein isn't liable for any loss of funds, lost profits, or indirect or consequential damages from using it or relying on it. If you pay for Rein, our total liability is limited to what you paid us in the 12 months before the claim. Free use: zero.</p>
+      <p><b>Your part.</b> Don't use Rein to break the law or to attack the services it reads from. Keep your own webhook URLs and keys secret; Rein never needs them on our side.</p>
+      <p><b>Paid plans.</b> If you buy a review or a plan, the order or invoice says what you get and for how long. These terms apply unless that order says otherwise.</p>
+      <p><b>Changes.</b> We may update these terms; the date above changes when we do. Using Rein after a change means you accept it.</p>
+      <p><b>Law.</b> These terms are governed by the laws of India.</p>
+    </div>
+  </div>
+</main>
+<footer>
+  <div class="wrap"><a href="../terms/">Terms</a> · <a href="../privacy/">Privacy</a> · <a href="https://github.com/let-the-dreamers-rise/rein">Source (MIT)</a></div>
+</footer>
+</body>
+</html>

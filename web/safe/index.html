@@ -219,7 +219,7 @@ details.more>summary{cursor:pointer;font-weight:600;padding:14px 4px;color:var(-
 </main>
 
 <footer>
-  <div class="wrap">Rein reads queued transactions from Safe's public service (through this site's read-only pass-through if Safe refuses the browser) and the Safe's history from <a href="https://www.blockscout.com/">Blockscout</a>. It's the same code as <code>npx rein-wallet safe</code>; read it at <a href="https://github.com/let-the-dreamers-rise/rein/blob/main/scan/safe.js">github.com/let-the-dreamers-rise/rein</a>. MIT.</div>
+  <div class="wrap">Rein reads queued transactions from Safe's public service (through this site's read-only pass-through if Safe refuses the browser) and the Safe's history from <a href="https://www.blockscout.com/">Blockscout</a>. It's the same code as <code>npx rein-wallet safe</code>; read it at <a href="https://github.com/let-the-dreamers-rise/rein/blob/main/scan/safe.js">github.com/let-the-dreamers-rise/rein</a>. MIT. <a href="../terms/">Terms</a> · <a href="../privacy/">Privacy</a></div>
 </footer>
 
 <script src="../scan/rein-scan.js"></script>
@@ -240,7 +240,7 @@ details.more>summary{cursor:pointer;font-weight:600;padding:14px 4px;color:var(-
         ? `Don't sign yet: ${danger} of the ${r.queue.length} queued transaction${r.queue.length === 1 ? "" : "s"} ${danger === 1 ? "pays" : "pay"} an address that only looks like one this Safe uses.`
         : warn
           ? `${warn} of the ${r.queue.length} queued transaction${r.queue.length === 1 ? "" : "s"} need${warn === 1 ? "s" : ""} a second look before the last signature.`
-          : `All ${r.queue.length} queued transaction${r.queue.length === 1 ? "" : "s"} fit what this Safe normally does.`;
+          : `All ${r.queue.length} queued transaction${r.queue.length === 1 ? "" : "s"} fit what this Safe normally does. This isn't a guarantee.`;
     $("synthetic").hidden = !synthetic;
     const list = $("queue");
     list.replaceChildren();
@@ -250,6 +250,7 @@ details.more>summary{cursor:pointer;font-weight:600;padding:14px 4px;color:var(-
       const line = el("div", null, "line");
       const l = lvl(q);
       line.append(el("span", `#${q.nonce}`, "n"), el("span", q.what, "what"), el("span", l === "danger" ? "Don't sign yet" : l === "warn" ? "Check first" : "Looks normal", `tag ${l}`), el("span", `${q.signed} of ${q.needed} signed`, "signed"));
+      if (l === "ok") line.append(el("span", "This isn't a guarantee", "signed"));
       d.append(line);
       if (q.found.length) { const ul = el("ul"); for (const f of q.found) ul.append(el("li", `${f.why}.`)); d.append(ul); }
       list.append(d);

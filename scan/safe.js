@@ -74,7 +74,7 @@ function safeGateway(chain, { url = SAFE_GATEWAY, fetch: fetchImpl = globalThis.
   const base = `${url.replace(/\/$/, "")}/v1/chains/${chainId}`;
   const get = async (p) => {
     const res = await fetchImpl(p.startsWith("http") ? p : `${base}${p}`, { headers: { accept: "application/json" } });
-    if (res.status === 404) throw new Error("there is no Safe at that address on this chain");
+    if (res.status === 404) throw new Error(`there is no Safe at that address on ${CHAINS[chain].name}${chain === "base" ? " (on Ethereum? choose Ethereum, or add --chain ethereum)" : chain === "ethereum" ? " (on Base? choose Base, or add --chain base)" : ""}`);
     if (!res.ok) throw new Error(`Safe's gateway answered ${res.status}`);
     return res.json();
   };
@@ -437,7 +437,7 @@ function text(r, { only = null } = {}) {
     if (!list.length) L.push("Nothing is waiting to be signed.");
   }
   for (const q of list) {
-    const mark = q.found.some((f) => f.level === "danger") ? "DON'T SIGN YET" : q.found.some((f) => f.level === "warn") ? "Check first" : "Looks normal";
+    const mark = q.found.some((f) => f.level === "danger") ? "DON'T SIGN YET" : q.found.some((f) => f.level === "warn") ? "Check first" : "Looks normal (this isn't a guarantee)";
     L.push(`#${q.nonce} (${q.signed} of ${q.needed} signed): ${q.what}. ${mark}${q.found.length ? ":" : "."}`);
     for (const f of q.found) L.push(`  - ${f.why}.`);
   }

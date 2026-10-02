@@ -24,7 +24,7 @@ npx rein-wallet safe 0xYourSafe          # or offline: npx rein-wallet safe --sa
 ```
 
 ```
-#41 (1 of 2 signed): pay 15 USDC to Inference API. Looks normal.
+#41 (1 of 2 signed): pay 15 USDC to Inference API. Looks normal (this isn't a guarantee).
 #42 (1 of 2 signed): pay 48,000 USDC to 0xc64F…e299. DON'T SIGN YET:
   - 0xc64F…e299 starts and ends like Inference API (0xC64f…e299), an address the Safe
     has paid, but it is a different address: the mark of address poisoning.

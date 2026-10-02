@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rein · Privacy</title>
+<meta name="description" content="What Rein collects: nothing. What leaves your machine, and to whom.">
+<meta name="theme-color" content="#ff6a1a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23ff6a1a'/%3E%3Cpath d='M9 23V9h8.5a4.5 4.5 0 0 1 1.6 8.7L23 23h-3.6l-3.5-4.8H12V23z' fill='%23141210'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:oklch(0.985 0 0);
+  --surface:#fff;
+  --sunken:oklch(0.955 0.004 60);
+  --ink:oklch(0.21 0.012 60);
+  --ink-2:oklch(0.40 0.012 60);
+  --ink-3:oklch(0.55 0.010 60);
+  --hair:oklch(0.89 0.006 60);
+  --brand:oklch(0.70 0.20 45);
+  --brand-strong:oklch(0.64 0.21 42);
+  --brand-deep:oklch(0.50 0.16 40);
+  --brand-tint:oklch(0.96 0.03 55);
+  --ok:oklch(0.52 0.14 150);
+  --ok-tint:oklch(0.95 0.04 150);
+  --no:oklch(0.55 0.19 35);
+  --display:"Bricolage Grotesque","Helvetica Neue",Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--display);font-size:17px;line-height:1.55;-webkit-font-smoothing:antialiased}
+a{color:var(--brand-deep);text-decoration:none}
+a:hover{text-decoration:underline;text-underline-offset:3px}
+:focus-visible{outline:3px solid var(--brand);outline-offset:3px;border-radius:2px}
+h1,h2,h3{margin:0;font-weight:700;letter-spacing:-.02em;line-height:1.08;text-wrap:balance}
+p{margin:0;text-wrap:pretty}
+code,.mono{font-family:var(--mono);font-size:.88em}
+code{background:var(--sunken);padding:.1em .4em;border-radius:4px;overflow-wrap:anywhere}
+.wrap{max-width:980px;margin:0 auto;padding:0 clamp(16px,4vw,40px)}
+.tape{height:10px;background:repeating-linear-gradient(-45deg,var(--brand) 0 18px,var(--ink) 18px 36px)}
+.nav{border-bottom:1px solid var(--hair);background:var(--bg)}
+.nav .wrap{display:flex;align-items:center;gap:20px;height:60px}
+.mark{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px;color:var(--ink)}
+.mark svg{width:26px;height:26px}
+.nav .links{margin-left:auto;display:flex;gap:20px;font-size:15px}
+.nav .links a{color:var(--ink-2)}
+
+footer{border-top:1px solid var(--hair);padding:28px 0 40px;font-size:14px;color:var(--ink-3)}
+footer a{color:var(--ink-2)}
+main{padding:clamp(40px,7vw,72px) 0 56px}
+main h1{font-size:clamp(2rem,4.6vw,3rem);font-weight:800;letter-spacing:-.03em}
+main .doc{max-width:68ch;margin-top:24px;display:grid;gap:16px;color:var(--ink-2)}
+main .doc b{color:var(--ink)}
+@media(max-width:560px){.nav .links{gap:14px;font-size:14px}}
+</style>
+</head>
+<body>
+<div class="tape" role="presentation"></div>
+<nav class="nav" aria-label="Primary">
+  <div class="wrap">
+    <a class="mark" href="../" aria-label="Rein, home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--brand)"/><path d="M9 23V9h8.5a4.5 4.5 0 0 1 1.6 8.7L23 23h-3.6l-3.5-4.8H12V23z" fill="var(--ink)"/></svg>
+      Rein
+    </a>
+    <div class="links"><a href="../safe/">Check a Safe</a><a href="https://github.com/let-the-dreamers-rise/rein">GitHub</a></div>
+  </div>
+</nav>
+<main>
+  <div class="wrap">
+    <h1>Rein privacy</h1>
+    <div class="doc">
+      <p>Last updated: 2 October 2026</p>
+      <p><b>Short version: Rein doesn't collect your data.</b> The checks run on your machine, in your GitHub account or in your browser. We have no accounts, no cookies and no analytics.</p>
+      <p><b>What leaves your machine, and to whom.</b> To check a payment, Rein asks public services for public blockchain data: Safe's public transaction service (safe-client.safe.global), block explorers such as Blockscout, and public RPC nodes. Those services see your IP address and the addresses you ask about, under their own privacy policies. If you set up alerts, Rein posts to the Slack, Discord or Telegram address you give it, and nowhere else.</p>
+      <p><b>The website.</b> The page at /safe can fetch a Safe's public queue through our relay when Safe's service blocks the browser. The relay passes the request straight through and stores nothing. Our host, Vercel, keeps standard request logs (which include IP addresses) for a short time under its own policy.</p>
+      <p><b>If you email us.</b> We keep your email so we can reply. We don't sell it or share it, and we'll delete it if you ask.</p>
+      <p><b>Wallet addresses.</b> Blockchain addresses and transactions are public. Rein doesn't link them to names, and we don't publish anything about a specific wallet without its owner's agreement.</p>
+    </div>
+  </div>
+</main>
+<footer>
+  <div class="wrap"><a href="../terms/">Terms</a> · <a href="../privacy/">Privacy</a> · <a href="https://github.com/let-the-dreamers-rise/rein">Source (MIT)</a></div>
+</footer>
+</body>
+</html>

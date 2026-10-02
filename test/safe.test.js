@@ -82,7 +82,7 @@ describe("rein safe", function () {
     expect(r.queue[0].found.map((f) => f.why).join()).to.contain("more than 3× the most this Safe has ever paid Inference API");
     const lines = [];
     expect(await safe.main(["--sample"], { log: (l) => lines.push(l) })).to.equal(1);
-    expect(lines.join("\n")).to.contain("made-up sample Safe").and.contain("#41 (1 of 2 signed): pay 15 USDC to Inference API. Looks normal.").and.contain("#42 (1 of 2 signed): pay 48,000 USDC");
+    expect(lines.join("\n")).to.contain("made-up sample Safe").and.contain("#41 (1 of 2 signed): pay 15 USDC to Inference API. Looks normal (this isn't a guarantee).").and.contain("#42 (1 of 2 signed): pay 48,000 USDC");
   });
 
   it("runs on the web page from the same bundle, keeping nothing", async () => {
@@ -126,7 +126,7 @@ describe("rein safe", function () {
       const r = await one(pay(someone("next grantee"), 5000));
       expect(r.queue[0].found.map((f) => f.level)).to.deep.equal(["info"]);
       expect(r.fresh).to.deep.equal([]);
-      expect(safe.text(r)).to.contain("Looks normal:").and.contain("pays new addresses often");
+      expect(safe.text(r)).to.contain("Looks normal (this isn't a guarantee):").and.contain("pays new addresses often");
       // A lookalike is still a lookalike.
       expect((await one(pay(fake, 5))).queue[0].found[0].level).to.equal("danger");
     });
@@ -239,6 +239,9 @@ describe("rein safe", function () {
     await api.queue(AGENT, 3);
     expect(asked[0]).to.deep.equal([`https://api.safe.global/tx-service/base/api/v1/safes/${AGENT}/multisig-transactions/?executed=false&nonce__gte=3&ordering=nonce&limit=100`, "Bearer k"]);
     expect(require("../bin/rein").main).to.be.a("function");
+    // Bug reports ask for it.
+    const v = require("child_process").spawnSync(process.execPath, [path.join(__dirname, "..", "bin", "rein.js"), "--version"], { encoding: "utf8" });
+    expect(v.stdout.trim()).to.equal(require("../package.json").version);
   });
   it("reads a long queue page by page, and the site's pass-through only lets Safe reads through", async () => {
     const base = "https://safe-client.safe.global/v1/chains/8453";
@@ -252,7 +255,7 @@ describe("rein safe", function () {
     const gw = safe.safeGateway("base", { fetch: async (url) => (asked.push(url), { ok: true, status: 200, json: async () => pages[url] }) });
     expect((await gw.queue(AGENT)).map((t) => t.nonce)).to.deep.equal([1, 2, 3]);
     const missing = safe.safeGateway("base", { fetch: async () => ({ ok: false, status: 404 }) });
-    await missing.info(AGENT).then(() => expect.fail(), (e) => expect(e.message).to.equal("there is no Safe at that address on this chain"));
+    await missing.info(AGENT).then(() => expect.fail(), (e) => expect(e.message).to.equal("there is no Safe at that address on Base (on Ethereum? choose Ethereum, or add --chain ethereum)"));
 
     const proxy = require("../web/api/safe");
     expect(proxy.target(`/api/safe?path=v1/chains/8453/safes/${AGENT}/transactions/queued&cursor=x&evil=1`)).to.equal(`https://safe-client.safe.global/v1/chains/8453/safes/${AGENT}/transactions/queued?cursor=x`);
