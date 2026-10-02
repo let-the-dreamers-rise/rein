@@ -235,5 +235,12 @@ describe("rein safe", function () {
     expect((await proxy({ method: "GET", url: `/api/safe?path=v1/chains/1/safes/${AGENT}` }, res(), async () => { throw new Error("down"); })).code).to.equal(502);
     const page = fs.readFileSync(path.join(__dirname, "..", "web", "safe", "index.html"), "utf8");
     expect(page).to.contain("/api/safe").and.contain("gatewayFetch");
+    // It also opens as a custom Safe App: Safe{Wallet} reads the manifest, the page asks which Safe it's in.
+    const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "web", "safe", "manifest.json"), "utf8"));
+    expect(manifest).to.include.keys("name", "description", "iconPath");
+    expect(fs.existsSync(path.join(__dirname, "..", "web", "safe", manifest.iconPath))).to.equal(true);
+    expect(page).to.contain('method: "getSafeInfo"').and.contain("in-safe");
+    const vercel = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "web", "vercel.json"), "utf8"));
+    expect(JSON.stringify(vercel.headers)).to.contain("manifest.json").and.contain("Access-Control-Allow-Origin");
   });
 });

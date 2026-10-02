@@ -1,0 +1,5 @@
+{
+  "name": "Rein Safe Watch",
+  "description": "Checks every queued transaction against what this Safe has paid before: lookalike addresses, first payments to strangers, unusual amounts and owner changes. Read only.",
+  "iconPath": "rein-icon.svg"
+}

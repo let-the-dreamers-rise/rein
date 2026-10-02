@@ -1,3 +1,13 @@
 {
-  "rewrites": [{ "source": "/api/safe/:path*", "destination": "/api/safe?path=:path*" }]
+  "rewrites": [{ "source": "/api/safe/:path*", "destination": "/api/safe?path=:path*" }],
+  "headers": [
+    {
+      "source": "/safe/(manifest.json|rein-icon.svg)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET" },
+        { "key": "Access-Control-Allow-Headers", "value": "X-Requested-With, content-type, Authorization" }
+      ]
+    }
+  ]
 }
