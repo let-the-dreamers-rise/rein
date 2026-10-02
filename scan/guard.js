@@ -51,9 +51,10 @@ const guardPath = (wallet, env) => path.join(home(env), "guards", `${wallet.toLo
 // each check holds a lock from read to write, so two checks can't both spend
 // the same hour.
 function saveGuard(g, file) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(g, null, 2)}\n`);
+  // Owner only: it holds the webhook URL and the holds a person approves.
+  fs.writeFileSync(tmp, `${JSON.stringify(g, null, 2)}\n`, { mode: 0o600 });
   for (let i = 0; ; i++) {
     try {
       fs.renameSync(tmp, file);
@@ -362,7 +363,8 @@ function toRow(tx, guard, now) {
     try {
       const a = ERC20.decodeFunctionData(known, data);
       if (known === "transferFrom") return { ...base, selector: known, kind: known, token: to, payee: ethers.getAddress(a[1]), amount: units(a[2], decimalsOf(to)) };
-      return { ...base, selector: known, kind: known, token: to, payee: ethers.getAddress(a[0]), amount: units(a[1], decimalsOf(to)) };
+      // increaseAllowance grants an allowance exactly as approve does.
+      return { ...base, selector: known, kind: known === "increaseAllowance" ? "approve" : known, token: to, payee: ethers.getAddress(a[0]), amount: units(a[1], decimalsOf(to)) };
     } catch {
       // a colliding selector: an ordinary call
     }
@@ -530,9 +532,12 @@ function checkOnce(tx, opts, file, given) {
   // second payment to that address waits for a person, and new addresses
   // together get at most three times the cap a day, so an attacker can't
   // take the daily ceiling in small pieces.
+  // As an enforced second key (`opts.enforced`, the co-signer), a first
+  // payment always waits for a person and teaches nothing: a hijacked agent
+  // must not be able to co-sign its way to the attacker's address.
   let first = null;
   const firsts = (guard.firstPayments || []).filter((f) => f.ts > now - 30 * DAY);
-  if (reason === "PAYEE_NOT_ALLOWED" && guard.newPayeeCap > 0 && rows.every((r) => r.derived || r.kind === "call" || Number(r.amount) <= guard.newPayeeCap)) {
+  if (!opts.enforced && reason === "PAYEE_NOT_ALLOWED" && guard.newPayeeCap > 0 && rows.every((r) => r.derived || r.kind === "call" || Number(r.amount) <= guard.newPayeeCap)) {
     const extra = rows.map((r) => r.payee).filter(Boolean);
     const amount = rows.filter((r) => !r.derived && r.kind !== "call").reduce((a, r) => a + Number(r.amount), 0);
     const seen = extra.some((p) => firsts.some((f) => f.payee.toLowerCase() === p.toLowerCase()));

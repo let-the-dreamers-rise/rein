@@ -23,7 +23,11 @@ const { loadGuard, saveGuard, decide, withLock, home } = require("./guard");
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const sign = (secret, wallet, id) => crypto.createHmac("sha256", secret).update(`${wallet.toLowerCase()}:${id}`).digest("hex").slice(0, 32);
-const same = (a, b) => a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+const same = (a, b) => {
+  const x = Buffer.from(String(a));
+  const y = Buffer.from(String(b));
+  return x.length === y.length && crypto.timingSafeEqual(x, y); // byte lengths: "é" is one character, two bytes
+};
 
 function guardFiles(env) {
   const dir = path.join(home(env), "guards");

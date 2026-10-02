@@ -245,7 +245,7 @@ function toTrail(history, { payments = false } = {}) {
           rows.push({ ...base, selector: known, kind: "transferFrom", token, payee: ethers.getAddress(args[1]), amount: units(args[2], decimalsOf(token)) });
           explained.add(tx.hash);
         } else {
-          rows.push({ ...base, selector: known, kind: known, token, payee: ethers.getAddress(args[0]), amount: units(args[1], decimalsOf(token)) });
+          rows.push({ ...base, selector: known, kind: known === "increaseAllowance" ? "approve" : known, token, payee: ethers.getAddress(args[0]), amount: units(args[1], decimalsOf(token)) });
         }
         continue;
       } catch {

@@ -128,9 +128,9 @@ function loadState(file) {
   }
 }
 function saveState(state, file) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(state, null, 2)}\n`);
+  fs.writeFileSync(tmp, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
   fs.renameSync(tmp, file);
 }
 
@@ -203,7 +203,7 @@ async function tick({ client, organizationId, env = process.env, webhook = null,
       }
       // approved: the check below lets it through once
     }
-    const v = check(r.tx, { env, wallet: r.tx.from, now: now(), fetch: fetchImpl });
+    const v = check(r.tx, { env, wallet: r.tx.from, now: now(), fetch: fetchImpl, enforced: true });
     if (v.allow) {
       await client.approve(a.fingerprint, org);
       delete state.activities[a.id];
@@ -246,6 +246,10 @@ async function recheck({ client, organizationId, env = process.env, ...rest }) {
 /// judges that, so a forged delivery can't make it approve anything.
 function turnkeyWebhookHandler({ client, organizationId, env = process.env, log = () => {}, ...rest }) {
   let queue = Promise.resolve();
+  // A flood of deliveries can't pile up without end: each activity is
+  // queued once, and past MAX_WAITING the sender is told to try later.
+  const MAX_WAITING = 200;
+  const waiting = new Set();
   const handle = async (a) => {
     const fresh = await client.get(a.id, a.organizationId || organizationId);
     if (!fresh || fresh.status !== "ACTIVITY_STATUS_CONSENSUS_NEEDED" || !SIGNING.includes(fresh.type)) return null;
@@ -253,9 +257,18 @@ function turnkeyWebhookHandler({ client, organizationId, env = process.env, log 
   };
   const handler = async (req, res) => {
     const send = (code, body) => {
+      if (res.headersSent) return;
       res.writeHead(code, { "content-type": "application/json", "cache-control": "no-store" });
       res.end(JSON.stringify(body));
     };
+    try {
+      return await receive(req, send);
+    } catch {
+      return send(400, { error: "Rein couldn't read that delivery" });
+    }
+  };
+  const ID = /^[A-Za-z0-9_-]{1,128}$/;
+  const receive = async (req, send) => {
     if (req.method !== "POST") return send(404, { error: "POST a Turnkey ACTIVITY_UPDATES delivery" });
     let body;
     try {
@@ -266,12 +279,29 @@ function turnkeyWebhookHandler({ client, organizationId, env = process.env, log 
       return send(400, { error: `not JSON: ${err.message}` });
     }
     const a = body?.activity || body?.data?.activity || body?.data || body;
-    if (!a?.id || (a.status && a.status !== "ACTIVITY_STATUS_CONSENSUS_NEEDED") || (a.type && !SIGNING.includes(a.type))) return send(200, { ignored: true });
+    // Only the id and organization are used, and only to read the activity
+    // again from Turnkey: anything else in a delivery is never trusted.
+    if (typeof a?.id !== "string" || !ID.test(a.id) || (a.organizationId != null && (typeof a.organizationId !== "string" || !ID.test(a.organizationId)))) return send(200, { ignored: true });
+    if ((a.status && a.status !== "ACTIVITY_STATUS_CONSENSUS_NEEDED") || (a.type && !SIGNING.includes(a.type))) return send(200, { ignored: true });
+    if (waiting.has(a.id)) return send(202, { checking: a.id });
+    if (waiting.size >= MAX_WAITING) return send(503, { error: "busy; Turnkey will deliver again" });
+    waiting.add(a.id);
     send(202, { checking: a.id });
     // One at a time: the guard's hourly totals and the held list stay consistent.
-    queue = queue.then(() => handle(a)).catch((err) => log(`could not check ${a.id}: ${err.message}`));
+    const { id, organizationId: org } = a;
+    queue = queue
+      .then(() => handle({ id, organizationId: org }))
+      .catch((err) => log(`could not check ${id}: ${String(err?.message ?? err)}`))
+      .finally(() => waiting.delete(id));
   };
   handler.idle = () => queue;
+  // The periodic re-check runs in the same line, so it never overwrites
+  // what a delivery just wrote to the state file.
+  handler.run = (fn) => {
+    const p = queue.then(fn);
+    queue = p.catch(() => {});
+    return p;
+  };
   return handler;
 }
 
@@ -338,7 +368,7 @@ function readPrivyRequest(r) {
   const m = /^https:\/\/api\.privy\.io\/v1\/wallets\/([A-Za-z0-9_-]+)\/rpc$/.exec(r?.url || "");
   if (r?.method !== "POST" || !m) return { refuse: "Rein co-signs wallet RPC requests only, never a change to a wallet, its owner or its policies" };
   const b = r.body || {};
-  if (!PAYMENT_METHODS.includes(b.method)) return { refuse: `Rein co-signs payments (${PAYMENT_METHODS.join(", ")}); ${b.method || "this"} is not one` };
+  if (typeof b.method !== "string" || !PAYMENT_METHODS.includes(b.method)) return { refuse: `Rein co-signs payments (${PAYMENT_METHODS.join(", ")}); ${typeof b.method === "string" ? b.method.slice(0, 40) : "this"} is not one` };
   if (b.method === "eth_signTypedData_v4") {
     const td = b.params?.typed_data || {};
     const ids = [caip2(b.caip2), td.domain?.chainId != null ? Number(td.domain.chainId) : null].filter((x) => x != null);
@@ -346,12 +376,21 @@ function readPrivyRequest(r) {
     return { walletId: m[1], tx: { domain: td.domain, types: td.types, primaryType: td.primary_type ?? td.primaryType, message: td.message }, chainId: ids[0] ?? null };
   }
   const t = b.params?.transaction || {};
-  if (!t.to) return { refuse: "the transaction has no recipient" };
+  if (typeof t.to !== "string" || !isAddress(t.to)) return { refuse: "the transaction has no recipient Rein can read" };
+  if (t.data != null && (typeof t.data !== "string" || !/^0x([0-9a-fA-F]{2})*$/.test(t.data))) return { refuse: "its calldata isn't hex" };
+  let value;
+  try {
+    if (t.value != null && typeof t.value !== "string" && typeof t.value !== "number") throw new Error("not a number");
+    value = BigInt(t.value ?? 0);
+    if (value < 0n) throw new Error("negative");
+  } catch {
+    return { refuse: "its value isn't a whole number of wei" };
+  }
   if (t.authorization_list || t.authorizationList || Number(t.type) === 4) return { refuse: "it hands the wallet's code to a contract (EIP-7702), which isn't a payment" };
   if (t.input != null && t.input !== t.data) return { refuse: "it carries calldata in a field Rein doesn't read" };
   const ids = [caip2(b.caip2), t.chain_id != null ? Number(t.chain_id) : null].filter((x) => x != null);
   if (new Set(ids).size > 1) return { refuse: `it names two chains (${ids.join(" and ")})` };
-  return { walletId: m[1], tx: { to: t.to, data: t.data || "0x", value: BigInt(t.value ?? 0).toString() }, chainId: ids[0] ?? null };
+  return { walletId: m[1], tx: { to: t.to, data: t.data || "0x", value: value.toString() }, chainId: ids[0] ?? null };
 }
 
 /// POST /sign with the exact request the agent will send to Privy ({ method,
@@ -368,21 +407,40 @@ function privyHandler({ env = process.env, appId, appSecret, key, token = null, 
     }
     return addresses.get(id);
   };
+  const expected = token ? Buffer.from(`Bearer ${token}`) : null;
+  const tokenOk = (h) => {
+    if (!expected) return true;
+    const got = Buffer.from(typeof h === "string" ? h : "");
+    return got.length === expected.length && crypto.timingSafeEqual(got, expected);
+  };
+  const deeper = (v, n = 0) => n > 32 || (v && typeof v === "object" && Object.values(v).some((x) => deeper(x, n + 1)));
   return async (req, res) => {
     const send = (code, body) => {
+      if (res.headersSent) return;
       res.writeHead(code, { "content-type": "application/json", "cache-control": "no-store" });
       res.end(JSON.stringify(body));
     };
+    // One malformed request must never stop the co-signer: every payment
+    // that needs its key would wait until someone restarts it.
+    try {
+      return await serve(req, send);
+    } catch (err) {
+      log(`couldn't read a request: ${String(err?.message ?? err).slice(0, 200)}`);
+      return send(400, { error: "Rein couldn't read that request" });
+    }
+  };
+  async function serve(req, send) {
     if (req.method !== "POST" || req.url !== "/sign") return send(404, { error: "POST /sign" });
-    if (token && req.headers.authorization !== `Bearer ${token}`) return send(401, { error: "wrong or missing bearer token" });
+    if (!tokenOk(req.headers.authorization)) return send(401, { error: "wrong or missing bearer token" });
     let request;
     try {
       let raw = "";
-      for await (const c of req) if ((raw += c).length > 1e6) throw new Error("too large");
+      for await (const c of req) if ((raw += c).length > 256e3) throw new Error("too large");
       request = JSON.parse(raw);
     } catch (err) {
       return send(400, { error: `not a JSON request: ${err.message}` });
     }
+    if (deeper(request)) return send(400, { error: "nested too deeply to be a Privy request" });
     const refuse = (explanation, reason = "NOT_A_PAYMENT") => (log(`refused: ${explanation}`), send(403, { allow: false, reason, explanation }));
     if (request?.headers?.["privy-app-id"] !== appId) return refuse(`this co-signer serves Privy app ${appId} only`, "WRONG_APP");
     const r = readPrivyRequest(request);
@@ -409,14 +467,14 @@ function privyHandler({ env = process.env, appId, appSecret, key, token = null, 
       }
     }
     if (guard.chainId && r.chainId && guard.chainId !== r.chainId) return refuse(`it is for chain ${r.chainId}, and this wallet's limits were learned on chain ${guard.chainId}`, "WRONG_CHAIN");
-    const v = check(r.tx, { env, wallet: address, fetch: fetchImpl });
+    const v = check(r.tx, { env, wallet: address, fetch: fetchImpl, enforced: true });
     if (v.allow) {
       log(`signed for ${address}: ${v.explanation}`);
       return send(200, { ...v, signature: sign.privySignature(request, key) });
     }
     log(`${v.held ? "holding" : "refused"} for ${address}: ${v.explanation}`);
     return send(v.held ? 202 : 403, v);
-  };
+  }
 }
 
 /// The Privy requests that make Rein the second key. Two key quorums: the
@@ -471,6 +529,7 @@ function parse(argv) {
     else if (a === "--once") o.once = true;
     else if (a === "--cohort") o.cohort = argv[++i];
     else if (a === "--no-learn") o.learn = false;
+    else if (a === "--host") o.host = argv[++i];
     else if (a === "--listen") o.listen = Number(argv[++i]);
     else if (a === "--webhook-url") o.webhookUrl = argv[++i];
     else if (a === "--webhook") o.webhook = argv[++i];
@@ -502,9 +561,9 @@ const USAGE = `usage: rein cosign keygen                      a key for Rein's c
        rein cosign setup privy --wallet <wallet id> --policy <learned policy id> --agent-key <key> --admin-key <key> [--send]
                                                keys are base64 P-256 public keys (needs REIN_PRIVY_PUBLIC_KEY, and
                                                PRIVY_APP_ID/SECRET plus the wallet owner's PRIVY_AUTHORIZATION_KEY to --send)
-       rein cosign privy [--port 8788] [--cohort cohort.json] [--no-learn]
+       rein cosign privy [--port 8788] [--host 127.0.0.1] [--cohort cohort.json] [--no-learn]
                                                run the co-signer (needs REIN_PRIVY_AUTH_KEY, PRIVY_APP_ID/SECRET;
-                                               REIN_COSIGN_TOKEN, if set, is required as a bearer token)`;
+                                               REIN_COSIGN_TOKEN (32+ characters) is required as a bearer token)`;
 
 async function main(argv, { log = console.log, env = process.env, fetch: fetchImpl = globalThis.fetch } = {}) {
   const o = parse(argv);
@@ -596,6 +655,7 @@ async function main(argv, { log = console.log, env = process.env, fetch: fetchIm
     const cohort = o.cohort ? JSON.parse(fs.readFileSync(o.cohort, "utf8")) : null;
     const run = () => tick({ client, organizationId: o.organization, env, webhook: o.webhook, fetch: fetchImpl, log, learn: o.learn, cohort });
     if (o.listen) {
+      keepRunning(log);
       const handler = turnkeyWebhookHandler({ client, organizationId: o.organization, env, webhook: o.webhook, fetch: fetchImpl, log, learn: o.learn, cohort });
       const server = http.createServer(handler);
       await new Promise((r, j) => {
@@ -605,8 +665,7 @@ async function main(argv, { log = console.log, env = process.env, fetch: fetchIm
       log(`Rein co-signer for Turnkey organization ${o.organization} and its sub-organizations: webhook on port ${o.listen}; held payments re-checked every ${o.every}s.`);
       for (;;) {
         await new Promise((r) => setTimeout(r, o.every * 1000));
-        await handler.idle();
-        await recheck({ client, organizationId: o.organization, env, webhook: o.webhook, fetch: fetchImpl, log, learn: o.learn, cohort }).catch((err) => log(`could not re-check held payments: ${err.message}`));
+        await handler.run(() => recheck({ client, organizationId: o.organization, env, webhook: o.webhook, fetch: fetchImpl, log, learn: o.learn, cohort })).catch((err) => log(`could not re-check held payments: ${err.message}`));
       }
     }
     if (o.once) {
@@ -621,18 +680,29 @@ async function main(argv, { log = console.log, env = process.env, fetch: fetchIm
     }
   }
   if (o.cmd === "privy") {
-    const need = ["REIN_PRIVY_AUTH_KEY", "PRIVY_APP_ID", "PRIVY_APP_SECRET"].filter((k) => !env[k]);
-    if (need.length) throw new Error(`set ${need.join(", ")}`);
+    const need = ["REIN_PRIVY_AUTH_KEY", "PRIVY_APP_ID", "PRIVY_APP_SECRET", "REIN_COSIGN_TOKEN"].filter((k) => !env[k]);
+    if (need.length) throw new Error(`set ${need.join(", ")}${need.includes("REIN_COSIGN_TOKEN") ? " (REIN_COSIGN_TOKEN: a secret of 32+ characters your agent sends as a bearer token; openssl rand -hex 32 makes one)" : ""}`);
+    if (env.REIN_COSIGN_TOKEN.length < 32) throw new Error("REIN_COSIGN_TOKEN must be at least 32 characters (openssl rand -hex 32 makes one)");
     const cohort = o.cohort ? JSON.parse(fs.readFileSync(o.cohort, "utf8")) : null;
+    keepRunning(log);
     const server = http.createServer(privyHandler({ env, appId: env.PRIVY_APP_ID, appSecret: env.PRIVY_APP_SECRET, key: env.REIN_PRIVY_AUTH_KEY, token: env.REIN_COSIGN_TOKEN || null, fetch: fetchImpl, log, learn: o.learn, cohort }));
     await new Promise((r, j) => {
       server.once("error", (err) => j(err.code === "EADDRINUSE" ? new Error(`port ${o.port} is already in use; stop whatever holds it or pass --port`) : err));
-      server.listen(o.port, r);
+      // This machine only, unless --host says otherwise.
+      server.listen(o.port, o.host || "127.0.0.1", r);
     });
-    log(`Rein co-signer for Privy app ${env.PRIVY_APP_ID} on port ${o.port}: POST /sign${env.REIN_COSIGN_TOKEN ? " (bearer token required)" : ""}.`);
+    log(`Rein co-signer for Privy app ${env.PRIVY_APP_ID} on ${o.host || "127.0.0.1"}:${o.port}: POST /sign (bearer token required).`);
     return null; // runs until stopped
   }
   throw new Error(`unknown cosign command ${o.cmd}`);
+}
+
+/// A long-running co-signer logs a stray rejection instead of exiting: while
+/// it is down, every payment that needs its key waits.
+function keepRunning(log) {
+  if (keepRunning.on) return;
+  keepRunning.on = true;
+  process.on("unhandledRejection", (err) => log(`kept running after an error: ${String(err?.message ?? err).slice(0, 200)}`));
 }
 
 module.exports = { main, tick, recheck, turnkeyWebhookHandler, readActivity, turnkeyClient, turnkeySetup, readPrivyRequest, privyHandler, privySetup, keygen, parse, USAGE, SIGNING };

@@ -185,9 +185,13 @@ describe("rein cosign (Turnkey)", function () {
     const offline = async (url, init) => (url.includes("blockscout") ? Promise.reject(new Error("offline")) : tk.fetch(url, init));
     tk.waiting = [pay("small", PAYEES.inference.address, 10), pay("big", PAYEES.data.address, 400)];
     const d = await run({ fetch: offline });
-    expect(d.approved).to.deep.equal(["small"]);
-    expect(d.held).to.deep.equal(["big"]);
-    expect(guard.loadGuard(fresh, env).guard.learning).to.equal(true);
+    // As an enforced second key, even a small first payment waits for a
+    // person, and the payee isn't learned from it (security review H1).
+    expect(d.approved).to.deep.equal([]);
+    expect(d.held).to.deep.equal(["small", "big"]);
+    const g = guard.loadGuard(fresh, env).guard;
+    expect(g.learning).to.equal(true);
+    expect(g.policy.transferPayees.map((x) => x.toLowerCase())).to.not.include(PAYEES.inference.address.toLowerCase());
   });
 
   it("serves an app with a sub-organization per user from Turnkey's webhook, reading each activity again from Turnkey", async () => {
@@ -341,7 +345,7 @@ describe("rein cosign (Privy)", function () {
     expect(await rein.cosign(usual, { url: "http://127.0.0.1:1", token: "t0ken" })).to.include({ allow: false, reason: "COSIGNER_UNREACHABLE" });
   });
 
-  it("learns a Privy wallet it hasn't seen, the first time it is asked to co-sign for it", async () => {
+  it("sets up a Privy wallet it hasn't seen, and holds its first payments for a person", async () => {
     const fresh = "0x" + "4".repeat(40);
     const privy = async (url) => (url.startsWith("https://api.privy.io") ? { ok: true, status: 200, json: async () => ({ id: "w2", address: fresh }) } : Promise.reject(new Error("offline")));
     const s = http.createServer(cosign.privyHandler({ env, appId: APP, appSecret: "s3cret", key: key.privyPrivateKey, fetch: privy }));
@@ -349,7 +353,7 @@ describe("rein cosign (Privy)", function () {
     const at = (o) => fetch(`http://127.0.0.1:${s.address().port}/sign`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(o) }).then(async (r) => ({ status: r.status, body: await r.json() }));
     const p = (to, amount) => ({ ...pay(to, amount), url: "https://api.privy.io/v1/wallets/w2/rpc" });
     try {
-      expect((await at(p(PAYEES.inference.address, 10))).status).to.equal(200);
+      expect((await at(p(PAYEES.inference.address, 10))).status).to.equal(202);
       expect((await at(p(PAYEES.data.address, 400))).status).to.equal(202);
       expect(guard.loadGuard(fresh, env).guard.learning).to.equal(true);
     } finally {

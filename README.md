@@ -203,9 +203,8 @@ only after you run `--approve`.
 ## Rein as a second key the wallet enforces
 
 **Preview: don't use it with real money yet.** The co-signer has only been
-tested against stand-ins for Turnkey and Privy, and the 2 October security
-review found problems in it that are still being fixed: a malformed request
-can stop it, and it learns too readily from a wallet's first payments.
+tested against stand-ins for Turnkey and Privy, and the fixes from the
+2 October security review are new.
 
 `check` runs in the agent's own process, so an agent that has been talked into
 it can skip it. On Turnkey or Privy, Rein can be a second key instead: the
@@ -227,7 +226,8 @@ npx rein-wallet cosign turnkey --organization <parent org id> --listen 8789 --co
 
 # Privy: the agent alone signs inside the learned policy; the wallet's owner is any two of agent, Rein, admin
 npx rein-wallet cosign setup privy --wallet <id> --policy <learned policy id> --agent-key <key> --admin-key <key> --send
-npx rein-wallet cosign privy --port 8788
+export REIN_COSIGN_TOKEN=$(openssl rand -hex 32)   # required: the agent sends it as a bearer token
+npx rein-wallet cosign privy --port 8788           # this machine only; add --host 0.0.0.0 to serve others
 ```
 
 On Turnkey the co-signer watches for signing requests waiting on it and
@@ -238,10 +238,15 @@ Turnkey with its own key before judging it, and votes in the sub-organization
 it lives in. Each sub-organization still needs Rein's user and policy, best
 added when the app creates it. A wallet the co-signer hasn't seen gets limits
 learned from its history, the cohort's (`rein fleet --out`), or learning mode;
-`--no-learn` leaves it for a person instead. It reads transactions, batches
+`--no-learn` leaves it for a person instead. As a second key it never lets a
+first payment to a new address through on its own, however small: that waits
+for a person, and nothing is learned from a payment no person approved. It reads transactions, batches
 (judged as one payment) and x402/EIP-712 signatures. On Privy the agent sends the request it is
 about to make to the co-signer's `/sign` and adds the signature it gets back
-(`await require("rein-wallet").cosign(request, { url })` does it in one call);
+(`await require("rein-wallet").cosign(request, { url })` does it in one call,
+sending `REIN_COSIGN_TOKEN` from the agent's environment). The Privy co-signer
+won't start without that token, at least 32 characters, and listens only on
+this machine unless `--host` says otherwise;
 a 202 means a person is deciding. Rein only ever co-signs payments: never a
 change to the wallet, its owner or its policies, a raw signature it can't
 read, or an EIP-7702 delegation. For it to hold, the agent must not be in Turnkey's root
@@ -597,7 +602,7 @@ none.
   repetition. Bounding it honestly would require mirroring the token's allowance
   in storage, and that mirror goes stale as soon as the spender spends. Use
   `approve()` with an exact total instead.
-- **Not audited.** 228 JavaScript and 18 Python tests pass. That is not an audit.
+- **Not audited.** 232 JavaScript and 18 Python tests pass. That is not an audit.
 
 ## Layout
 
@@ -616,7 +621,7 @@ plugin/                         the MCP server as one file, packaged as a Claude
 dist/rein.mcpb                  the same file as a Claude Desktop extension
 client/monitor.js               the guardian's evaluator for learned habits, same bands as the compiler
 v2/export.js                    the compiled bounds as Turnkey, Coinbase CDP and Privy policy JSON, with the honest table
-test/rein.test.js               the account's tests; the other test/*.test.js files cover the scanner, guard, Safe check and co-signer, 228 in all
+test/rein.test.js               the account's tests; the other test/*.test.js files cover the scanner, guard, Safe check and co-signer, 232 in all
 scripts/explain-error.js        the three failures a first live run hits, in words, with the command that diagnoses each
 scripts/v2/demo.js              Rein v2 end to end: shadow, export, compile, apply, measure
 v2/compile.py                   the compiler: bounds plus nyaya-learned habits, readable policy out
