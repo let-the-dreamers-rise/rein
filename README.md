@@ -611,7 +611,7 @@ plugin/                         the MCP server as one file, packaged as a Claude
 dist/rein.mcpb                  the same file as a Claude Desktop extension
 client/monitor.js               the guardian's evaluator for learned habits, same bands as the compiler
 v2/export.js                    the compiled bounds as Turnkey, Coinbase CDP and Privy policy JSON, with the honest table
-test/rein.test.js               46 tests on the account; client, monitor, export and the error explainer have their own, 56 in all
+test/rein.test.js               the account's tests; the other test/*.test.js files cover the scanner, guard, Safe check and co-signer, 212 in all
 scripts/explain-error.js        the three failures a first live run hits, in words, with the command that diagnoses each
 scripts/v2/demo.js              Rein v2 end to end: shadow, export, compile, apply, measure
 v2/compile.py                   the compiler: bounds plus nyaya-learned habits, readable policy out

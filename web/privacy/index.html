@@ -70,9 +70,10 @@ main .doc b{color:var(--ink)}
     <h1>Rein privacy</h1>
     <div class="doc">
       <p>Last updated: 2 October 2026</p>
-      <p><b>Short version: Rein doesn't collect your data.</b> The checks run on your machine, in your GitHub account or in your browser. We have no accounts, no cookies and no analytics.</p>
+      <p><b>Short version: Rein doesn't collect your data.</b> The checks run on your machine, in your GitHub account or in your browser. We have no accounts, no cookies and no tracking.</p>
       <p><b>What leaves your machine, and to whom.</b> To check a payment, Rein asks public services for public blockchain data: Safe's public transaction service (safe-client.safe.global), block explorers such as Blockscout, and public RPC nodes. Those services see your IP address and the addresses you ask about, under their own privacy policies. If you set up alerts, Rein posts to the Slack, Discord or Telegram address you give it, and nowhere else.</p>
       <p><b>The website.</b> The page at /safe can fetch a Safe's public queue through our relay when Safe's service blocks the browser. The relay passes the request straight through and stores nothing. Our host, Vercel, keeps standard request logs (which include IP addresses) for a short time under its own policy.</p>
+      <p><b>What the relay counts.</b> Each day we keep a running total of how many requests pass through the /safe relay, split by chain and by kind of request (Safe details, queued transactions, history, a single transaction). That's all it stores: a date, a chain, a kind and a number. It never stores a Safe or wallet address, a transaction, your IP address or anything else about you, so there's nothing to opt out of. The totals are kept in a database hosted by Upstash, and we use them only to know how much Rein is used.</p>
       <p><b>If you email us.</b> We keep your email so we can reply. We don't sell it or share it, and we'll delete it if you ask.</p>
       <p><b>Wallet addresses.</b> Blockchain addresses and transactions are public. Rein doesn't link them to names, and we don't publish anything about a specific wallet without its owner's agreement.</p>
     </div>

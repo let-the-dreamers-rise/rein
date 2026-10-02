@@ -313,7 +313,7 @@ footer a{color:var(--ink)}
         <h3>You guess the limit, or skip it</h3>
         <ul>
           <li><b>A blank policy</b>, or one flat cap that has no idea who the money goes to.</li>
-          <li><b>No way to know</b> whether a tighter rule would have blocked last week's honest payments.</li>
+          <li><b>No way to know</b> whether a tighter rule would have held last week's honest payments.</li>
           <li><b>Hand-writing JSON</b> in three different policy languages if you use more than one engine.</li>
           <li><b>Finding out from users</b> when an injected instruction moves funds.</li>
         </ul>
@@ -324,7 +324,7 @@ footer a{color:var(--ink)}
         <ul>
           <li><b>Payees, contracts, functions and hourly ceilings</b> learned from what the wallet already does.</li>
           <li><b>One line before signing</b> holds transfers, router swaps and signatures (x402, Permit, Permit2) to them, with a reason the agent can act on.</li>
-          <li><b>Measured before you ship it:</b> replayed on recent calls it never saw, with the count that would have been blocked.</li>
+          <li><b>Measured before you ship it:</b> replayed on recent calls it never saw, with the count that would have been held.</li>
           <li><b>Rein as a second key</b> on Turnkey or Privy: the agent signs alone inside its limits, and anything else needs Rein's co-signature or a person's approval in Slack. The requests are printed first, so nothing surprises you.</li>
           <li><b>An alert on the first transaction outside it</b>, in Slack or Discord, with no server to run.</li>
         </ul>
@@ -332,7 +332,7 @@ footer a{color:var(--ink)}
     </div>
     <div class="incident">
       <b class="d">May 2026</b>
-      <p>A token sent to a Grok-linked agent wallet on Bankr unlocked more of what the agent was allowed to do, and the agent was then talked into sending funds out. <strong>Limits learned from a wallet's own history don't widen because a token or a message says so.</strong> Only the owner can widen them, at a keyboard, and a payment to an address the agent has never paid is blocked until they do.</p>
+      <p>A token sent to a Grok-linked agent wallet on Bankr unlocked more of what the agent was allowed to do, and the agent was then talked into sending funds out. <strong>Limits learned from a wallet's own history don't widen because a token or a message says so.</strong> Only the owner can widen them, at a keyboard, and a payment to an address the agent has never paid is held for a person until they approve it.</p>
     </div>
   </div>
 </section>
@@ -453,10 +453,10 @@ Pay Acme 1,000 USDC, 20 times     <span class="no">REFUSED  TOKEN_PER_WINDOW</sp
     <div class="faq">
       <details><summary>Does Rein need our keys or custody of funds?</summary><p>No. The scan reads public chain data. <code>apply</code> calls your wallet engine's API with credentials that stay on your machine, and prints every request before it sends one. Nothing moves into a Rein contract unless you choose the Rein account.</p></details>
       <details><summary>We already have a Privy, Turnkey or CDP policy. Does the scan see it?</summary><p>No, and every report says so. A signing policy held off chain is invisible to a scan of the chain. That's why the report says "no on-chain limit" rather than "anyone can take it". The review compares the compiled policy against the one you already have.</p></details>
-      <details><summary>What if the compiled policy blocks something the agent needs?</summary><p>Every policy comes with the count of recent calls it would have refused. You see those calls before you apply it. Anything rare, like a payee seen only once, is held back for a person to approve instead of being allowed quietly.</p></details>
+      <details><summary>What if the compiled policy holds something the agent needs?</summary><p>Every policy comes with the count of recent calls it would have refused. You see those calls before you apply it. Anything rare, like a payee seen only once, is held back for a person to approve instead of being allowed quietly.</p></details>
       <details><summary>Where does the check run?</summary><p>As a second key, in Rein's co-signer, and your wallet engine enforces it: on Turnkey a policy needs both the agent and Rein outside the learned limits, and on Privy the wallet's owner is any two of the agent, Rein and your admin key. A hijacked agent can't skip a signature it doesn't have. Normal payments never touch Rein, so an outage can't stop them. <code>rein.check(tx)</code> runs the same check inside the agent's own process with no server, which is quicker to start with but can be skipped by an agent whose code is taken over.</p></details>
       <details><summary>Has the co-signer run on a live Turnkey or Privy account?</summary><p>Not yet. It is built against both vendors' published APIs and tested against stand-ins for them. Shadow mode needs neither, so it is the place to start.</p></details>
-      <details><summary>What can't it stop?</summary><p>A payment the policy allows. If an attacker steers the agent to pay a payee it already pays, inside the hourly and daily ceilings, that goes through, and the replay states how much that could be. Rein bounds how much can move and to whom. It doesn't judge the payments the policy permits. A signature it can't read is blocked; a call to an unfamiliar contract is blocked; a call to a contract the agent already uses, that Rein can't read, is held only to the contracts and functions the agent normally calls.</p></details>
+      <details><summary>What can't it stop?</summary><p>A payment the policy allows. If an attacker steers the agent to pay a payee it already pays, inside the hourly and daily ceilings, that goes through, and the replay states how much that could be. Rein bounds how much can move and to whom. It doesn't judge the payments the policy permits. A signature it can't read is held; a call to an unfamiliar contract is held; a call to a contract the agent already uses, that Rein can't read, is held only to the contracts and functions the agent normally calls.</p></details>
       <details><summary>What chains and engines?</summary><p>Scans read Base, Base Sepolia and Ethereum. Policies export to Privy, Turnkey and Coinbase CDP, and to the Rein smart account. The code is open source under MIT.</p></details>
       <details><summary>Is the Rein account audited?</summary><p>Not yet. It is verified on Base Sepolia and Whitechain Sepolia, with its test suite in the repository. For money that matters today, use Rein's policies on the engine you already trust. <a href="account/">More about the account</a>.</p></details>
     </div>
