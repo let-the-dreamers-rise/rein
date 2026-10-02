@@ -60,6 +60,9 @@ function safeApi(chain, { url = null, apiKey = null, fetch: fetchImpl = globalTh
   return {
     info: (safe) => get(`/v1/safes/${safe}/`),
     queue: async (safe, nonce) => (await get(`/v1/safes/${safe}/multisig-transactions/?executed=false&nonce__gte=${nonce}&ordering=nonce&limit=100`)).results || [],
+    // The Safe's own recent executed transactions: the contracts it calls and
+    // the spenders it approves, which a lookalike may copy.
+    executed: async (safe) => (await get(`/v1/safes/${safe}/multisig-transactions/?executed=true&ordering=-nonce&limit=100`)).results || [],
   };
 }
 
@@ -91,28 +94,43 @@ function safeGateway(chain, { url = SAFE_GATEWAY, fetch: fetchImpl = globalThis.
         page = await get(page.next);
       }
       const out = [];
-      for (const id of ids) {
-        const d = await get(`/transactions/${id}`);
-        const t = d.txData || {};
-        const e = d.detailedExecutionInfo || {};
-        out.push({
-          nonce: e.nonce,
-          safeTxHash: e.safeTxHash || id,
-          to: value(t.to),
-          value: t.value || "0",
-          data: t.hexData || "0x",
-          operation: t.operation || 0,
-          dataDecoded: t.dataDecoded || null,
-          confirmations: e.confirmations || [],
-          confirmationsRequired: e.confirmationsRequired,
-          isExecuted: d.txStatus === "SUCCESS",
-          // What the gateway knows of the token a plain transfer moves.
-          tokens: d.txInfo?.transferInfo?.tokenAddress ? [{ address: d.txInfo.transferInfo.tokenAddress, symbol: d.txInfo.transferInfo.tokenSymbol, decimals: d.txInfo.transferInfo.decimals }] : [],
-        });
+      for (const id of ids) out.push(await detail(id));
+      return out;
+    },
+    executed: async (safe) => {
+      // Contract calls only (a plain transfer's payee is already in the
+      // history), the most recent 25, from up to 3 pages.
+      const ids = [];
+      let page = await get(`/safes/${safe}/transactions/history`);
+      for (let n = 1; ; n++) {
+        for (const x of page.results || []) if (x.type === "TRANSACTION" && x.transaction?.id && x.transaction.txInfo?.type === "Custom" && ids.length < 25) ids.push(x.transaction.id);
+        if (!page.next || n >= 3 || ids.length >= 25) break;
+        page = await get(page.next);
       }
+      const out = [];
+      for (const id of ids) out.push(await detail(id));
       return out;
     },
   };
+  async function detail(id) {
+    const d = await get(`/transactions/${id}`);
+    const t = d.txData || {};
+    const e = d.detailedExecutionInfo || {};
+    return {
+      nonce: e.nonce,
+      safeTxHash: e.safeTxHash || id,
+      to: value(t.to),
+      value: t.value || "0",
+      data: t.hexData || "0x",
+      operation: t.operation || 0,
+      dataDecoded: t.dataDecoded || null,
+      confirmations: e.confirmations || [],
+      confirmationsRequired: e.confirmationsRequired,
+      isExecuted: d.txStatus === "SUCCESS",
+      // What the gateway knows of the token a plain transfer moves.
+      tokens: d.txInfo?.transferInfo?.tokenAddress ? [{ address: d.txInfo.transferInfo.tokenAddress, symbol: d.txInfo.transferInfo.tokenSymbol, decimals: d.txInfo.transferInfo.decimals }] : [],
+    };
+  }
 }
 
 // -- reading a queued transaction -------------------------------------------------
@@ -171,7 +189,7 @@ function moveOf(c) {
 /// What Rein knows about a Safe from its public history: who it has paid, the
 /// largest it has sent in each token, who it has approved, and the addresses
 /// that appear only in fake transfers made to look like it sent them.
-function habits(history, { owners = [], ethPaid = [] } = {}) {
+function habits(history, { owners = [], ethPaid = [], executed = [], safe = null } = {}) {
   const { rows, tokens, ignored = [] } = toTrail(history, { payments: true });
   const own = rows.filter((r) => !r.derived);
   const paid = new Map();
@@ -187,6 +205,27 @@ function habits(history, { owners = [], ethPaid = [] } = {}) {
         const k = `${r.payee.toLowerCase()}:${r.token.toLowerCase()}`;
         largest[k] = Math.max(largest[k] || 0, Number(r.amount));
       }
+    }
+  }
+  // The contracts the Safe's own executed transactions called, and the
+  // spenders they approved: Safe's service has them, the explorer doesn't.
+  const called = new Set();
+  for (const tx of executed) {
+    let calls = [];
+    try {
+      calls = callsOf(tx).calls;
+    } catch {
+      continue;
+    }
+    for (const c of calls) {
+      const to = c.to.toLowerCase();
+      if (MULTISEND.has(to) || (safe && to === safe.toLowerCase())) continue;
+      const m = moveOf(c);
+      if (m.kind === "approve") {
+        spenders.add(m.payee.toLowerCase());
+        called.add(to);
+      } else if (m.kind === "call") called.add(to);
+      else if (m.token !== NATIVE) called.add(to);
     }
   }
   // ETH a Safe pays goes out as internal transactions, read separately.
@@ -217,7 +256,7 @@ function habits(history, { owners = [], ethPaid = [] } = {}) {
   const fake = ignored.filter((x) => !realIgnored.includes(x));
   const fakes = new Set(fake.map((x) => x.payee && x.payee.toLowerCase()).filter(Boolean));
   const rate = (t) => (t === NATIVE ? (history.info?.exchange_rate != null ? Number(history.info.exchange_rate) : null) : tokens[t]?.rate ?? (STABLES.test(tokens[t]?.symbol || "") ? 1 : null));
-  return { paid, largest, spenders, fakes, tokens, rate, owners: owners.map((o) => ethers.getAddress(o)), name: namer(history, tokens), payments: own.length + ethPaid.length + realIgnored.length, newShare, ignored: fake };
+  return { paid, largest, spenders, called, fakes, tokens, rate, owners: owners.map((o) => ethers.getAddress(o)), name: namer(history, tokens), payments: own.length + ethPaid.length + realIgnored.length, newShare, ignored: fake };
 }
 
 /// A token's symbol, decimals and dollar rate: from the Safe's own history,
@@ -236,6 +275,27 @@ function describe(raw, info) {
   const usd = amount != null && info.rate != null ? amount * info.rate : null;
   return `${amount != null ? money(amount) : "an unknown amount of"} ${info.symbol}${usd != null && usd >= 1 && !STABLES.test(info.symbol) ? ` (${dollars(usd)})` : ""}`;
 }
+
+/// An address the Safe really uses that `addr` starts and ends like, and
+/// what it is to the Safe: { twin, what } or null.
+function twinOf(addr, h) {
+  const a = addr.toLowerCase();
+  const pools = [
+    [h.owners.map((o) => o.toLowerCase()), "one of the Safe's owners"],
+    [[...h.paid.keys()], "an address the Safe has paid"],
+    [[...(h.called || [])], "a contract the Safe has used"],
+    [[...h.spenders], "an address the Safe has let spend its tokens"],
+  ];
+  for (const [list, what] of pools) {
+    const twin = list.find((x) => x !== a && looksLike(x, a));
+    if (twin) return { twin: ethers.getAddress(twin), what };
+  }
+  return null;
+}
+const lookalikeWhy = (addr, t, h) => {
+  const label = h.name(t.twin);
+  return `${addr} starts and ends like ${label.startsWith("0x") ? t.twin : `${label} (${t.twin})`}, ${t.what}, but it is a different address: the mark of address poisoning. Check every character before signing`;
+};
 
 /// The findings for one queued transaction: [{ level: "danger" | "warn", why }].
 function judge(tx, h, { safe, minUsd = 1000 }) {
@@ -257,13 +317,21 @@ function judge(tx, h, { safe, minUsd = 1000 }) {
         }
         if (name && CONTROL.has(name)) found.push({ level: "warn", why: `it changes who controls the Safe (${name})` });
         what.push(name ? `${name} on the Safe` : "a call to the Safe itself");
-      } else what.push(`a call to ${h.name(c.to)}`);
+      } else {
+        what.push(`a call to ${h.name(c.to)}`);
+        const t = twinOf(c.to, h);
+        if (t) found.push({ level: "danger", why: `it calls ${lookalikeWhy(c.to, t, h)}` });
+      }
       continue;
     }
     const info = tokenInfo(m.token, h, tx);
     if (m.kind === "approve") {
       what.push(`let ${h.name(m.payee)} spend ${m.raw === ethers.MaxUint256 ? `all its ${info.symbol}` : describe(m.raw, info, h)}`);
-      if (!h.spenders.has(m.payee.toLowerCase()) && !h.paid.has(m.payee.toLowerCase())) found.push({ level: "warn", why: `it lets ${m.payee} spend the Safe's ${info.symbol}, and the Safe has never approved that address before` });
+      const spender = m.payee.toLowerCase();
+      const t = twinOf(m.payee, h);
+      if (t) found.push({ level: "danger", why: `it lets ${m.payee} spend the Safe's ${info.symbol}, and ${lookalikeWhy(m.payee, t, h)}` });
+      else if (h.fakes.has(spender)) found.push({ level: "danger", why: `it lets ${m.payee} spend the Safe's ${info.symbol}, an address that has only ever appeared in fake transfers made to look like the Safe sent them: address poisoning` });
+      else if (!h.spenders.has(spender) && !h.paid.has(spender) && !(h.called || new Set()).has(spender)) found.push({ level: "warn", why: `it lets ${m.payee} spend the Safe's ${info.symbol}, and the Safe has never approved or used that address before` });
       continue;
     }
     what.push(`pay ${describe(m.raw, info, h)} to ${h.name(m.payee)}`);
@@ -280,11 +348,9 @@ function judge(tx, h, { safe, minUsd = 1000 }) {
     const amount = info.decimals != null ? Number(ethers.formatUnits(p.raw, info.decimals)) : null;
     const usd = amount != null && info.rate != null ? amount * info.rate : null;
     const shown = describe(p.raw, info, h);
-    const twin = [...h.paid.keys()].map((x) => ethers.getAddress(x)).find((x) => looksLike(x, payee)) || h.owners.find((o) => looksLike(o, payee));
+    const twin = twinOf(payee, h);
     if (twin) {
-      const owner = h.owners.some((o) => o === twin);
-      const label = h.name(twin);
-      found.push({ level: "danger", why: `${payee} starts and ends like ${label.startsWith("0x") ? twin : `${label} (${twin})`}, ${owner ? "one of the Safe's owners" : "an address the Safe has paid"}, but it is a different address: the mark of address poisoning. Check every character before signing` });
+      found.push({ level: "danger", why: lookalikeWhy(payee, twin, h) });
     } else if (h.fakes.has(key)) {
       found.push({ level: "danger", why: `${payee} has only ever appeared in fake transfers made to look like the Safe sent them: address poisoning` });
     } else if (!h.paid.has(key) && (usd == null || usd >= minUsd)) {
@@ -326,7 +392,7 @@ function saveState(state, file) {
 /// Reads the queue and judges each pending transaction. Returns
 /// { safe, threshold, owners, nonce, queue: [{ nonce, safeTxHash, signed, needed, what, found }], fresh }
 /// where `fresh` are the flagged ones not posted before.
-async function watchOnce(address, { chain = "base", api = null, safeApi: given = null, apiKey = null, safeUrl = null, fetch: fetchImpl = globalThis.fetch, env = process.env, minUsd = 1000, history = null, ethPaid = null, remember = true } = {}) {
+async function watchOnce(address, { chain = "base", api = null, safeApi: given = null, apiKey = null, safeUrl = null, fetch: fetchImpl = globalThis.fetch, env = process.env, minUsd = 1000, history = null, ethPaid = null, executed = null, remember = true } = {}) {
   const safe = ethers.getAddress(address);
   const service = given || safeApi(chain, { url: safeUrl, apiKey, fetch: fetchImpl });
   const info = await service.info(safe);
@@ -335,7 +401,10 @@ async function watchOnce(address, { chain = "base", api = null, safeApi: given =
   const hist = history || (await fetchHistory(safe, { chain, api, fetch: fetchImpl }));
   // Best effort: without it a usual ETH payee reads as new, which only adds a flag.
   const eth = ethPaid || (history ? [] : await fetchEthPaid(safe, { chain, api, fetch: fetchImpl }).catch(() => []));
-  const h = habits(hist, { owners: info.owners || [], ethPaid: eth });
+  // Best effort too: the contracts and spenders the Safe has used, so a
+  // lookalike of one is caught (the Request Finance theft approved one).
+  const done = executed || (service.executed ? await service.executed(safe).catch(() => []) : []);
+  const h = habits(hist, { owners: info.owners || [], ethPaid: eth, executed: done, safe });
   const queue = pending
     .filter((t) => !t.isExecuted && Number(t.nonce) >= nonce)
     .map((t) => ({

@@ -131,6 +131,44 @@ describe("rein safe", function () {
       expect((await one(pay(fake, 5))).queue[0].found[0].level).to.equal("danger");
     });
 
+    it("won't let a batch approve a lookalike of a contract the Safe uses (the Request Finance theft)", async () => {
+      // The Safe pays invoices through a batch-payment contract: approve it, then call it.
+      const real = ethers.getAddress("0x8ae7aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa3c51");
+      const lookalike = ethers.getAddress("0x8ae7bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb3c51");
+      const BATCH = new ethers.Interface(["function batchERC20PaymentsWithReference(address,address[],uint256[],bytes[],uint256[],address)"]);
+      const approve = (spender) => ({ to: USDC.address, value: 0n, operation: 0, data: ERC20.encodeFunctionData("approve", [spender, usdc(50000)]) });
+      const batchPay = (contract) => ({ to: contract, value: 0n, operation: 0, data: BATCH.encodeFunctionData("batchERC20PaymentsWithReference", [USDC.address, [PAYEES.inference.address], [usdc(50000)], ["0x01"], [0], PAYEES.inference.address]) });
+      const multi = (calls) => ({ to: MULTISEND, value: "0", operation: 1, data: SAFE.encodeFunctionData("multiSend", [pack(calls)]) });
+      const executed = [{ ...multi([approve(real), batchPay(real)]), isExecuted: true }];
+      const run = (q) => safe.watchOnce(AGENT, { safeApi: { ...service([{ nonce: 7, safeTxHash: ethers.id(JSON.stringify(q.data)), confirmations: [], confirmationsRequired: 2, ...q }]), executed: async () => executed }, history, env });
+
+      const attack = await run(multi([approve(lookalike), batchPay(lookalike)]));
+      const found = attack.queue[0].found;
+      expect(found.map((f) => f.level)).to.deep.equal(["danger", "danger"]);
+      expect(found[0].why).to.contain(`it lets ${lookalike} spend the Safe's USDC`).and.contain(`like ${real}, a contract the Safe has used`);
+      expect(found[1].why).to.contain(`it calls ${lookalike}`);
+      expect(safe.text(attack)).to.contain("DON'T SIGN YET");
+      // The real contract, as usual: nothing to say.
+      expect((await run(multi([approve(real), batchPay(real)]))).queue[0].found).to.deep.equal([]);
+      // Without the Safe's own transactions it can only say the spender is new.
+      const blind = await safe.watchOnce(AGENT, { safeApi: service([{ nonce: 7, safeTxHash: "0x01", confirmations: [], confirmationsRequired: 2, ...multi([approve(lookalike)]) }]), history, env });
+      expect(blind.queue[0].found.map((f) => f.level)).to.deep.equal(["warn"]);
+
+      // Safe's gateway serves those executed transactions with no key.
+      const base = "https://safe-client.safe.global/v1/chains/8453";
+      const ex = executed[0];
+      const pages = {
+        [`${base}/safes/${AGENT}/transactions/history`]: { results: [{ type: "DATE_LABEL" }, { type: "TRANSACTION", transaction: { id: "x1", txInfo: { type: "Custom" } } }, { type: "TRANSACTION", transaction: { id: "t1", txInfo: { type: "Transfer" } } }], next: null },
+        [`${base}/transactions/x1`]: { txData: { to: { value: ex.to }, value: "0", hexData: ex.data, operation: 1 }, detailedExecutionInfo: { nonce: 3 }, txStatus: "SUCCESS" },
+      };
+      const asked = [];
+      const gw = safe.safeGateway("base", { fetch: async (url) => (asked.push(url), { ok: true, status: 200, json: async () => pages[url] }) });
+      const got = await gw.executed(AGENT);
+      expect(got.map((t) => [t.to, t.operation, t.isExecuted])).to.deep.equal([[MULTISEND, 1, true]]);
+      expect(asked).to.not.include(`${base}/transactions/t1`);
+      expect(require("../web/api/safe").target(`/api/safe?path=v1/chains/8453/safes/${AGENT}/transactions/history`)).to.equal(`${base}/safes/${AGENT}/transactions/history`);
+    });
+
     it("says so when a Safe has no payment history at all", async () => {
       history.transactions = [];
       history.tokenTransfers = [];

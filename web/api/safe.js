@@ -1,10 +1,10 @@
 // Reads a Safe's public queue for the /safe page when Safe's gateway refuses a
-// browser. GET only, and only the three read paths the page uses: nothing else
+// browser. GET only, and only the Safe read paths the page uses: nothing else
 // passes through. No key, no state.
 const GATEWAY = "https://safe-client.safe.global";
 const ALLOWED = [
   /^\/v1\/chains\/\d{1,10}\/safes\/0x[0-9a-fA-F]{40}$/,
-  /^\/v1\/chains\/\d{1,10}\/safes\/0x[0-9a-fA-F]{40}\/transactions\/queued$/,
+  /^\/v1\/chains\/\d{1,10}\/safes\/0x[0-9a-fA-F]{40}\/transactions\/(queued|history)$/,
   /^\/v1\/chains\/\d{1,10}\/transactions\/[A-Za-z0-9_:-]{1,200}$/,
 ];
 const QUERY = new Set(["cursor", "trusted"]);
