@@ -37,10 +37,29 @@ const MULTISEND = new Set(
 );
 const CONTROL = new Set(["addOwnerWithThreshold", "removeOwner", "swapOwner", "changeThreshold", "enableModule", "disableModule", "setGuard", "setModuleGuard", "setFallbackHandler"]);
 const STABLES = /^(USDC|USDbC|USDT|DAI|USDS|EURC|PYUSD)$/i;
-const ERC20 = new ethers.Interface(["function transfer(address to, uint256 value)", "function approve(address spender, uint256 value)", "function transferFrom(address from, address to, uint256 value)"]);
+const ERC20 = new ethers.Interface(["function transfer(address to, uint256 value)", "function approve(address spender, uint256 value)", "function transferFrom(address from, address to, uint256 value)", "function increaseAllowance(address spender, uint256 value)", "function setApprovalForAll(address operator, bool approved)"]);
+// Permit2's allowance (token, spender, amount, expiration) and Disperse's
+// payouts (a payroll Safe's usual batch): each moves money to an address in
+// its arguments, not to the contract called.
+const PERMIT2 = new ethers.Interface(["function approve(address token, address spender, uint160 amount, uint48 expiration)"]);
+const DISPERSE = new ethers.Interface(["function disperseEther(address[] recipients, uint256[] values)", "function disperseToken(address token, address[] recipients, uint256[] values)", "function disperseTokenSimple(address token, address[] recipients, uint256[] values)"]);
 const MULTI = new ethers.Interface(["function multiSend(bytes transactions)"]);
 
 const short = (a) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+/// A lookalike as poisoners make them: the same first and last characters,
+/// not only exactly four and four (wallets show 3 to 6 at each end). A
+/// random pair matches 7 hex characters about once in 268 million.
+function looksAlike(a, b) {
+  const x = String(a).toLowerCase();
+  const y = String(b).toLowerCase();
+  if (x === y || x.length !== 42 || y.length !== 42) return false;
+  if (looksLike(x, y)) return true;
+  let p = 0;
+  while (p < 40 && x[2 + p] === y[2 + p]) p++;
+  let q = 0;
+  while (q < 40 && x[41 - q] === y[41 - q]) q++;
+  return (p >= 3 && q >= 4) || (p >= 4 && q >= 3) || q >= 6 || (p >= 6 && q >= 2);
+}
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const dollars = (n) => (n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e4 ? `$${Math.round(n / 1e3)}k` : `$${Math.round(n).toLocaleString("en-US")}`);
 
@@ -124,6 +143,13 @@ function safeGateway(chain, { url = SAFE_GATEWAY, fetch: fetchImpl = globalThis.
       data: t.hexData || "0x",
       operation: t.operation || 0,
       dataDecoded: t.dataDecoded || null,
+      // Who the Safe pays for gas when the transaction runs, and how much: a
+      // queued transaction can pay any amount of any token to refundReceiver.
+      safeTxGas: e.safeTxGas || "0",
+      baseGas: e.baseGas || "0",
+      gasPrice: e.gasPrice || "0",
+      gasToken: value(e.gasToken) || ethers.ZeroAddress,
+      refundReceiver: value(e.refundReceiver) || ethers.ZeroAddress,
       confirmations: e.confirmations || [],
       confirmationsRequired: e.confirmationsRequired,
       isExecuted: d.txStatus === "SUCCESS",
@@ -171,17 +197,44 @@ function unpackMultiSend(hex) {
 /// What one call moves: { kind, token, payee, raw } or a plain contract call.
 function moveOf(c) {
   if (c.data && c.data !== "0x" && c.data.length >= 10) {
-    try {
-      const d = ERC20.parseTransaction({ data: c.data });
-      if (d.name === "transfer") return { kind: "transfer", token: c.to, payee: ethers.getAddress(d.args[0]), raw: d.args[1] };
-      if (d.name === "transferFrom") return { kind: "transfer", token: c.to, payee: ethers.getAddress(d.args[1]), raw: d.args[2] };
-      if (d.name === "approve") return { kind: "approve", token: c.to, payee: ethers.getAddress(d.args[0]), raw: d.args[1] };
-    } catch {
-      // not a token call
+    for (const iface of [ERC20, PERMIT2]) {
+      try {
+        const d = iface.parseTransaction({ data: c.data });
+        if (!d) continue;
+        if (iface === PERMIT2) return { kind: "approve", token: ethers.getAddress(d.args[0]), payee: ethers.getAddress(d.args[1]), raw: BigInt(d.args[2]) };
+        if (d.name === "transfer") return { kind: "transfer", token: c.to, payee: ethers.getAddress(d.args[0]), raw: d.args[1] };
+        if (d.name === "transferFrom") return { kind: "transfer", token: c.to, payee: ethers.getAddress(d.args[1]), raw: d.args[2] };
+        if (d.name === "approve" || d.name === "increaseAllowance") return { kind: "approve", token: c.to, payee: ethers.getAddress(d.args[0]), raw: d.args[1] };
+        if (d.name === "setApprovalForAll") return d.args[1] ? { kind: "approve", token: c.to, payee: ethers.getAddress(d.args[0]), raw: ethers.MaxUint256 } : { kind: "call", target: c.to, selector: c.data.slice(0, 10) };
+      } catch {
+        // not this kind of call
+      }
     }
     return { kind: "call", target: c.to, selector: c.data.slice(0, 10) };
   }
   return { kind: "transfer", token: NATIVE, payee: c.to, raw: c.value };
+}
+
+/// Every move one call makes: Disperse's payouts one by one, and ETH sent
+/// along with calldata as a payment to the contract or address called.
+function movesOf(c) {
+  let out = null;
+  if (c.data && c.data.length >= 10) {
+    try {
+      const d = DISPERSE.parseTransaction({ data: c.data });
+      if (d) {
+        const token = d.name === "disperseEther" ? NATIVE : ethers.getAddress(d.args[0]);
+        const [to, raw] = d.name === "disperseEther" ? [d.args[0], d.args[1]] : [d.args[1], d.args[2]];
+        out = to.map((payee, i) => ({ kind: "transfer", token, payee: ethers.getAddress(payee), raw: BigInt(raw[i] ?? 0) }));
+      }
+    } catch {
+      out = null;
+    }
+  }
+  out ||= [moveOf(c)];
+  const v = BigInt(c.value || 0);
+  if (v > 0n && !out.some((m) => m.token === NATIVE)) out.push({ kind: "transfer", token: NATIVE, payee: c.to, raw: v });
+  return out;
 }
 
 // -- what the Safe has done -------------------------------------------------------
@@ -251,12 +304,21 @@ function habits(history, { owners = [], ethPaid = [], executed = [], safe = null
   // the explorer filter reads a payment in an unpriced token, a DAO's own
   // governance token say, as possible poisoning. Unless the payee looks like
   // another address, count it as a real payment.
-  const realIgnored = ignored.filter((x) => /is unpriced/.test(x.why) && x.payee && ![...paid.keys(), ...ignored.map((y) => y.payee && y.payee.toLowerCase())].some((p) => p && looksLike(p, x.payee)));
-  for (const x of realIgnored) paid.set(x.payee.toLowerCase(), (paid.get(x.payee.toLowerCase()) || 0) + 1);
+  // Anyone can emit such a transfer "from" the Safe for a few cents, so it
+  // only counts as having paid that address in that same token: it never
+  // vouches for a payment in USDC, and never makes a lookalike's twin.
+  const realIgnored = ignored.filter((x) => /is unpriced/.test(x.why) && x.payee && ![...paid.keys(), ...ignored.map((y) => y.payee && y.payee.toLowerCase())].some((p) => p && looksAlike(p, x.payee)));
+  const paidIn = new Set();
+  const unpricedToken = new Map(ignored.map((x) => [x.tx, null]));
+  for (const t of history.tokenTransfers || []) if (unpricedToken.has(t.transaction_hash) && (t.token?.address_hash || t.token?.address)) unpricedToken.set(t.transaction_hash, String(t.token.address_hash || t.token.address).toLowerCase());
+  for (const x of realIgnored) if (unpricedToken.get(x.tx)) paidIn.add(`${x.payee.toLowerCase()}:${unpricedToken.get(x.tx)}`);
   const fake = ignored.filter((x) => !realIgnored.includes(x));
   const fakes = new Set(fake.map((x) => x.payee && x.payee.toLowerCase()).filter(Boolean));
   const rate = (t) => (t === NATIVE ? (history.info?.exchange_rate != null ? Number(history.info.exchange_rate) : null) : tokens[t]?.rate ?? (STABLES.test(tokens[t]?.symbol || "") ? 1 : null));
-  return { paid, largest, spenders, called, fakes, tokens, rate, owners: owners.map((o) => ethers.getAddress(o)), name: namer(history, tokens), payments: own.length + ethPaid.length + realIgnored.length, newShare, ignored: fake };
+  // Names an attacker can't choose for the payee: none from the transfers Rein ignored.
+  const ignoredTx = new Set(ignored.map((x) => x.tx));
+  const name = namer({ ...history, tokenTransfers: (history.tokenTransfers || []).filter((t) => !ignoredTx.has(t.transaction_hash)) }, tokens);
+  return { paid, paidIn, largest, spenders, called, fakes, tokens, rate, owners: owners.map((o) => ethers.getAddress(o)), name, payments: own.length + ethPaid.length + realIgnored.length, newShare, ignored: fake, truncated: Boolean(history.truncated) };
 }
 
 /// A token's symbol, decimals and dollar rate: from the Safe's own history,
@@ -287,7 +349,7 @@ function twinOf(addr, h) {
     [[...h.spenders], "an address the Safe has let spend its tokens"],
   ];
   for (const [list, what] of pools) {
-    const twin = list.find((x) => x !== a && looksLike(x, a));
+    const twin = list.find((x) => x !== a && looksAlike(x, a));
     if (twin) return { twin: ethers.getAddress(twin), what };
   }
   return null;
@@ -302,11 +364,25 @@ function judge(tx, h, { safe, minUsd = 1000 }) {
   const found = [];
   const { calls, danger } = callsOf(tx);
   if (danger) found.push({ level: "danger", why: danger });
+  // A gas refund pays (gas used + baseGas) × gasPrice of gasToken to
+  // refundReceiver (or whoever executes it) when the transaction runs.
+  // Safe{Wallet} proposes with gasPrice 0; anything else can drain the Safe.
+  if (BigInt(tx.gasPrice || 0) > 0n) {
+    const token = tx.gasToken && tx.gasToken !== ethers.ZeroAddress ? ethers.getAddress(tx.gasToken) : NATIVE;
+    const to = tx.refundReceiver && tx.refundReceiver !== ethers.ZeroAddress ? ethers.getAddress(tx.refundReceiver) : "whoever executes it";
+    const info = tokenInfo(token, h, tx);
+    // The Safe pays (gas used + baseGas) × gasPrice, so baseGas alone sets the floor.
+    const least = BigInt(tx.baseGas || 0) * BigInt(tx.gasPrice);
+    found.push({ level: "danger", why: `it pays a gas refund of at least ${describe(least, info)} (gasPrice ${tx.gasPrice}, baseGas ${tx.baseGas || 0}) to ${to} when it runs. Safe{Wallet} never sets this; don't sign it` });
+  }
   const what = [];
   const pays = new Map();
+  const moves = [];
   for (const c of calls) {
     if (c.operation === 1) found.push({ level: "danger", why: `one of its calls is a delegatecall to ${c.to}, which can move anything the Safe holds` });
-    const m = moveOf(c);
+    for (const m of movesOf(c)) moves.push([c, m]);
+  }
+  for (const [c, m] of moves) {
     if (m.kind === "call") {
       if (c.to.toLowerCase() === safe.toLowerCase()) {
         let name = null;
@@ -318,15 +394,17 @@ function judge(tx, h, { safe, minUsd = 1000 }) {
         if (name && CONTROL.has(name)) found.push({ level: "warn", why: `it changes who controls the Safe (${name})` });
         what.push(name ? `${name} on the Safe` : "a call to the Safe itself");
       } else {
-        what.push(`a call to ${h.name(c.to)}`);
+        what.push(`a call to ${label(c.to, h)}`);
         const t = twinOf(c.to, h);
+        const target = c.to.toLowerCase();
         if (t) found.push({ level: "danger", why: `it calls ${lookalikeWhy(c.to, t, h)}` });
+        else if (!(h.called || new Set()).has(target) && !h.paid.has(target) && !h.spenders.has(target) && !h.tokens[c.to]) found.push({ level: "warn", why: `it calls ${c.to}, which this Safe has never used, and Rein can't read who that call pays` });
       }
       continue;
     }
     const info = tokenInfo(m.token, h, tx);
     if (m.kind === "approve") {
-      what.push(`let ${h.name(m.payee)} spend ${m.raw === ethers.MaxUint256 ? `all its ${info.symbol}` : describe(m.raw, info, h)}`);
+      what.push(`let ${label(m.payee, h)} spend ${m.raw === ethers.MaxUint256 ? `all its ${info.symbol}` : describe(m.raw, info, h)}`);
       const spender = m.payee.toLowerCase();
       const t = twinOf(m.payee, h);
       if (t) found.push({ level: "danger", why: `it lets ${m.payee} spend the Safe's ${info.symbol}, and ${lookalikeWhy(m.payee, t, h)}` });
@@ -334,7 +412,7 @@ function judge(tx, h, { safe, minUsd = 1000 }) {
       else if (!h.spenders.has(spender) && !h.paid.has(spender) && !(h.called || new Set()).has(spender)) found.push({ level: "warn", why: `it lets ${m.payee} spend the Safe's ${info.symbol}, and the Safe has never approved or used that address before` });
       continue;
     }
-    what.push(`pay ${describe(m.raw, info, h)} to ${h.name(m.payee)}`);
+    what.push(`pay ${describe(m.raw, info, h)} to ${label(m.payee, h)}`);
     // Several calls to one payee in one batch are judged as one payment, so
     // splitting it can't slip under the dollar line.
     const k = `${m.payee.toLowerCase()}:${m.token.toLowerCase()}`;
@@ -353,7 +431,7 @@ function judge(tx, h, { safe, minUsd = 1000 }) {
       found.push({ level: "danger", why: lookalikeWhy(payee, twin, h) });
     } else if (h.fakes.has(key)) {
       found.push({ level: "danger", why: `${payee} has only ever appeared in fake transfers made to look like the Safe sent them: address poisoning` });
-    } else if (!h.paid.has(key) && (usd == null || usd >= minUsd)) {
+    } else if (!h.paid.has(key) && !(h.paidIn || new Set()).has(`${key}:${p.token.toLowerCase()}`) && (usd == null || usd >= minUsd)) {
       const tail = usd != null ? `, and this is ${dollars(usd)}` : `, and Rein can't price ${info.symbol}`;
       if (h.newShare != null && h.newShare >= 0.5) {
         // Normal for this Safe: say so, but don't raise an alert.
@@ -369,7 +447,20 @@ function judge(tx, h, { safe, minUsd = 1000 }) {
       found.push({ level: "warn", why: `${shown} is more than 3× the most this Safe has ever paid ${h.name(payee)} in ${info.symbol} (${money(top)})` });
     }
   }
-  return { what: what.join(", then ") || "nothing Rein can read", found };
+  // First payments under the dollar line, kept so the whole queue can be
+  // summed per payee: thirty payments of $990 are one $29,700 payment.
+  const small = [...pays.values()].filter((p) => !h.paid.has(p.payee.toLowerCase()) && !twinOf(p.payee, h)).map((p) => {
+    const amount = p.info.decimals != null ? Number(ethers.formatUnits(p.raw, p.info.decimals)) : null;
+    return { payee: p.payee.toLowerCase(), usd: amount != null && p.info.rate != null ? amount * p.info.rate : null };
+  });
+  return { what: what.join(", then ") || "nothing Rein can read", found, small };
+}
+
+/// How a report names an address: always the address itself, with the
+/// explorer's label (which its owner chose) after it.
+function label(a, h) {
+  const n = h.name(a);
+  return n.startsWith("0x") ? a : `${a} ("${n.replace(/[<>|*_`~\[\]()@]/g, "")}")`;
 }
 
 // -- one pass ---------------------------------------------------------------------
@@ -392,7 +483,7 @@ function saveState(state, file) {
 /// Reads the queue and judges each pending transaction. Returns
 /// { safe, threshold, owners, nonce, queue: [{ nonce, safeTxHash, signed, needed, what, found }], fresh }
 /// where `fresh` are the flagged ones not posted before.
-async function watchOnce(address, { chain = "base", api = null, safeApi: given = null, apiKey = null, safeUrl = null, fetch: fetchImpl = globalThis.fetch, env = process.env, minUsd = 1000, history = null, ethPaid = null, executed = null, remember = true } = {}) {
+async function watchOnce(address, { chain = "base", api = null, safeApi: given = null, apiKey = null, safeUrl = null, fetch: fetchImpl = globalThis.fetch, env = process.env, minUsd = 1000, history = null, ethPaid = null, executed = null, remember = true, defer = false } = {}) {
   const safe = ethers.getAddress(address);
   const service = given || safeApi(chain, { url: safeUrl, apiKey, fetch: fetchImpl });
   const info = await service.info(safe);
@@ -415,6 +506,22 @@ async function watchOnce(address, { chain = "base", api = null, safeApi: given =
       proposer: t.proposer || null,
       ...judge(t, h, { safe, minUsd }),
     }));
+  const owed = new Map();
+  for (const q of queue) {
+    for (const s of q.small || []) {
+      const o = owed.get(s.payee) || { usd: 0, n: 0 };
+      if (s.usd != null) o.usd += s.usd;
+      o.n += 1;
+      owed.set(s.payee, o);
+    }
+  }
+  for (const q of queue) {
+    for (const s of q.small || []) {
+      const o = owed.get(s.payee);
+      if (o.n > 1 && o.usd >= minUsd && s.usd != null && s.usd < minUsd) q.found.push({ level: "warn", why: `${o.n} transactions in the queue pay ${ethers.getAddress(s.payee)}, which the Safe has never paid, ${dollars(o.usd)} in all. Confirm the address with the payee through another channel` });
+    }
+  }
+  for (const q of queue) delete q.small;
   // What was already posted, so each flagged transaction is posted once. A web
   // page passes remember: false and keeps nothing.
   const file = remember ? statePath(safe, env) : null;
@@ -425,8 +532,11 @@ async function watchOnce(address, { chain = "base", api = null, safeApi: given =
   // Forget what has left the queue (executed or replaced).
   const live = new Set(queue.map((q) => q.safeTxHash));
   for (const k of Object.keys(state.posted)) if (!live.has(k)) delete state.posted[k];
-  if (file) saveState(state, file);
-  return { safe, chain, threshold: Number(info.threshold || 0), owners: info.owners || [], nonce, payments: h.payments, poisoning: h.ignored.length, queue, fresh };
+  // With defer, the caller saves only once the alert has really been posted,
+  // so a webhook that fails is tried again on the next check.
+  const commit = () => file && saveState(state, file);
+  if (!defer) commit();
+  return { safe, chain, threshold: Number(info.threshold || 0), owners: info.owners || [], nonce, payments: h.payments, poisoning: h.ignored.length, truncated: h.truncated, queue, fresh, ...(defer ? { commit } : {}) };
 }
 
 function text(r, { only = null } = {}) {
@@ -434,6 +544,7 @@ function text(r, { only = null } = {}) {
   const list = only || r.queue;
   if (!only) {
     L.push(`Safe ${r.safe} on ${CHAINS[r.chain]?.name || r.chain}: ${r.threshold} of ${r.owners.length} owners sign. Rein knows ${plural(r.payments, "payment")} it has made${r.poisoning ? `, and ignored ${plural(r.poisoning, "fake transfer")} made to look like it sent them (address poisoning)` : ""}.`);
+    if (r.truncated) L.push("Rein read only the newest part of this Safe's history (a flood of fake transfers can push real payees out of it), so a usual payee may read as new.");
     if (!list.length) L.push("Nothing is waiting to be signed.");
   }
   for (const q of list) {
@@ -504,7 +615,10 @@ function parse(argv) {
 
 async function post(webhook, textBody, fetchImpl) {
   // Slack reads "text", Discord "content", Telegram's sendMessage "text" (with chat_id in the URL).
-  const res = await fetchImpl(webhook, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: textBody, content: textBody.slice(0, 2000) }) });
+  // Slack reads <…> as links and mentions, Discord pings on @everyone: the
+  // report carries text from the chain, so neither may act on it.
+  const slack = textBody.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const res = await fetchImpl(webhook, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: slack, content: textBody.slice(0, 2000), allowed_mentions: { parse: [] } }) });
   if (!res.ok) throw new Error(`the webhook answered ${res.status}`);
 }
 
@@ -518,15 +632,19 @@ async function main(argv, { log = console.log, env = process.env, fetch: fetchIm
   const run = async () => {
     const r = demo
       ? await watchOnce(demo.address, { safeApi: demo.safeApi, history: demo.history, minUsd: o.minUsd, remember: false })
-      : await watchOnce(o.address, { chain: o.chain, api: o.api, safeUrl: o.safeUrl, apiKey: env.SAFE_API_KEY || null, fetch: fetchImpl, env, minUsd: o.minUsd });
+      : await watchOnce(o.address, { chain: o.chain, api: o.api, safeUrl: o.safeUrl, apiKey: env.SAFE_API_KEY || null, fetch: fetchImpl, env, minUsd: o.minUsd, defer: true });
     if (demo && !o.json) log("(Rein's made-up sample Safe, not a real one.)");
     if (o.json) log(JSON.stringify(r, null, 2));
     else log(text(r));
-    if (o.webhook && r.fresh.length) await post(o.webhook, alertText(r), fetchImpl).catch((err) => log(`could not post the alert: ${err.message}`));
+    let posted = true;
+    if (o.webhook && r.fresh.length) posted = await post(o.webhook, alertText(r), fetchImpl).then(() => true, (err) => (log(`could not post the alert: ${err.message}`), false));
+    if (posted && r.commit) r.commit();
+    if (!posted) r.alertFailed = true;
     return r;
   };
   if (!o.every) {
     const r = await run();
+    if (r.alertFailed) return 3;
     return r.queue.some((q) => q.found.some((f) => f.level === "danger")) ? 1 : 0;
   }
   log(`Watching Safe ${o.address}'s queue every ${o.every}s.`);

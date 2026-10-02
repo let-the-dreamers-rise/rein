@@ -82,7 +82,7 @@ describe("rein safe", function () {
     expect(r.queue[0].found.map((f) => f.why).join()).to.contain("more than 3× the most this Safe has ever paid Inference API");
     const lines = [];
     expect(await safe.main(["--sample"], { log: (l) => lines.push(l) })).to.equal(1);
-    expect(lines.join("\n")).to.contain("made-up sample Safe").and.contain("#41 (1 of 2 signed): pay 15 USDC to Inference API. Looks normal (this isn't a guarantee).").and.contain("#42 (1 of 2 signed): pay 48,000 USDC");
+    expect(lines.join("\n")).to.contain("made-up sample Safe").and.contain("#41 (1 of 2 signed): pay 15 USDC to 0xC64f0057027cDa5b6D862b6E1906b1d7a5B4e299 (\"Inference API\"). Looks normal (this isn't a guarantee).").and.contain("#42 (1 of 2 signed): pay 48,000 USDC");
   });
 
   it("runs on the web page from the same bundle, keeping nothing", async () => {
