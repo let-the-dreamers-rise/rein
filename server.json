@@ -1,0 +1,24 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.let-the-dreamers-rise/rein",
+  "title": "Rein",
+  "description": "Scan an agent wallet for the spending policy its history supports; sandbox that refuses drains",
+  "repository": {
+    "url": "https://github.com/let-the-dreamers-rise/rein",
+    "source": "github"
+  },
+  "websiteUrl": "https://github.com/let-the-dreamers-rise/rein",
+  "version": "0.1.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "rein-wallet",
+      "version": "0.1.1",
+      "transport": { "type": "stdio" },
+      "packageArguments": [
+        { "type": "positional", "value": "mcp" },
+        { "type": "positional", "value": "--sandbox" }
+      ]
+    }
+  ]
+}

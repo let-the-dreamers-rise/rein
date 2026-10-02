@@ -18,7 +18,37 @@ The policy the agent runs under:
 | must say why | every payment carries a hash of the instruction behind it |
 | account holds | 50,000 USDC |
 
+## Guarding a real wallet instead
+
+```bash
+npx rein-wallet guard 0xYourAgentWallet            # add --chain base-sepolia or ethereum
+```
+
+It learns the wallet's payees and hourly limits from its own history, prints
+what they would have allowed over the last 30 days, and saves them to
+`~/.rein/guards/`. Then, before the agent signs:
+
+```js
+const verdict = require("rein-wallet").check(tx);  // tx, or an x402 { payTo, asset, amount }
+```
+
+For an MCP agent, `npx rein-wallet mcp --guard 0xYourAgentWallet` answers
+`rein_check_payment` from those limits; the agent's own wallet still signs. Try
+it with nothing real: `npx rein-wallet guard --sample`.
+
+The rest of this page is the sandbox.
+
 ## Pick one
+
+### A terminal, nothing else
+
+```bash
+npx rein-wallet try
+```
+
+The same gauntlet as the plugin's `/rein:try`, printed as a table: one honest
+payment, then five attempts to drain the account, each checked with
+`simulate()` and then sent anyway, so every refusal is the contract's.
 
 ### Claude Code: the plugin
 
@@ -136,7 +166,7 @@ sample wallet that needs no network.
 From a terminal, with nothing installed but Node:
 
 ```bash
-npx github:let-the-dreamers-rise/rein scan 0xAgentWallet --out report
+npx rein-wallet scan 0xAgentWallet --out report
 ```
 
 The first run fetches Rein (about 30 seconds). Then put that policy on the
@@ -145,19 +175,19 @@ wallet engine the key lives in (drop `--send` to see the requests first):
 ```bash
 # Privy
 PRIVY_APP_ID=… PRIVY_APP_SECRET=… \
-npx github:let-the-dreamers-rise/rein apply report/export/privy.json --wallet <privy wallet id> --send
+npx rein-wallet apply report/export/privy.json --wallet <privy wallet id> --send
 # Turnkey
 TURNKEY_API_PUBLIC_KEY=… TURNKEY_API_PRIVATE_KEY=… \
-npx github:let-the-dreamers-rise/rein apply report/export/turnkey.json --organization <org id> --agent-user <user id> --send
+npx rein-wallet apply report/export/turnkey.json --organization <org id> --agent-user <user id> --send
 # Coinbase CDP
 CDP_API_KEY_ID=… CDP_API_KEY_SECRET=… CDP_WALLET_SECRET=… \
-npx github:let-the-dreamers-rise/rein apply report/export/coinbase.json --send
+npx rein-wallet apply report/export/coinbase.json --send
 ```
 
 To be told when the wallet does something its policy would not allow:
 
 ```bash
-npx github:let-the-dreamers-rise/rein watch 0xAgentWallet --webhook "$SLACK_WEBHOOK_URL"
+npx rein-wallet watch 0xAgentWallet --webhook "$SLACK_WEBHOOK_URL"
 ```
 
 Or, with nothing left running, copy [`scan/watch-action.yml`](scan/watch-action.yml)

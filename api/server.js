@@ -21,7 +21,7 @@
 // behind the sandbox, so a generated key guards nothing worth guarding.
 const http = require("node:http");
 const crypto = require("node:crypto");
-const { openClient, wantsSandbox } = require("../mcp/lib/config");
+const { openClient, wantsSandbox, scrub } = require("../mcp/lib/config");
 
 const PORT = Number(process.env.REIN_API_PORT || 8402);
 const MAX_BODY = 64 * 1024;
@@ -161,7 +161,7 @@ function createServer(tokens) {
     } catch (err) {
       // A policy refusal is a 200 with allowed:false -- it is a normal answer.
       // A 4xx here means the request itself was malformed or unanswerable.
-      return json(res, 400, { error: err.message });
+      return json(res, 400, { error: scrub(err.message) });
     }
   });
 }
@@ -192,7 +192,14 @@ function main() {
     process.exit(1);
   }
   if (sandbox) rein().catch((err) => console.error(`rein-api: the sandbox did not start: ${err.message}`));
-  createServer(tokens).listen(PORT, "127.0.0.1", () => {
+  const server = createServer(tokens);
+  server.on("error", (err) => {
+    console.error(err.code === "EADDRINUSE"
+      ? `rein-api: port ${PORT} is already in use (another rein-api?). Stop it, or pick another with REIN_API_PORT=8403.`
+      : `rein-api: could not listen on port ${PORT}: ${err.message}`);
+    process.exit(1);
+  });
+  server.listen(PORT, "127.0.0.1", () => {
     // Loopback by default. Putting a key that can spend on a public interface
     // should be a decision somebody makes on purpose, behind a proxy they chose.
     console.error(`rein-api listening on http://127.0.0.1:${PORT} for ${tokens.size} caller(s)`);

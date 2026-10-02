@@ -24,9 +24,9 @@ const { ethers } = require("ethers");
 const { NATIVE } = require("./evaluate");
 
 const CHAINS = {
-  base: { name: "Base", api: "https://base.blockscout.com", explorer: "https://base.blockscout.com" },
-  "base-sepolia": { name: "Base Sepolia", api: "https://base-sepolia.blockscout.com", explorer: "https://base-sepolia.blockscout.com" },
-  ethereum: { name: "Ethereum", api: "https://eth.blockscout.com", explorer: "https://eth.blockscout.com" },
+  base: { name: "Base", chainId: 8453, api: "https://base.blockscout.com", explorer: "https://base.blockscout.com" },
+  "base-sepolia": { name: "Base Sepolia", chainId: 84532, api: "https://base-sepolia.blockscout.com", explorer: "https://base-sepolia.blockscout.com" },
+  ethereum: { name: "Ethereum", chainId: 1, api: "https://eth.blockscout.com", explorer: "https://eth.blockscout.com" },
 };
 
 const ERC20 = new ethers.Interface([
@@ -48,13 +48,94 @@ const tokenAddress = (t) => ethers.getAddress(t.address_hash || t.address);
 const seconds = (iso) => Math.floor(Date.parse(iso) / 1000);
 const isErc20 = (t) => !t.type || t.type === "ERC-20";
 
+// Tokens that are what their symbol says, by address. Anyone can deploy a
+// token called "USDC" (or "ÚSDС"), so a symbol proves nothing.
+const KNOWN_TOKENS = {
+  base: [
+    "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // USDC
+    "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA", // USDbC
+    "0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42", // EURC
+    "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2", // USDT
+    "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb", // DAI
+    "0x4200000000000000000000000000000000000006", // WETH
+    "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf", // cbBTC
+  ],
+  "base-sepolia": ["0x036CbD53842c5426634e7929541eC2318f3dCF7e", "0x4200000000000000000000000000000000000006"],
+  ethereum: [
+    "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", // USDC
+    "0xdAC17F958D2ee523a2206206994597C13D831ec7", // USDT
+    "0x6B175474E89094C44Da98b954EedeAC495271d0F", // DAI
+    "0x1aBaEA1f7C830bD89Acc67eC4af516284b1bC33c", // EURC
+    "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", // WETH
+  ],
+};
+const PLAIN = /^[\x20-\x7E]*$/; // printable ASCII: no lookalike letters, no invisible ones
+
+/// Text anyone on the chain chose (a token's name or symbol, an address's
+/// label), made safe to print to a terminal, a chat or a model: no control
+/// characters (a terminal escape can rewrite the clipboard), no direction
+/// overrides or invisible characters, no line breaks, at most 32 characters.
+/// Lookalike letters stay, so the poisoning checks can still see them.
+function display(s) {
+  if (s == null) return s;
+  // Replaced with a visible mark, not removed: "USDC" plus an invisible
+  // character must not come out reading "USDC".
+  const t = String(s).replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g, "\ufffd").replace(/\s+/g, " ").trim();
+  return t.length > 32 ? `${t.slice(0, 31)}…` : t;
+}
+
+/// The same, over a whole history as the explorer returned it.
+function cleanHistory(h) {
+  // rawSymbol and rawName keep what the chain said, for the poisoning checks.
+  const tok = (t) => t && !("rawSymbol" in t) && Object.assign(t, { rawSymbol: t.symbol ?? null, rawName: t.name ?? null, ...(t.symbol != null ? { symbol: display(t.symbol) } : {}), ...(t.name != null ? { name: display(t.name) } : {}) });
+  const who = (p) => p && Object.assign(p, { ...(p.name != null ? { name: display(p.name) } : {}), ...(p.ens_domain_name != null ? { ens_domain_name: display(p.ens_domain_name) } : {}), ...(p.metadata?.tags ? { metadata: { ...p.metadata, tags: p.metadata.tags.map((x) => ({ ...x, name: display(x.name) })) } } : {}) });
+  for (const b of h.tokenBalances || []) tok(b.token);
+  for (const t of h.tokenTransfers || []) tok(t.token), who(t.to), who(t.from);
+  for (const tx of h.transactions || []) {
+    who(tx.to);
+    for (const t of tx.token_transfers || []) tok(t.token), who(t.to);
+  }
+  return h;
+}
+
+/// Why a transfer out of the wallet, in a transaction the wallet didn't
+/// send, is not to be believed, or null if it can be. Address poisoning mints
+/// a fake "USDC" and emits Transfer events "from" the victim to an address
+/// that looks like one it pays, so the victim's history seems to show it
+/// paying the attacker. A real payment the wallet signed for someone else to
+/// submit (x402, a smart wallet's user operation) moves a real token.
+function poisoned(t, { chain, interacted }) {
+  const tok = t.token || {};
+  const address = tokenAddress(tok);
+  if (BigInt(t.total?.value || 0) === 0n) return "moves nothing";
+  if (!PLAIN.test(tok.rawSymbol ?? tok.symbol ?? "") || !PLAIN.test(tok.rawName ?? tok.name ?? "")) return `its token's name hides lookalike characters (${tok.symbol})`;
+  if (tok.reputation && tok.reputation !== "ok") return `the explorer marks its token ${tok.reputation}`;
+  const known = (KNOWN_TOKENS[chain] || []).some((a) => a.toLowerCase() === address.toLowerCase());
+  if (known || interacted.has(address.toLowerCase()) || tok.exchange_rate != null) return null;
+  return `its token (${tok.symbol || address}) is unpriced, and this wallet never called it`;
+}
+
 // -- fetching ---------------------------------------------------------------
 
-async function getJson(url, fetchImpl) {
-  const res = await fetchImpl(url, { headers: { accept: "application/json" } });
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`${url} answered ${res.status}`);
-  return res.json();
+async function getJson(url, fetchImpl, { tries = 4 } = {}) {
+  for (let i = 1; ; i++) {
+    const res = await fetchImpl(url, { headers: { accept: "application/json" } });
+    if (res.status === 404) return null;
+    if (res.ok) return res.json();
+    // Busy or rate-limited: wait and ask again, as the explorer asks.
+    if ((res.status === 429 || res.status >= 500) && i < tries) {
+      const after = Number(res.headers?.get?.("retry-after"));
+      await new Promise((r) => setTimeout(r, Number.isFinite(after) && after > 0 ? Math.min(after, 30) * 1000 : 1000 * 2 ** (i - 1)));
+      continue;
+    }
+    const hint =
+      res.status === 403
+        ? " (refused: a proxy or firewall on this network may block the explorer; --api <Blockscout URL> points Rein at another one)"
+        : res.status === 429
+          ? " (rate-limited: try again in a minute, or point --api at your own Blockscout)"
+          : "";
+    throw new Error(`${url} answered ${res.status}${hint}`);
+  }
 }
 
 async function paged(base, path, query, { fetchImpl, maxPages, pause }) {
@@ -87,7 +168,7 @@ async function fetchHistory(address, { chain = "base", api, fetch: fetchImpl = g
   const transfers = await paged(base, `/addresses/${addr}/token-transfers`, { filter: "from", type: "ERC-20" }, opts);
   const balances = (await getJson(`${base}/api/v2/addresses/${addr}/token-balances`, fetchImpl)) || [];
 
-  return {
+  return cleanHistory({
     chain: c ? chain : base,
     address: addr,
     info,
@@ -96,7 +177,7 @@ async function fetchHistory(address, { chain = "base", api, fetch: fetchImpl = g
     tokenBalances: balances,
     truncated: txs.truncated || transfers.truncated,
     fetchedAt: new Date().toISOString(),
-  };
+  });
 }
 
 // -- turning it into a trail -----------------------------------------------
@@ -118,7 +199,12 @@ function units(raw, decimals) {
   return Number(ethers.formatUnits(BigInt(raw), decimals ?? 18));
 }
 
-function toTrail(history) {
+/// `payments: true` reads a token transfer the wallet authorized in someone
+/// else's transaction (an x402 / EIP-3009 payment a facilitator submitted, or
+/// a smart wallet's call through an entry point) as a payment it chose, with
+/// its payee, rather than as a side effect. The guard wants that; the on-chain
+/// policy, which only sees the wallet's own calls, does not.
+function toTrail(history, { payments = false } = {}) {
   const me = lower(history.address);
   const book = tokenBook(history);
   const rows = [];
@@ -159,7 +245,7 @@ function toTrail(history) {
           rows.push({ ...base, selector: known, kind: "transferFrom", token, payee: ethers.getAddress(args[1]), amount: units(args[2], decimalsOf(token)) });
           explained.add(tx.hash);
         } else {
-          rows.push({ ...base, selector: known, kind: known, token, payee: ethers.getAddress(args[0]), amount: units(args[1], decimalsOf(token)) });
+          rows.push({ ...base, selector: known, kind: known === "increaseAllowance" ? "approve" : known, token, payee: ethers.getAddress(args[0]), amount: units(args[1], decimalsOf(token)) });
         }
         continue;
       } catch {
@@ -170,9 +256,25 @@ function toTrail(history) {
     rows.push({ ...base, selector: sel, kind: "call", token: null, payee: null, amount: 0, method: tx.method || null });
   }
 
+  // The wallet's own transactions, and how far back they were read: a
+  // transfer older than that may belong to a call that was never loaded.
+  const own = new Set(history.transactions.filter((tx) => lower(tx.from?.hash) === me).map((tx) => tx.hash));
+  const ownSince = Math.min(...history.transactions.filter((tx) => lower(tx.from?.hash) === me).map((tx) => seconds(tx.timestamp)));
+
+  // Contracts the wallet itself has called: a token among them is one it uses.
+  const interacted = new Set(history.transactions.filter((tx) => lower(tx.from?.hash) === me && tx.to?.hash).map((tx) => lower(tx.to.hash)));
+  const ignored = [];
   for (const t of history.tokenTransfers) {
     if (lower(t.from?.hash) !== me || !isErc20(t.token || {})) continue;
     if (explained.has(t.transaction_hash)) continue;
+    if (!own.has(t.transaction_hash)) {
+      const why = poisoned(t, { chain: history.chain, interacted });
+      if (why) {
+        ignored.push({ tx: t.transaction_hash, token: t.token?.symbol || null, payee: t.to?.hash ? ethers.getAddress(t.to.hash) : null, when: t.timestamp || null, why });
+        continue;
+      }
+    }
+    const authorized = payments && !own.has(t.transaction_hash) && (own.size === 0 || seconds(t.timestamp) >= ownSince);
     const token = tokenAddress(t.token);
     const decimals = t.total?.decimals != null ? Number(t.total.decimals) : decimalsOf(token);
     rows.push({
@@ -187,18 +289,22 @@ function toTrail(history) {
       amount: units(t.total?.value || 0, decimals),
       value: 0,
       intent: null,
-      derived: true,
+      ...(authorized ? {} : { derived: true }),
     });
   }
 
   rows.sort((a, b) => a.ts - b.ts);
-  return { rows, tokens: book, unknownDecimals: [...unknownDecimals] };
+  return { rows, tokens: book, unknownDecimals: [...unknownDecimals], ignored };
 }
 
 /// What the wallet holds now, in each token's own units and, where the
-/// explorer knows a price, in dollars.
+/// explorer knows a price, in dollars. Airdropped junk (lookalike names,
+/// tokens the explorer flags, unpriced tokens this wallet never used) is left
+/// out and counted in `junk`, so a phishing "token" never shows as a holding.
 function holdings(history) {
   const out = [];
+  const me = lower(history.address);
+  const used = new Set(history.transactions.filter((tx) => lower(tx.from?.hash) === me && tx.to?.hash).map((tx) => lower(tx.to.hash)));
   const coin = history.info?.coin_balance;
   if (coin != null) {
     const amount = Number(ethers.formatEther(BigInt(coin)));
@@ -211,9 +317,28 @@ function holdings(history) {
     const amount = units(b.value || 0, decimals);
     if (amount === 0) continue;
     const rate = b.token.exchange_rate != null ? Number(b.token.exchange_rate) : null;
-    out.push({ token: tokenAddress(b.token), symbol: b.token.symbol || null, amount, usd: rate != null ? amount * rate : null });
+    const address = tokenAddress(b.token);
+    const known = (KNOWN_TOKENS[history.chain] || []).some((a) => a.toLowerCase() === address.toLowerCase());
+    const junk = !PLAIN.test(b.token.rawSymbol ?? b.token.symbol ?? "") || !PLAIN.test(b.token.rawName ?? b.token.name ?? "")
+      || (b.token.reputation && b.token.reputation !== "ok")
+      || (rate == null && !known && !used.has(address.toLowerCase()));
+    if (junk) { out.junk = (out.junk || 0) + 1; continue; }
+    out.push({ token: address, symbol: b.token.symbol || null, amount, usd: rate != null ? amount * rate : null });
   }
   return out;
 }
 
-module.exports = { fetchHistory, toTrail, holdings, tokenBook, CHAINS, NO_CALLDATA };
+/// ETH a contract wallet (a Safe) sent: internal transactions from it that
+/// moved value, as { payee, amount, ts }. An EOA's ETH payments are in its
+/// own transactions instead.
+async function fetchEthPaid(address, { chain = "base", api, fetch: fetchImpl = globalThis.fetch, maxPages = 5, pause = 200 } = {}) {
+  const c = CHAINS[chain];
+  const base = (api || c.api).replace(/\/$/, "");
+  const addr = ethers.getAddress(address);
+  const { items } = await paged(base, `/addresses/${addr}/internal-transactions`, { filter: "from" }, { fetchImpl, maxPages, pause });
+  return items
+    .filter((t) => lower(t.from?.hash) === lower(addr) && t.to?.hash && t.success !== false && BigInt(t.value || 0) > 0n)
+    .map((t) => ({ payee: ethers.getAddress(t.to.hash), amount: Number(ethers.formatEther(BigInt(t.value))), ts: seconds(t.timestamp) }));
+}
+
+module.exports = { display, cleanHistory, fetchHistory, fetchEthPaid, toTrail, holdings, tokenBook, poisoned, KNOWN_TOKENS, CHAINS, NO_CALLDATA, SELECTOR_NAMES, ERC20 };

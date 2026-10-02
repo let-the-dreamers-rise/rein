@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rein · Check an agent wallet</title>
+<meta name="description" content="Paste an AI agent's wallet address. In seconds Rein tells you if someone is trying to trick it, what it normally does, and what Rein would have stopped. Then ask about any payment. Runs in your browser; nothing is signed.">
+<meta property="og:title" content="Rein · Check an agent wallet">
+<meta property="og:description" content="Is someone trying to trick your agent's wallet, what does it normally do, and what would Rein have stopped? Free, in your browser, nothing signed.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://rein-nine.vercel.app/scan/">
+<meta name="theme-color" content="#ff6a1a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23ff6a1a'/%3E%3Cpath d='M9 23V9h8.5a4.5 4.5 0 0 1 1.6 8.7L23 23h-3.6l-3.5-4.8H12V23z' fill='%23141210'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="../fonts/fonts.css">
+<style>
+:root{
+  --bg:oklch(0.985 0 0);
+  --surface:#fff;
+  --sunken:oklch(0.955 0.004 60);
+  --ink:oklch(0.21 0.012 60);
+  --ink-2:oklch(0.40 0.012 60);
+  --ink-3:oklch(0.55 0.010 60);
+  --hair:oklch(0.89 0.006 60);
+  --brand:oklch(0.70 0.20 45);
+  --brand-strong:oklch(0.64 0.21 42);
+  --brand-deep:oklch(0.50 0.16 40);
+  --brand-tint:oklch(0.96 0.03 55);
+  --ok:oklch(0.52 0.14 150);
+  --ok-tint:oklch(0.95 0.04 150);
+  --no:oklch(0.55 0.19 35);
+  --display:"Bricolage Grotesque","Helvetica Neue",Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--display);font-size:17px;line-height:1.55;-webkit-font-smoothing:antialiased}
+a{color:var(--brand-deep);text-decoration:none}
+a:hover{text-decoration:underline;text-underline-offset:3px}
+:focus-visible{outline:3px solid var(--brand);outline-offset:3px;border-radius:2px}
+h1,h2,h3{margin:0;font-weight:700;letter-spacing:-.02em;line-height:1.08;text-wrap:balance}
+p{margin:0;text-wrap:pretty}
+code,.mono{font-family:var(--mono);font-size:.88em}
+code{background:var(--sunken);padding:.1em .4em;border-radius:4px;overflow-wrap:anywhere}
+.wrap{max-width:980px;margin:0 auto;padding:0 clamp(16px,4vw,40px)}
+.tape{height:10px;background:repeating-linear-gradient(-45deg,var(--brand) 0 18px,var(--ink) 18px 36px)}
+.nav{border-bottom:1px solid var(--hair);background:var(--bg)}
+.nav .wrap{display:flex;align-items:center;gap:20px;height:60px}
+.mark{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px;color:var(--ink)}
+.mark svg{width:26px;height:26px}
+.nav .links{margin-left:auto;display:flex;gap:20px;font-size:15px}
+.nav .links a{color:var(--ink-2)}
+
+header{padding:clamp(40px,7vw,80px) 0 28px}
+header h1{font-size:clamp(2.2rem,5.4vw,3.8rem);font-weight:800;letter-spacing:-.03em;max-width:16ch}
+header .lede{margin-top:18px;font-size:clamp(17px,1.5vw,19px);color:var(--ink-2);max-width:60ch}
+
+form{margin-top:30px;display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px}
+@media(max-width:700px){form{grid-template-columns:minmax(0,1fr) auto}form input{grid-column:1/-1}}
+input,select,button{font:inherit;font-size:16px;border-radius:8px;border:1px solid var(--ink);padding:12px 14px;background:var(--surface);color:var(--ink);min-width:0}
+input{font-family:var(--mono);font-size:15px}
+button{cursor:pointer;font-weight:600;background:var(--ink);color:#fff}
+button:hover{background:oklch(0.30 0.012 60)}
+button:disabled{opacity:.6;cursor:progress}
+.alt{margin-top:12px;font-size:15px;color:var(--ink-3)}
+.alt button{all:unset;cursor:pointer;color:var(--brand-deep);font-weight:500}
+.alt button:hover{text-decoration:underline;text-underline-offset:3px}
+#status{margin-top:22px;font-family:var(--mono);font-size:14px;color:var(--ink-2);min-height:1.5em}
+#status.err{color:var(--no)}
+.fail{margin-top:14px;border:1px solid var(--hair);background:var(--surface);border-radius:10px;padding:16px 18px;font-size:15px;color:var(--ink-2)}
+.fail pre{margin:10px 0 0;font-family:var(--mono);font-size:13.5px;background:var(--sunken);border-radius:8px;padding:10px 12px;overflow-x:auto;color:var(--ink)}
+
+#report{padding-bottom:80px}
+.card{background:var(--surface);border:1px solid var(--hair);border-radius:12px;padding:clamp(18px,3vw,28px);margin-top:18px}
+.who{font-family:var(--mono);font-size:13px;color:var(--ink-3);overflow-wrap:anywhere}
+.verdict{margin-top:10px;font-size:clamp(1.25rem,2.4vw,1.6rem);line-height:1.3;font-weight:600;letter-spacing:-.01em}
+.synthetic{display:inline-block;margin-top:12px;font-family:var(--mono);font-size:12px;background:var(--brand-tint);color:var(--brand-deep);padding:4px 10px;border-radius:999px}
+.nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--hair);border:1px solid var(--hair);border-radius:12px;overflow:hidden;margin-top:18px}
+@media(max-width:700px){.nums{grid-template-columns:minmax(0,1fr)}}
+.nums>div{background:var(--surface);padding:18px 20px}
+.nums .k{font-size:14px;color:var(--ink-2)}
+.nums .v{font-size:clamp(1.6rem,3.4vw,2.2rem);font-weight:800;letter-spacing:-.02em;margin-top:4px;font-variant-numeric:tabular-nums}
+.nums .v.bad{color:var(--no)}
+.nums .v.good{color:var(--ok)}
+.nums .s{font-size:13.5px;color:var(--ink-3);margin-top:4px}
+h2{font-size:clamp(1.25rem,2vw,1.5rem);margin-bottom:10px}
+.card p+p{margin-top:10px}
+.card .sub{color:var(--ink-2);font-size:15.5px}
+ul.policy{margin:12px 0 0;padding-left:1.1em}
+ul.policy li{margin:6px 0}
+.tablewrap{overflow-x:auto;margin-top:12px}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--hair);vertical-align:top}
+th{font-size:13px;font-weight:600;color:var(--ink-3)}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+td .mono{overflow-wrap:anywhere}
+.downloads{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+.downloads button{background:var(--surface);color:var(--ink);font-size:15px;padding:10px 14px}
+.downloads button:hover{background:var(--sunken)}
+.downloads button.primary{background:var(--brand);border-color:var(--brand)}
+.downloads button.primary:hover{background:var(--brand-strong)}
+pre.cmd{margin:10px 0 0;font-family:var(--mono);font-size:13.5px;line-height:1.6;background:var(--sunken);border-radius:8px;padding:12px 14px;overflow-x:auto;white-space:pre}
+ol.next{margin:12px 0 0;padding-left:1.2em}
+ol.next li{margin:14px 0}
+ul.caveats{margin:10px 0 0;padding-left:1.1em;color:var(--ink-2);font-size:15px}
+ul.caveats li{margin:6px 0}
+.share{margin-top:14px;font-size:14px;color:var(--ink-3)}
+footer{border-top:1px solid var(--hair);padding:28px 0 40px;font-size:14px;color:var(--ink-3)}
+ul.habits{margin:12px 0 0;padding-left:1.1em}
+ul.habits li{margin:6px 0}
+.card.alarm{border-color:var(--no);box-shadow:inset 4px 0 0 var(--no)}
+.card.alarm h2{color:var(--no)}
+.ask{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;margin-top:14px}
+.ask input{font-family:var(--display);font-size:16px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.chips button{background:var(--surface);color:var(--ink);border-color:var(--hair);font-weight:500;font-size:14px;padding:7px 12px;border-radius:999px}
+.chips button:hover{background:var(--sunken)}
+.answer{margin-top:16px;border-radius:10px;padding:14px 16px;font-size:16px;line-height:1.5}
+.answer.ok{background:var(--ok-tint);color:oklch(0.32 0.09 150)}
+.answer.held{background:var(--brand-tint);color:var(--brand-deep)}
+.answer.no{background:var(--sunken);color:var(--ink-2)}
+.answer .q{font-size:13.5px;font-family:var(--mono);opacity:.8;overflow-wrap:anywhere;margin-bottom:6px}
+.answer .follow{margin-top:10px;padding-top:10px;border-top:1px solid currentColor;border-top-color:color-mix(in oklab,currentColor 25%,transparent)}
+.answer .acts{display:flex;gap:8px;margin-top:12px}
+.answer .acts button{font-size:14px;padding:8px 14px}
+.answer .acts button.second{background:var(--surface);color:var(--ink)}
+.on h3{font-size:1.05rem;margin-top:18px}
+.on h3:first-of-type{margin-top:6px}
+details.more{margin-top:18px}
+details.more>summary{cursor:pointer;font-weight:600;padding:14px 4px;color:var(--ink-2)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="tape" aria-hidden="true"></div>
+<nav class="nav" aria-label="Primary">
+  <div class="wrap">
+    <a class="mark" href="../" aria-label="Rein, home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--brand)"/><path d="M9 23V9h8.5a4.5 4.5 0 0 1 1.6 8.7L23 23h-3.6l-3.5-4.8H12V23z" fill="var(--ink)"/></svg>
+      Rein
+    </a>
+    <div class="links"><a href="../">What Rein is</a><a href="https://github.com/let-the-dreamers-rise/rein">GitHub</a></div>
+  </div>
+</nav>
+
+<main>
+  <header>
+    <div class="wrap">
+      <h1>Check any agent wallet in seconds.</h1>
+      <p class="lede">Paste the address an AI agent pays from. Rein reads its public history and tells you whether someone is trying to trick it, what it normally does, and what Rein would have stopped. Then ask it about any payment. It runs in your browser: nothing is signed or sent, and no Rein server sees the address.</p>
+      <form id="form" autocomplete="off">
+        <input id="address" name="address" placeholder="0x… agent wallet address" spellcheck="false" aria-label="Wallet address" required pattern="^0x[0-9a-fA-F]{40}$" title="A 0x address, 42 characters">
+        <select id="chain" name="chain" aria-label="Chain">
+          <option value="base">Base</option>
+          <option value="base-sepolia">Base Sepolia</option>
+          <option value="ethereum">Ethereum</option>
+        </select>
+        <button id="go" type="submit">Check</button>
+      </form>
+      <p class="alt">No agent wallet to hand? <button id="sample" type="button">Try a made-up agent wallet that's under attack</button></p>
+      <p id="status" role="status" aria-live="polite"></p>
+      <div id="fail" class="fail" hidden></div>
+    </div>
+  </header>
+
+  <div class="wrap" id="report" hidden>
+    <div class="card">
+      <div class="who" id="who"></div>
+      <p class="verdict" id="headline"></p>
+      <p class="sub" id="headline-more" style="margin-top:8px"></p>
+      <span class="synthetic" id="synthetic" hidden>Made-up sample wallet, not a real one</span>
+    </div>
+
+    <div class="nums">
+      <div><div class="k">It holds today</div><div class="v" id="k-holds"></div><div class="s">with no on-chain limit</div></div>
+      <div><div class="k">Fake transfers aimed at it</div><div class="v" id="k-fake"></div><div class="s" id="k-fake-s"></div></div>
+      <div><div class="k">Rein would have held</div><div class="v" id="k-held"></div><div class="s" id="k-held-s"></div></div>
+    </div>
+
+    <div class="card alarm" id="c-attack" hidden>
+      <h2>Someone is trying to trick it</h2>
+      <p class="sub" id="attack-text"></p>
+      <div class="tablewrap" id="attack-wrap"><table><thead><tr><th>the address it really pays</th><th>the fake that copies its start and end</th></tr></thead><tbody id="attack"></tbody></table></div>
+      <p class="sub" style="margin-top:12px">An agent that copies an address from its own history can copy the fake one. Rein ignores these transfers when it learns, and holds any payment to a lookalike for a person.</p>
+    </div>
+
+    <div class="card" id="c-habits">
+      <h2>What it normally does</h2>
+      <ul class="habits" id="habits"></ul>
+      <p class="sub" id="toonew" hidden></p>
+    </div>
+
+    <div class="card" id="c-held">
+      <h2 id="held-title"></h2>
+      <p class="sub" id="held-text"></p>
+      <div class="tablewrap" id="held-wrap" hidden><table><thead><tr><th>when</th><th>what</th><th>why Rein would ask a person</th></tr></thead><tbody id="held"></tbody></table></div>
+    </div>
+
+    <div class="card" id="c-ask">
+      <h2>Ask Rein about a payment</h2>
+      <p class="sub">Type it the way you'd say it. Rein answers from this wallet's own habits, instantly.</p>
+      <form class="ask" id="ask" autocomplete="off">
+        <input id="ask-text" placeholder="Send 500 USDC to 0x…" aria-label="A payment to check">
+        <button type="submit">Ask</button>
+      </form>
+      <div class="chips" id="chips"></div>
+      <div id="answers"></div>
+    </div>
+
+    <div class="card on" id="c-on">
+      <h2>Switch it on</h2>
+      <h3>One agent: one line</h3>
+      <p class="sub">Wrap the wallet your agent signs with (viem, so Coinbase AgentKit, GOAT and ElizaOS too). Rein learns these habits on first use and checks every payment before it's signed; anything it holds throws an error that says why.</p>
+      <pre class="cmd" id="cmd-guard"></pre>
+      <h3>Many agent wallets: Rein as a second key</h3>
+      <p class="sub">Your agents keep signing normal payments alone. Anything unusual needs Rein's second signature too, which Turnkey or Privy enforce, so a hijacked agent can't skip it. A person approves or refuses in Slack. Start with a free shadow report across all your wallets, with nothing to integrate:</p>
+      <pre class="cmd">npx rein-wallet fleet wallets.txt --since 30d</pre>
+      <p class="sub" style="margin-top:10px"><a href="../#how">How the second key works</a></p>
+    </div>
+
+    <details class="more">
+      <summary>The full policy, its replay, and policy files for Privy, Turnkey and Coinbase</summary>
+
+    <div class="card">
+      <p class="verdict" id="verdict" style="margin-top:0"></p>
+    </div>
+
+    <div class="nums">
+      <div><div class="k">Held with no on-chain limit today</div><div class="v bad" id="n-today"></div><div class="s" id="n-today-s"></div></div>
+      <div><div class="k">Most it could move under its own policy</div><div class="v" id="n-policy"></div><div class="s" id="n-policy-s"></div></div>
+      <div><div class="k">Later transactions the policy still allows</div><div class="v good" id="n-cover"></div><div class="s" id="n-cover-s"></div></div>
+    </div>
+
+    <div class="card" id="c-policy">
+      <h2>The policy its own history supports</h2>
+      <p class="sub" id="policy-from"></p>
+      <ul class="policy" id="policy"></ul>
+      <div id="withheld-wrap" hidden>
+        <p class="sub" style="margin-top:16px">Seen in the history, but too rare to admit without a person saying yes:</p>
+        <div class="tablewrap"><table><thead><tr><th>what</th><th>kind</th><th class="n">calls</th><th class="n">days</th></tr></thead><tbody id="withheld"></tbody></table></div>
+      </div>
+    </div>
+
+    <div class="card" id="c-cover">
+      <h2>Would it have got in the way?</h2>
+      <p class="sub" id="cover-text"></p>
+      <div class="tablewrap" id="refused-wrap" hidden><table><thead><tr><th>when</th><th>what</th><th>refused with</th></tr></thead><tbody id="refused"></tbody></table></div>
+    </div>
+
+    <div class="card">
+      <h2>What it holds</h2>
+      <div class="tablewrap"><table><thead><tr><th>token</th><th class="n">amount</th><th class="n">USD</th></tr></thead><tbody id="holdings"></tbody></table></div>
+      <p class="sub" id="junk" style="margin-top:12px" hidden></p>
+    </div>
+
+    <div class="card" id="c-next">
+      <h2>Put this policy on the wallet</h2>
+      <p class="sub">Download the policy for the wallet engine the agent already uses, then apply it from a terminal. Each file is the exact API requests, in order; <code>apply</code> prints them first and only sends with <code>--send</code>.</p>
+      <div class="downloads" id="downloads"></div>
+      <ol class="next">
+        <li>Apply it, with your engine's credentials in the environment:
+          <pre class="cmd" id="cmd-apply"></pre></li>
+        <li>Get told when the wallet steps outside it. Copy <a href="https://github.com/let-the-dreamers-rise/rein/blob/main/scan/watch-action.yml">this GitHub Action</a> into any repository you own for a check every 15 minutes with no server, or run:
+          <pre class="cmd" id="cmd-watch"></pre></li>
+        <li>Or move the agent onto a Rein account, where the contract itself refuses anything outside the policy. <a href="https://github.com/let-the-dreamers-rise/rein/blob/main/QUICKSTART.md">Quickstart</a>.</li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <h2>What this does not say</h2>
+      <ul class="caveats" id="caveats"></ul>
+    </div>
+    </details>
+    <p class="share" id="share"></p>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">Rein reads public chain data from <a href="https://www.blockscout.com/">Blockscout</a>. The scanner is the same code as <code>npx rein-wallet scan</code>; read it at <a href="https://github.com/let-the-dreamers-rise/rein/tree/main/scan">github.com/let-the-dreamers-rise/rein</a>. MIT. <a href="../terms/">Terms</a> · <a href="../privacy/">Privacy</a></div>
+</footer>
+
+<script src="rein-scan.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const usd = (n) => n == null ? "?" : "$" + Math.round(n).toLocaleString("en-US");
+  const amt = (n) => n == null ? "?" : Number(n).toLocaleString("en-US", { maximumFractionDigits: 6 });
+  const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
+  const row = (cells) => { const tr = el("tr"); for (const [text, cls] of cells) tr.appendChild(el("td", text, cls)); return tr; };
+  let current = null;
+
+  function status(text, err) { $("status").textContent = text; $("status").className = err ? "err" : ""; }
+
+  function showFailure(address, chain, message) {
+    const f = $("fail");
+    f.replaceChildren();
+    f.appendChild(el("p", `The explorer did not answer this page (${message}). The same scan runs from a terminal, with nothing to install:`));
+    f.appendChild(el("pre", `npx rein-wallet scan ${address}${chain !== "base" ? ` --chain ${chain}` : ""}`));
+    f.hidden = false;
+  }
+
+  function download(name, body) {
+    const blob = new Blob([JSON.stringify(body, null, 2) + "\n"], { type: "application/json" });
+    const a = el("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+  }
+
+  function render(r, chain) {
+    current = r;
+    $("verdict").textContent = r.verdict;
+
+    $("n-today").textContent = usd(r.exposureToday.usd);
+    $("n-today-s").textContent = r.exposureToday.unpriced?.length ? `plus ${r.exposureToday.unpriced.length} token(s) with no price` : "can go to any address";
+
+    const hasPolicy = Boolean(r.policy);
+    $("c-policy").hidden = $("c-cover").hidden = $("c-next").hidden = !hasPolicy;
+    if (hasPolicy) {
+      $("n-policy").textContent = usd(r.exposureUnderPolicy.usdPerHour) + "/hr";
+      $("n-policy-s").textContent = r.exposureUnderPolicy.to;
+      $("n-cover").textContent = `${r.coverage.allowed} of ${r.coverage.total}`;
+      $("n-cover-s").textContent = "later transactions it never saw";
+
+      $("policy-from").textContent = `Compiled from its first ${r.policy.compiledFrom} transactions (${r.policy.estimator}), then tested on the ${r.coverage.total} after them, which it never saw.`;
+      $("policy").replaceChildren(...r.policy.sentences.map((s) => el("li", s)));
+      $("withheld").replaceChildren(...r.policy.withheld.map((w) => row([[w.what], [w.kind], [String(w.calls), "n"], [String(w.days), "n"]])));
+      $("withheld-wrap").hidden = !r.policy.withheld.length;
+
+      $("cover-text").textContent = `Of those ${r.coverage.total} later transactions, ${r.coverage.allowed} would still have gone through under the policy, checked with the contract's own rules.` + (r.coverage.refusedExamples.length ? " These would have been refused:" : "");
+      $("refused").replaceChildren(...r.coverage.refusedExamples.map((x) => row([[x.when.slice(0, 16).replace("T", " ")], [x.what], [x.reason, "mono"]])));
+      $("refused-wrap").hidden = !r.coverage.refusedExamples.length;
+
+      const plans = Rein.exportPolicy(r) || {};
+      const labels = { privy: "Privy", turnkey: "Turnkey", coinbase: "Coinbase CDP" };
+      $("downloads").replaceChildren(
+        ...Object.keys(plans).map((v) => {
+          const b = el("button", `${labels[v] || v} policy`);
+          b.type = "button";
+          b.addEventListener("click", () => download(`${v}.json`, plans[v]));
+          return b;
+        }),
+        (() => { const b = el("button", "Full report (JSON)"); b.type = "button"; b.addEventListener("click", () => download("report.json", Rein.summary(r))); return b; })()
+      );
+      $("cmd-apply").textContent =
+        "# Privy\nPRIVY_APP_ID=… PRIVY_APP_SECRET=… npx rein-wallet apply privy.json --wallet <privy wallet id> --send\n" +
+        "# Turnkey\nTURNKEY_API_PUBLIC_KEY=… TURNKEY_API_PRIVATE_KEY=… npx rein-wallet apply turnkey.json --organization <org id> --agent-user <user id> --send\n" +
+        "# Coinbase CDP\nCDP_API_KEY_ID=… CDP_API_KEY_SECRET=… CDP_WALLET_SECRET=… npx rein-wallet apply coinbase.json --send";
+      $("cmd-watch").textContent = `npx rein-wallet watch ${r.address}${chain && chain !== "base" ? ` --chain ${chain}` : ""} --webhook "$SLACK_WEBHOOK_URL"`;
+    } else {
+      $("n-policy").textContent = "none yet";
+      $("n-policy-s").textContent = "too little history to compile from";
+      $("n-cover").textContent = "n/a";
+      $("n-cover-s").textContent = "";
+    }
+
+    $("holdings").replaceChildren(...r.holdings.map((h) => row([[h.symbol || h.token], [amt(h.amount), "n"], [h.usd != null ? usd(h.usd) : "?", "n"]])));
+    $("junk").hidden = !r.junkTokens;
+    $("junk").textContent = r.junkTokens ? `Left out ${r.junkTokens} airdropped token(s) with no price that this wallet never used, or with lookalike names. Often spam or phishing: don't open their links.` : "";
+    $("caveats").replaceChildren(...r.caveats.map((c) => el("li", c)));
+    $("share").textContent = r.synthetic ? "" : `Link to this check: ${location.href}`;
+  }
+
+  // -- the checkup: the part people read ------------------------------------
+  let cu = null;
+  const fmt = (iso) => iso.slice(0, 16).replace("T", " ");
+
+  function renderCheckup(c, chain) {
+    cu = c;
+    $("headline").textContent = c.headlineParts[0];
+    $("headline-more").textContent = c.headlineParts.slice(1).join(" ");
+    $("who").textContent = `${c.address} · ${c.chain} · ${c.calls} transactions over ${c.days} day(s)`;
+    $("synthetic").hidden = !c.synthetic;
+    $("k-holds").textContent = usd(c.holdsUsd);
+    const a = c.attack;
+    $("k-fake").textContent = a ? String(a.fakeTransfers) : "0";
+    $("k-fake").className = "v" + (a ? " bad" : " good");
+    $("k-fake-s").textContent = a ? (a.lookalikes.length ? `to ${a.lookalikes.length} lookalike address(es)` : "in tokens it never used") : "none seen";
+    $("k-held").textContent = c.recent.checked ? `${c.recent.held.length} of ${c.recent.checked}` : "n/a";
+    $("k-held-s").textContent = c.recent.checked ? `of its transactions in its last ${c.recent.days} days` : "nothing recent to check";
+
+    $("c-attack").hidden = !a;
+    if (a) {
+      $("attack-text").textContent = `${a.fakeTransfers} transfers that this wallet never sent, in tokens named ${a.fakeTokens.map((t) => (/^[\x20-\x7E]*$/.test(t) ? `"${t}"` : `"${t}" (spelled with a lookalike letter)`)).join(", ")}, show up in its history as if it had paid these addresses.`;
+      $("attack").replaceChildren(...a.lookalikes.slice(0, 8).map((x) => row([[x.realName.startsWith("0x") ? x.real : `${x.realName} (${x.real})`, "mono"], [x.fake, "mono"]])));
+      $("attack-wrap").hidden = !a.lookalikes.length;
+    }
+
+    $("habits").replaceChildren(...c.habits.map((h) => el("li", h)));
+    $("habits").hidden = !c.habits.length;
+    $("toonew").hidden = !c.tooNew;
+    $("toonew").textContent = c.tooNew || "";
+
+    $("held-title").textContent = `What Rein would have held in its last ${c.recent.days} days`;
+    const h = c.recent.held;
+    $("held-text").textContent = !c.recent.checked
+      ? "It made no transactions in that time."
+      : h.length
+        ? `Judged only by the habits it had before each one. Everything else, ${c.recent.checked - h.length} of ${c.recent.checked}, would have gone through with nobody asked.`
+        : `All ${c.recent.checked} fit the habits it had before each one, so nobody would have been asked about any of them.`;
+    const b = c.biggest;
+    if (b && b.usd >= 1000 && !h.some((x) => x.tx && x.tx === b.tx)) {
+      $("held-text").textContent += ` Before that, its biggest: on ${b.when.slice(0, 10)} it sent ${amt(b.amount)} ${b.symbol} (${usd(b.usd)}) to ${b.payee}, an address it had never paid. Rein would have held that one too.`;
+    }
+    $("held").replaceChildren(...h.slice(0, 12).map((x) => row([[fmt(x.when), "mono"], [x.what], [x.why]])));
+    $("held-wrap").hidden = !h.length;
+
+    $("c-ask").hidden = !c.habits.length;
+    $("answers").replaceChildren();
+    $("chips").replaceChildren(...Rein.checkup.examples(c).map((e) => {
+      const b = el("button", e.label);
+      b.type = "button";
+      b.title = e.text;
+      b.addEventListener("click", () => { $("ask-text").value = e.text; ask(e.text); });
+      return b;
+    }));
+    $("cmd-guard").textContent = `npm i rein-wallet\n\nconst { protect } = require("rein-wallet");\nconst wallet = protect(walletClient);   // the viem client for ${c.address.slice(0, 6)}…${c.address.slice(-4)}`;
+  }
+
+  function ask(text) {
+    if (!cu) return;
+    const r = Rein.checkup.ask(cu, text);
+    const box = el("div", null, "answer " + (!r.understood ? "no" : r.verdict.allow ? "ok" : r.held ? "held" : "no"));
+    box.appendChild(el("div", text, "q"));
+    box.appendChild(el("div", r.answer));
+    if (r.held) {
+      const acts = el("div", null, "acts");
+      const yes = el("button", "Approve once");
+      const no = el("button", "Refuse", "second");
+      yes.type = no.type = "button";
+      yes.addEventListener("click", () => {
+        Rein.checkup.approve(cu, r.held);
+        const retry = Rein.checkup.ask(cu, text);
+        acts.replaceWith(el("div", `You approved it. The agent retries: ${retry.answer}`, "follow"));
+        box.className = "answer ok";
+      });
+      no.addEventListener("click", () => {
+        Rein.checkup.refuse(cu, r.held);
+        acts.replaceWith(el("div", `You refused it. If the agent retries: ${Rein.checkup.ask(cu, text).answer}`, "follow"));
+        box.className = "answer no";
+      });
+      acts.append(yes, no);
+      box.appendChild(acts);
+    }
+    $("answers").prepend(box);
+  }
+
+  $("ask").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const t = $("ask-text").value.trim();
+    if (t) ask(t);
+  });
+
+  function show(history, chain) {
+    try {
+      renderCheckup(Rein.checkup.checkup(history), chain);
+    } catch (err) {
+      $("headline").textContent = `Rein read this wallet but couldn't finish its check: ${err.message}`;
+    }
+    render(Rein.scanHistory(history), chain);
+    $("report").hidden = false;
+    $("report").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  async function run(address, chain) {
+    $("fail").hidden = true;
+    $("go").disabled = true;
+    status(`Reading ${address.slice(0, 6)}…${address.slice(-4)}'s history from Blockscout. A busy wallet takes up to half a minute.`);
+    try {
+      const history = await Rein.fetchHistory(address, { chain, fetch: (...a) => window.fetch(...a) });
+      show(history, chain);
+      status(cu ? `Read ${cu.calls} transactions. Nothing was signed or sent.` : "Nothing was signed or sent.");
+    } catch (err) {
+      const msg = String(err && err.message || err);
+      const reached = !/Failed to fetch|NetworkError|Load failed|CORS/i.test(msg);
+      status(reached ? msg : "Could not reach the explorer from this page.", true);
+      if (!reached || /\b(429|5\d\d)\b/.test(msg)) showFailure(address, chain, reached ? msg : "blocked by the browser");
+    } finally {
+      $("go").disabled = false;
+    }
+  }
+
+  $("form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const address = $("address").value.trim();
+    const chain = $("chain").value;
+    if (!/^0x[0-9a-fA-F]{40}$/.test(address)) { status("That is not a 0x address of 42 characters.", true); return; }
+    const u = new URL(location.href);
+    u.searchParams.set("address", address);
+    if (chain !== "base") u.searchParams.set("chain", chain); else u.searchParams.delete("chain");
+    history.replaceState(null, "", u);
+    run(address, chain);
+  });
+
+  function sample() {
+    $("fail").hidden = true;
+    status("Rein's made-up sample wallet, with an attack on it like one seen on a real Base agent wallet: no network needed.");
+    show(Rein.poisonedSampleHistory(), "base");
+  }
+  $("sample").addEventListener("click", sample);
+
+  const q = new URLSearchParams(location.search);
+  if (q.get("chain") && [...$("chain").options].some((o) => o.value === q.get("chain"))) $("chain").value = q.get("chain");
+  if (q.get("address")) { $("address").value = q.get("address"); $("form").requestSubmit(); }
+  else if (q.has("sample")) sample();
+})();
+</script>
+</body>
+</html>

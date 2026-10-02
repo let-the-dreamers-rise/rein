@@ -2,12 +2,104 @@
 
 [![test](https://github.com/let-the-dreamers-rise/rein/actions/workflows/test.yml/badge.svg)](https://github.com/let-the-dreamers-rise/rein/actions/workflows/test.yml)
 
+**Know your payee before the last signature.** Rein checks every payment
+waiting in a Safe multisig against who that Safe has actually paid, and how
+much. It flags an address dressed up as one the Safe pays (address
+poisoning), a first payment to a stranger, an amount far above the usual for
+that payee, and changes to who controls the Safe, and it can tell your team's
+chat before anyone signs. Free, read-only, no keys.
+
+The same check can also run as **a second key for AI agent wallets** on
+Turnkey or Privy. That part is a preview: see below before using it with
+real money.
+
+## Start here: check a Safe's queue in seconds
+
+One person queues a payment and the others sign what the screen shows them.
+None of them pasted the address, so a lookalike is easy to sign. Rein checks
+every queued transaction against what the Safe has paid before:
+
+```
+npx rein-wallet safe 0xYourSafe          # or offline: npx rein-wallet safe --sample
+```
+
+```
+#41 (1 of 2 signed): pay 15 USDC to Inference API. Looks normal (this isn't a guarantee).
+#42 (1 of 2 signed): pay 48,000 USDC to 0xc64F…e299. DON'T SIGN YET:
+  - 0xc64F…e299 starts and ends like Inference API (0xC64f…e299), an address the Safe
+    has paid, but it is a different address: the mark of address poisoning.
+#43 (0 of 2 signed): pay 6,500 USDC to 0x6320…8F82. Check first:
+  - the Safe has never paid 0x6320…8F82 before, and this is $6,500.
+```
+
+Or paste the Safe at [rein-nine.vercel.app/safe](https://rein-nine.vercel.app/safe/).
+`--webhook URL --every 300` posts each flagged transaction once to Slack,
+Discord or Telegram, and [scan/safe-action.yml](scan/safe-action.yml) does the
+same from a GitHub Action with no server. It holds no key and needs none.
+
+In Safe{Wallet}, add `https://rein-nine.vercel.app/safe/` under Apps, My
+custom apps, Add custom Safe App: it opens on the Safe you're in and checks its
+queue, read-only.
+
+How this differs from what Safe{Wallet} shows: Safe's lookalike warning
+compares against each signer's own address book, not the Safe's history, and
+its "New recipient" label is moving to Safe Pro, Safe's paid plan. Neither checks
+the amount against what the Safe usually pays that payee.
+
+## An agent wallet: check it in seconds
+
+```
+npx rein-wallet 0xAnyAgentWallet        # or try it offline: npx rein-wallet checkup --sample
+```
+
+Or paste the address at [rein-nine.vercel.app/scan](https://rein-nine.vercel.app/scan/).
+Nothing is signed; it reads public chain data. On the made-up sample wallet:
+
+```
+Rein would have held this payment: on 20 Aug 2026 this wallet sent 12,500 USDC ($13k)
+to 0x7946…2773, an address it had never paid before. Someone is trying to trick this
+wallet: 24 fake transfers point it at addresses dressed up as ones it really pays.
+
+Asked about a few payments, Rein says:
+  > Send 38 USDC to Data vendor
+    Goes through. 38 USDC to Data vendor fits this agent's habits, with 716.79 USDC left in its hour.
+  > Send 38 USDC to 0x7946eEEEeeeeeEEEeEEEEeeEEeeEeEEeeeee2773
+    Held for a person: this address starts and ends like one the agent has paid, but it is
+    a different address: the mark of address poisoning.
+```
+
+Then ask about any payment in plain words (`--ask "send 500 USDC to 0x…"`),
+or see what a
+second key would have held across a whole fleet with `npx rein-wallet fleet
+wallets.txt`. In Claude, the `rein_check_wallet` tool does the same.
+
+## Switch it on: one line
+
+```js
+const { protect } = require("rein-wallet");
+const wallet = protect(walletClient);   // a viem wallet client
+```
+
+Coinbase AgentKit, GOAT and ElizaOS all sign with a viem wallet client, so
+wrap it before you hand it to them. Every `sendTransaction`, `writeContract`,
+`signTransaction` and `signTypedData` (x402 included) is checked first; one
+outside the agent's habits throws `ReinHeld` with the reason and the id a
+person approves it with (`npx rein-wallet guard 0x… --allow <id>`).
+
+On first use Rein learns the wallet's limits from its history. A brand-new
+agent starts in learning mode: stablecoin payments up to 25 go through and
+the addresses they pay become trusted (at most 100 an hour and 250 a day);
+anything bigger, any other token or contract, and any lookalike address
+waits. Change those with `protect(walletClient, { starter: { perPayment, perHour, perDay } })`.
+
+## The Rein account: limits in the contract itself
+
 A smart account an autonomous agent can operate and cannot drain.
 
-**Live on two public EVM testnets, same bytecode, same result.** Chain-agnostic
+**Live on three public EVM testnets, same bytecode, same result.** Chain-agnostic
 Solidity (`evmVersion: paris`, no PUSH0), so the account deploys wherever the
 agent's money already is. Demo page with the on-chain run and a 90-second
-video: [rein-nine.vercel.app](https://rein-nine.vercel.app).
+video: [rein-nine.vercel.app/account](https://rein-nine.vercel.app/account/).
 
 | | Base Sepolia (84532) | Whitechain Sepolia (1874) | GOAT Testnet3 (48816) |
 |---|---|---|---|
@@ -23,6 +115,145 @@ completely taken over -- wrong instructions, poisoned tool output, rewritten
 system prompt -- still cannot produce a transaction the account is unwilling to
 make.
 
+## Guard your agent's wallet in one step
+
+```bash
+npx rein-wallet guard 0xYourAgentWallet
+```
+
+It reads the wallet's public history, learns who the agent pays and how much
+it spends in its busiest hour, shows what those limits would have allowed over
+the last 30 days, and saves them on your machine. Then one line before the
+agent signs holds every payment to them:
+
+```js
+const verdict = require("rein-wallet").check(tx);   // { allow, reason, explanation, leftThisHour }
+if (!verdict.allow) throw new Error(`Rein blocked this payment: ${verdict.explanation}`);
+```
+
+`tx` is the transaction about to be signed (`{ to, data, value }`) or an x402
+payment requirement (`{ payTo, asset, amount }`). The check is local and
+synchronous: no network, no key, nothing to host. An MCP agent gets the same
+check from `rein_check_payment` with `npx rein-wallet mcp --guard 0xYourAgentWallet`.
+If the agent runs somewhere else, save the limits with `--out rein-guard.json`,
+ship that file with it, and set `REIN_GUARD_FILE=rein-guard.json`.
+
+A payment outside the limits isn't simply refused: it is held, and
+`check` says so (`held: "<id>"`). A person can let that one payment through
+with `rein-wallet guard 0x… --allow <id>`, typed at a terminal, and the agent's
+retry then passes. `rein-wallet approvals` posts each hold to Slack with a link
+to approve or refuse it. `--new-payee-cap 20` lets a first payment of up to 20
+tokens to a new address through without asking.
+
+Run the command again whenever you like. Limits that should tighten do so on
+their own; anything that would widen them (a new payee, a higher ceiling) waits
+for `rein-wallet guard 0x… --approve`. Add `--webhook <Slack or Discord URL>`
+to hear about every blocked payment.
+
+What it reads: token transfers and approvals, Uniswap V2 and V3 router swaps
+(the recipient must be the wallet itself, and what a swap spends counts toward
+the hour), x402 / EIP-3009 authorizations, and Permit and Permit2 signatures.
+Limits hold per hour and per day. A signature it can't read is blocked, and so
+is anything when the limits file is missing or unreadable: `check` never
+throws, so a `catch` can't turn an error into a payment.
+
+The check runs in your agent's process, so an agent whose code is fully
+compromised can skip it. For limits nothing can skip, the same policy runs on
+chain in a Rein account (below).
+
+## Shadow mode for a platform's agent wallets
+
+```bash
+npx rein-wallet fleet wallets.txt --webhook "$SLACK_WEBHOOK_URL"
+```
+
+For a platform that runs many agent wallets, give Rein the list, one address
+per line. It learns each wallet's limits from its history before the last 30
+days, then posts to Slack every payment since that a second key would have held
+for a person to approve. That covers a first payment to an address the agent
+had never paid, a payee it doesn't pay often enough to trust, a swap that sent
+its output elsewhere, and more in an hour or a day than its history supports.
+
+Nothing is integrated and nothing is held: it reads public chain data and
+reports what would have happened. Run it with `--since 30m` every 15 minutes
+from cron or a scheduled GitHub Action, and each new one lands in Slack as it
+happens. `--out dir` writes the full list. `npx rein-wallet fleet --sample`
+shows it on made-up wallets: one that got drained, and one too new to have
+habits of its own. `npx rein-wallet fleet --olas 20` reads the newest 20
+deployed Olas agent services' wallets from the registry on Base.
+
+Each run also reports two numbers anyone can check on an explorer: first-ever
+payments over $100 to an address the wallet had never paid, and hours in which
+a wallet sent more than 3× its own busiest earlier hour.
+
+A wallet with fewer than 20 calls has too little history to learn from, so
+once three or more wallets in the list have enough, Rein holds the new ones to
+what most of them share: the contracts and payees at least half of them use,
+and the median of their hourly and daily limits. `--out dir` saves that as
+`cohort.json`, and a new agent's wallet starts guarded from day one:
+
+```bash
+npx rein-wallet guard 0xNEW… --cohort dir/cohort.json
+```
+
+It stays on the shared limits until it has 20 calls of its own. Then its own
+limits take over the same way any update does: tighter ones at once, wider ones
+only after you run `--approve`.
+
+## Rein as a second key the wallet enforces
+
+**Preview: don't use it with real money yet.** The co-signer has only been
+tested against stand-ins for Turnkey and Privy, and the fixes from the
+2 October security review are new.
+
+`check` runs in the agent's own process, so an agent that has been talked into
+it can skip it. On Turnkey or Privy, Rein can be a second key instead: the
+wallet's own policy engine lets the agent sign alone inside the limits Rein
+learned, and anything else needs Rein's approval too. Rein's co-signer runs the
+same guard (each wallet's learned payees and its hourly and daily totals),
+approves what fits, and holds the rest for a person to approve in Slack.
+
+```bash
+npx rein-wallet cosign keygen      # Rein's key: keep it where only the co-signer can read it
+
+# Turnkey: a co-signer user, and a policy needing both the agent and Rein outside the learned limits
+npx rein-wallet cosign setup turnkey --organization <org id> --agent-user <agent user id> --send
+npx rein-wallet cosign turnkey --organization <org id> --webhook "$SLACK_WEBHOOK_URL"
+
+# Turnkey, an app with a sub-organization per user: one webhook in the parent, and the co-signer listens for it
+npx rein-wallet cosign setup turnkey --organization <parent org id> --webhook-url https://<co-signer host>/ --send
+npx rein-wallet cosign turnkey --organization <parent org id> --listen 8789 --cohort cohort.json
+
+# Privy: the agent alone signs inside the learned policy; the wallet's owner is any two of agent, Rein, admin
+npx rein-wallet cosign setup privy --wallet <id> --policy <learned policy id> --agent-key <key> --admin-key <key> --send
+export REIN_COSIGN_TOKEN=$(openssl rand -hex 32)   # required: the agent sends it as a bearer token
+npx rein-wallet cosign privy --port 8788           # this machine only; add --host 0.0.0.0 to serve others
+```
+
+On Turnkey the co-signer watches for signing requests waiting on it and
+approves or rejects them there. An app that gives each user a sub-organization
+can't be polled one organization at a time, so Turnkey's webhook on the parent
+reports activity from every sub-organization; Rein reads each one again from
+Turnkey with its own key before judging it, and votes in the sub-organization
+it lives in. Each sub-organization still needs Rein's user and policy, best
+added when the app creates it. A wallet the co-signer hasn't seen gets limits
+learned from its history, the cohort's (`rein fleet --out`), or learning mode;
+`--no-learn` leaves it for a person instead. As a second key it never lets a
+first payment to a new address through on its own, however small: that waits
+for a person, and nothing is learned from a payment no person approved. It reads transactions, batches
+(judged as one payment) and x402/EIP-712 signatures. On Privy the agent sends the request it is
+about to make to the co-signer's `/sign` and adds the signature it gets back
+(`await require("rein-wallet").cosign(request, { url })` does it in one call,
+sending `REIN_COSIGN_TOKEN` from the agent's environment). The Privy co-signer
+won't start without that token, at least 32 characters, and listens only on
+this machine unless `--host` says otherwise;
+a 202 means a person is deciding. Rein only ever co-signs payments: never a
+change to the wallet, its owner or its policies, a raw signature it can't
+read, or an EIP-7702 delegation. For it to hold, the agent must not be in Turnkey's root
+quorum or have any other way to sign alone, and must not be able to read
+Rein's key. Both setups are written against Turnkey's and Privy's published
+API types and tested against fakes of them, not yet against a live account.
+
 ## Try it in Claude, with nothing to set up
 
 Give Claude a Rein account holding 50,000 test USDC, then try to talk it into
@@ -35,6 +266,12 @@ server, so there is no wallet, key or faucet involved.
 /rein:try                                              # one honest payment, five drain attempts
 ```
 
+No Claude? The same gauntlet runs in a terminal:
+
+```bash
+npx rein-wallet try
+```
+
 Claude Desktop: download [`dist/rein.mcpb`](dist/rein.mcpb) and double-click it.
 Any other MCP client, or the HTTP API with a key: [QUICKSTART.md](QUICKSTART.md).
 
@@ -42,10 +279,12 @@ Any other MCP client, or the HTTP API with a key: [QUICKSTART.md](QUICKSTART.md)
 
 Most agent wallets run with an empty spending policy, because writing one by
 hand means guessing limits and hoping the agent still works. Rein writes it
-from what the agent already does. No install, no key, no account:
+from what the agent already does. Paste the address at
+[rein-nine.vercel.app/scan](https://rein-nine.vercel.app/scan/), or, with no
+install, key or account:
 
 ```bash
-npx github:let-the-dreamers-rise/rein scan 0xYourAgentWallet
+npx rein-wallet scan 0xYourAgentWallet
 ```
 
 It reads the wallet's public history on Base and prints the policy that
@@ -55,7 +294,7 @@ the policy would have refused. With `--out report` it also writes that policy
 as Turnkey, Coinbase CDP and Privy JSON. Then keep it honest:
 
 ```bash
-npx github:let-the-dreamers-rise/rein watch 0xYourAgentWallet --webhook "$SLACK_WEBHOOK_URL"
+npx rein-wallet watch 0xYourAgentWallet --webhook "$SLACK_WEBHOOK_URL"
 ```
 
 Every new transaction is held against the policy, and the first one outside it
@@ -363,7 +602,7 @@ none.
   repetition. Bounding it honestly would require mirroring the token's allowance
   in storage, and that mirror goes stale as soon as the spender spends. Use
   `approve()` with an exact total instead.
-- **Not audited.** 56 tests pass. That is not an audit.
+- **Not audited.** 232 JavaScript and 18 Python tests pass. That is not an audit.
 
 ## Layout
 
@@ -382,12 +621,14 @@ plugin/                         the MCP server as one file, packaged as a Claude
 dist/rein.mcpb                  the same file as a Claude Desktop extension
 client/monitor.js               the guardian's evaluator for learned habits, same bands as the compiler
 v2/export.js                    the compiled bounds as Turnkey, Coinbase CDP and Privy policy JSON, with the honest table
-test/rein.test.js               46 tests on the account; client, monitor, export and the error explainer have their own, 56 in all
+test/rein.test.js               the account's tests; the other test/*.test.js files cover the scanner, guard, Safe check and co-signer, 232 in all
 scripts/explain-error.js        the three failures a first live run hits, in words, with the command that diagnoses each
 scripts/v2/demo.js              Rein v2 end to end: shadow, export, compile, apply, measure
 v2/compile.py                   the compiler: bounds plus nyaya-learned habits, readable policy out
 web/v2/index.html               the compiled policy with every rule switchable, at rein-nine.vercel.app/v2
-web/index.html                  the demo page and video, deployed at rein-nine.vercel.app
+web/index.html                  the product site: scan, apply, watch, pricing, at rein-nine.vercel.app
+web/scan/                       the wallet scanner in the browser, at rein-nine.vercel.app/scan
+web/account/index.html          the smart-account demo page and video, at rein-nine.vercel.app/account
 ```
 
 ## Running it
@@ -396,6 +637,10 @@ web/index.html                  the demo page and video, deployed at rein-nine.v
 npm install
 npm test
 ```
+
+Releases are published from the exact commit the security review signs off,
+from a clean checkout. `scripts\release.cmd` (Windows) publishes and redeploys
+in one step; it will be used again, with npm provenance, after 0.1.1.
 
 ## Chains
 

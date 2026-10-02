@@ -1,13 +1,59 @@
 {
-  "name": "rein",
-  "version": "0.1.0",
-  "private": true,
-  "description": "A smart account an autonomous agent can operate but cannot drain -- on-chain policy, on-chain refusal codes, on-chain intent trail",
+  "name": "rein-wallet",
+  "version": "0.1.1",
+  "description": "Check every payment waiting in a Safe multisig against who that Safe has actually paid, and how much: lookalike addresses, first payments to strangers, unusual amounts, owner changes. Read-only, no keys. Also a preview second key for AI agent wallets on Privy or Turnkey.",
+  "mcpName": "io.github.let-the-dreamers-rise/rein",
+  "keywords": [
+    "safe",
+    "gnosis-safe",
+    "multisig",
+    "address-poisoning",
+    "ai-agent",
+    "agent-wallet",
+    "wallet-policy",
+    "mcp",
+    "mcp-server",
+    "privy",
+    "turnkey",
+    "coinbase-cdp",
+    "smart-account",
+    "base",
+    "ethereum",
+    "security"
+  ],
+  "homepage": "https://github.com/let-the-dreamers-rise/rein#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/let-the-dreamers-rise/rein.git"
+  },
+  "bugs": {
+    "url": "https://github.com/let-the-dreamers-rise/rein/issues"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
   "bin": {
+    "rein-wallet": "bin/rein.js",
     "rein": "bin/rein.js",
-    "rein-mcp": "plugin/server/rein-mcp.cjs",
+    "rein-mcp": "mcp/rein-mcp.js",
     "rein-scan": "scan/cli.js"
   },
+  "files": [
+    "index.js",
+    "bin/",
+    "scan/*.js",
+    "scan/README.md",
+    "scan/watch-action.yml",
+    "scan/safe-action.yml",
+    "mcp/rein-mcp.js",
+    "mcp/lib/",
+    "mcp/sandbox/",
+    "api/server.js",
+    "scripts/codes.js",
+    "v2/export.js",
+    "QUICKSTART.md"
+  ],
   "scripts": {
     "build": "hardhat compile",
     "test": "hardhat test",
@@ -55,5 +101,6 @@
     "@ethereumjs/vm": "^10.1.3",
     "dotenv": "^16.4.7",
     "ethers": "^6.17.0"
-  }
+  },
+  "main": "index.js"
 }

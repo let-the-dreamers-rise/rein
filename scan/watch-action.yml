@@ -16,6 +16,8 @@ on:
   schedule:
     - cron: "*/15 * * * *"
   workflow_dispatch:
+# It needs no access to this repository.
+permissions: {}
 jobs:
   watch:
     runs-on: ubuntu-latest
@@ -28,7 +30,9 @@ jobs:
         env:
           AGENT_WALLET: ${{ vars.AGENT_WALLET }}
           REIN_WEBHOOK: ${{ secrets.REIN_WEBHOOK }}
+          # A fixed version: a new release runs here only when you change this.
+          REIN_VERSION: 0.1.1
         # Add --chain base-sepolia or --chain ethereum for another chain, and
         # --policy report.json (committed from `rein scan --out`) to hold the
         # wallet to a policy you reviewed rather than one compiled each run.
-        run: npx -y github:let-the-dreamers-rise/rein watch "$AGENT_WALLET" --since 30m --fail-on-alert
+        run: npx -y "rein-wallet@$REIN_VERSION" watch "$AGENT_WALLET" --since 30m --fail-on-alert

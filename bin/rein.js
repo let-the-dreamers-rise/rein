@@ -1,8 +1,18 @@
 #!/usr/bin/env node
 // One command for everything Rein does from a terminal.
 //
-//   npx github:let-the-dreamers-rise/rein scan 0xAgentWallet
+//   npx rein-wallet 0xAgentWallet
 //
+//   rein checkup 0x…         in seconds: is something tricking this wallet, what
+//                            does it normally do, what would Rein have held;
+//                            then ask about any payment (also `rein 0x…`)
+//   rein guard 0x…           learn the wallet's limits from its history and
+//                            hold every payment to them with rein.check(tx)
+//   rein fleet wallets.txt   what a second key would have held across many
+//                            agent wallets, posted to Slack (shadow mode)
+//   rein cosign turnkey      Rein as the second key the wallet vendor enforces
+//   rein try                 a hijacked agent against a real Rein account, in a
+//                            sandbox inside this process
 //   rein scan 0x…            the policy a wallet's history supports, and what it
 //                            holds with no on-chain limit (scan/cli.js)
 //   rein watch 0x…           alert when that wallet steps outside the policy
@@ -12,7 +22,59 @@
 //   rein api [--sandbox]     the HTTP API
 //
 // Reading and watching sign nothing and need no key.
-const USAGE = `rein: a wallet your agent can operate and cannot drain.
+const USAGE = `rein: a second key for agent wallets.
+
+  rein <address>   (or rein checkup <address>; rein checkup --sample to try it)
+      In seconds: is someone trying to trick this agent wallet, what does it
+      normally do, and what would Rein have held in its last 30 days. Then ask
+      about any payment in plain words: --ask "send 500 USDC to 0x…".
+
+  rein safe <safe address> [--webhook URL] [--every 300]
+      Before the last signature: checks every transaction queued in a Safe
+      against what that Safe has paid before, and flags lookalike addresses
+      (address poisoning), first payments to new addresses, unusual amounts,
+      delegatecalls and owner changes. Holds no key and needs none.
+
+  rein guard <address> [--chain base|base-sepolia|ethereum] [--webhook URL]
+      Learns the wallet's payees and hourly limits from its own history, shows
+      what they would have allowed over the last 30 days, and saves them. Then
+      one line before your agent signs holds every payment to them:
+        const verdict = require("rein-wallet").check(tx)   // { allow, reason }
+      Run it again to keep the limits current: they tighten on their own, and
+      anything wider waits for rein guard <address> --approve.
+      A payment outside the limits is held: rein guard <address> --allow <id>
+      lets it through once. --new-payee-cap N lets small first payments through.
+      A new wallet with little history: --cohort cohort.json (from rein fleet --out)
+      starts it from the limits its sibling wallets share.
+
+  rein approvals --public-url URL --webhook <Slack URL>
+      Posts each held payment to Slack with a link to approve or refuse it.
+      Needs REIN_APPROVAL_SECRET, kept where the agent can't read it.
+
+  rein cosign setup turnkey --organization <org id> --agent-user <user id> [--send]
+  rein cosign turnkey --organization <org id> [--webhook URL]
+      Rein as a second key Turnkey enforces: the agent signs alone inside its
+      learned limits, and anything else waits for Rein's co-signer, which
+      approves what fits the hourly and daily limits and holds the rest for a
+      person. rein cosign keygen makes Rein's key.
+  rein cosign setup privy --wallet <id> --policy <id> --agent-key <key> --admin-key <key> [--send]
+  rein cosign privy [--port 8788]
+      The same for Privy, with key quorums: the agent signs alone inside its
+      learned policy, and anything else needs Rein's signature, which the
+      co-signer gives only to what fits.
+
+  rein fleet <wallets.txt> [--since 30d] [--webhook URL] [--out dir]
+      Shadow mode for many agent wallets: learns each one's limits from its
+      history before --since, and reports to the terminal and Slack every
+      payment since that a second key would have held for a person to approve.
+      Wallets too new to learn from are held to what three or more others share;
+      --out also saves that as cohort.json. Read-only.
+      rein fleet --sample shows it on made-up wallets, one drained and one brand new;
+      rein fleet --olas 20 reads the newest 20 Olas agent wallets on Base.
+
+  rein try
+      A hijacked agent against a real Rein account on a private chain inside
+      this process: one honest payment, then five ways to drain it. No keys.
 
   rein scan <address> [--chain base|base-sepolia|ethereum] [--out dir]
       The spending policy the wallet's own history supports, what it holds with
@@ -89,6 +151,25 @@ function parseApply(argv) {
 async function main(argv) {
   const [cmd, ...rest] = argv;
   switch (cmd) {
+    case "--version":
+    case "-v":
+      console.log(require("../package.json").version);
+      return 0;
+    case "checkup":
+      return require("../scan/checkup").main(rest);
+    case "guard":
+      return require("../scan/guard").main(rest);
+    case "fleet":
+      return require("../scan/fleet").main(rest);
+    case "safe":
+      return require("../scan/safe").main(rest);
+    case "approvals":
+      return require("../scan/approvals").main(rest);
+    case "cosign":
+      return require("../scan/cosign").main(rest);
+    case "try":
+      await require("./try").runTry();
+      return 0;
     case "scan":
       return require("../scan/cli").main(rest);
     case "watch": {
@@ -129,8 +210,8 @@ async function main(argv) {
       console.error(USAGE);
       return cmd ? 0 : 2;
     default:
-      // `rein 0x…` is the scan most people mean.
-      if (/^0x[0-9a-fA-F]{40}$/.test(cmd)) return require("../scan/cli").main(argv);
+      // `rein 0x…`: the checkup, the one-minute answer most people want.
+      if (/^0x[0-9a-fA-F]{40}$/.test(cmd)) return require("../scan/checkup").main(argv);
       console.error(`rein: unknown command "${cmd}"\n\n${USAGE}`);
       return 2;
   }

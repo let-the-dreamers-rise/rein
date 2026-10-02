@@ -81,7 +81,8 @@ const lc = (a) => (/^0x[0-9a-fA-F]{40}$/.test(a) ? a.toLowerCase() : a);
 
 // -- Turnkey ------------------------------------------------------------------
 //
-// Stateless expressions over the transaction; no spend windows exist. The
+// Expressions over one transaction. Turnkey's velocity controls can hold
+// spend windows now, but Rein does not write them yet. The
 // decoded call arguments are only there once the contract's ABI is uploaded,
 // so each token gets a create_smart_contract_interface step first. Addresses
 // are compared lowercase, and eth.tx.data carries its 0x, so a selector is
@@ -150,7 +151,7 @@ function turnkey(f, consensus, o = {}, agents = null) {
     request: turnkeyActivity("ACTIVITY_TYPE_CREATE_POLICY_V3", "create_policy", {
       policyName: fleet.length > 1 ? `Rein: ${fleet.length} agents, compiled` : "Rein: compiled from the agent's history",
       effect: "EFFECT_ALLOW",
-      notes: "Written by Rein from the agents' own transaction history. Turnkey holds per-transaction caps; hourly totals are not expressible here, so rein watch covers them.",
+      notes: "Written by Rein from the agents' own transaction history. This policy holds per-transaction caps; hourly totals need a Turnkey velocity control, which Rein does not write yet, so rein watch covers them.",
       consensus,
       condition: branches.map((b) => b.condition).join(" || ") || "false",
     }),
@@ -250,11 +251,12 @@ function privy(f, o = {}) {
       { field_source: "ethereum_calldata", field: "approve.spender", abi: ERC20_ABI, operator: "in", value: payees },
       { field_source: "ethereum_calldata", field: "approve.value", abi: ERC20_ABI, operator: "lte", value: hex(tok.maxApproval) }] });
   }
-  for (const oth of f.others) {
-    rules.push({ name: `calls on ${oth.name}`.slice(0, 50), method, action: "ALLOW", conditions: [chain,
-      { field_source: "ethereum_transaction", field: "to", operator: "eq", value: oth.address },
-      { field_source: "ethereum_transaction", field: "value", operator: "lte", value: hex(f.nativePerCall) }] });
-  }
+  // Privy can only tell one function on a contract from another by decoding
+  // its arguments with the ABI, which Rein doesn't write yet. A rule on `to`
+  // alone would allow every function on a router, including a swap paid out
+  // to someone else, so other contracts are left out: closed, not open.
+  const leftOut = f.others.map((oth) => ({ contract: oth.name, address: oth.address, functions: oth.selectors,
+    why: "Privy can only limit which function is called with the contract's ABI, so Rein leaves it out rather than allow every function on it. Add an ABI rule by hand, or have a person approve these calls." }));
   if (f.nativeTo.length && f.nativePerCall > 0n) {
     rules.push({ name: "ETH to known recipients", method, action: "ALLOW", conditions: [chain,
       { field_source: "ethereum_transaction", field: "to", operator: "in", value: f.nativeTo },
@@ -265,7 +267,7 @@ function privy(f, o = {}) {
   steps.push({ step: "attach it to the agent's wallet (a wallet holds one policy, so this replaces any other)",
     request: { method: "PATCH", url: `${PRIVY}/wallets/${fill("privy_wallet_id")}`, auth: `${PRIVY_AUTH}; a wallet with an owner also needs privy-authorization-signature`,
       body: { policy_ids: [fill("policy.id")] } } });
-  return { vendor: "privy", method, fill: ["privy_wallet_id"], steps };
+  return { vendor: "privy", method, fill: ["privy_wallet_id"], steps, ...(leftOut.length ? { leftOut } : {}) };
 }
 
 // The honest table: which of the compiled bounds each engine can hold.
@@ -274,7 +276,7 @@ const CAN = {
   "selector allowlist": { turnkey: "yes (data[0..10])", coinbase: "yes with ABI, else contract only", privy: "yes with ABI" },
   "payee allowlist": { turnkey: "yes (after the ABI upload)", coinbase: "yes (evmData)", privy: "yes (calldata)" },
   "per-transaction cap": { turnkey: "yes", coinbase: "yes", privy: "yes" },
-  "rolling spend window": { turnkey: "no: stateless", coinbase: "no: per transaction only", privy: "yes (aggregation, signing requests only)" },
+  "rolling spend window": { turnkey: "yes (velocity controls; Rein does not write them yet)", coinbase: "no: per transaction only", privy: "yes (aggregation, signing requests only)" },
   "approval ceiling": { turnkey: "yes", coinbase: "yes", privy: "yes" },
   "call rate": { turnkey: "no", coinbase: "no", privy: "no (sum only)" },
   "native ceiling of zero": { turnkey: "yes", coinbase: "yes", privy: "yes" },

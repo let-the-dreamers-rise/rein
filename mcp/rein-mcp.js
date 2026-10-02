@@ -25,11 +25,11 @@
 //                            commitment so it is not readable by strangers
 
 const readline = require("readline");
-const { openClient } = require("./lib/config");
+const { openClient, wantsGuard, scrub } = require("./lib/config");
 const { NAMES, explain } = require("../scripts/codes");
 
 const PROTOCOL_VERSION = "2024-11-05";
-const SERVER = { name: "rein", version: "0.4.0" };
+const SERVER = { name: "rein", version: require("../package.json").version };
 
 // The descriptions below are the real interface. A model decides whether to
 // check before paying based on what these say, so they state the two facts that
@@ -52,7 +52,7 @@ const TOOLS = [
   {
     name: "rein_check_payment",
     description:
-      "Ask whether a payment would be allowed, WITHOUT making it. This is free: it is an on-chain view call, it costs no gas, it cannot fail, and it leaves no trace. " +
+      "Ask whether a payment would be allowed, WITHOUT making it. This is free: a read-only check that costs no gas and moves nothing. " +
       "Always call this before rein_pay. If it refuses, you get the exact reason (for example PAYEE_NOT_ALLOWED or TOKEN_PER_WINDOW) and how much budget is left, " +
       "so you can pay a smaller amount, wait for the window to roll, or tell the person why you are not going to do it. Do not retry a refused payment unchanged, and do not look for another route around it: the refusal is the owner's decision, not an obstacle.",
     inputSchema: {
@@ -100,6 +100,23 @@ const TOOLS = [
     inputSchema: { type: "object", properties: {} },
   },
   {
+    name: "rein_check_wallet",
+    description:
+      "Check any agent wallet in seconds from its public history: whether someone is trying to trick it (address poisoning, fake tokens), " +
+      "what it normally does (who it pays, how much an hour and a day), and which of its recent transactions Rein would have held for a person. " +
+      'Pass "payments" in plain words ("send 500 USDC to 0x…") to hear whether each would go through or be held, and why. ' +
+      'Read-only; signs and spends nothing, needs no Rein account. Address "sample" is a made-up wallet under attack, with no network.',
+    inputSchema: {
+      type: "object",
+      properties: {
+        address: { type: "string", description: 'The wallet address (0x...), or "sample".' },
+        chain: { type: "string", enum: ["base", "base-sepolia", "ethereum"], description: "Default base." },
+        payments: { type: "array", items: { type: "string" }, description: 'Optional payments to ask about, e.g. ["send 40 USDC to 0x…"].' },
+      },
+      required: ["address"],
+    },
+  },
+  {
     name: "rein_scan_wallet",
     description:
       "Scan any agent wallet's public history and report the spending policy that history supports: who it pays, how much an hour, " +
@@ -126,6 +143,21 @@ const TOOLS = [
     },
   },
 ];
+
+// With --guard, Rein checks payments the agent makes with its own wallet: it
+// doesn't pay, and an allowed check is counted against the hour, because the
+// agent is about to sign it.
+const GUARD_TOOLS = TOOLS.filter((t) => t.name !== "rein_pay").map((t) =>
+  t.name !== "rein_check_payment"
+    ? t
+    : {
+        ...t,
+        description:
+          "Call this before you sign any payment with your wallet. It answers allow or block with the reason, from limits learned from this wallet's own history. " +
+          "An allowed payment is counted against this hour and day, so call it once per payment, right before you sign. " +
+          "If it blocks, the reason says why (for example PAYEE_NOT_ALLOWED or TOKEN_PER_WINDOW); a payment that is held waits for a person to approve it, so tell them and retry the same payment later. Do not look for another way to make it.",
+      }
+);
 
 // Opened on first use rather than at startup, so a misconfigured server still
 // answers initialize and tools/list and can explain what is wrong through the
@@ -154,6 +186,17 @@ async function callTool(name, args) {
       return (await rein()).client.budget();
     case "rein_policy":
       return (await rein()).client.policy();
+    case "rein_check_wallet": {
+      const cu = require("../scan/checkup");
+      const addr = String(args.address || "").trim();
+      const history =
+        addr.toLowerCase() === "sample"
+          ? require("../scan/sample").poisonedSampleHistory()
+          : await require("../scan/blockscout").fetchHistory(addr, { chain: args.chain || "base" });
+      const c = cu.checkup(history);
+      const asked = (Array.isArray(args.payments) ? args.payments : []).map((q) => `> ${q}\n${cu.ask(c, String(q)).answer}`);
+      return [cu.text(c), ...asked].join("\n");
+    }
     case "rein_scan_wallet": {
       // Required here rather than at the top: the scanner is not needed to
       // answer any other tool, and a server that only pays should not load it.
@@ -210,7 +253,7 @@ async function handle(msg) {
       return reply(id, {});
 
     case "tools/list":
-      return reply(id, { tools: TOOLS });
+      return reply(id, { tools: wantsGuard() ? GUARD_TOOLS : TOOLS });
 
     case "tools/call": {
       const toolName = params?.name;
@@ -224,7 +267,7 @@ async function handle(msg) {
         // A refusal is not an error, but a misconfiguration is, and the agent
         // should be able to tell them apart from the text alone.
         return reply(id, {
-          content: [{ type: "text", text: `rein could not answer: ${err.message}` }],
+          content: [{ type: "text", text: `rein could not answer: ${scrub(err.message)}` }],
           isError: true,
         });
       }
@@ -259,7 +302,7 @@ function main() {
     // One message at a time, in the order they arrived. Two payments in flight
     // from one key would race for the same nonce, and a budget read that
     // overtakes the payment before it would report money that is already gone.
-    queue = queue.then(() => handle(msg)).catch((err) => fail(msg.id ?? null, -32603, err.message));
+    queue = queue.then(() => handle(msg)).catch((err) => fail(msg.id ?? null, -32603, scrub(err.message)));
   });
   rl.on("close", () => queue.then(() => process.exit(0)));
 }

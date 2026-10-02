@@ -83,4 +83,23 @@ function cdpWalletJwt({ walletSecret, method, url, body, now = Math.floor(Date.n
   return jwt({ alg: "ES256", typ: "JWT" }, claims, key, "ES256");
 }
 
-module.exports = { turnkeyStamp, turnkeyKey, cdpJwt, cdpWalletJwt, cdpNeedsWalletAuth, sortKeys };
+// -- Privy ---------------------------------------------------------------------------
+
+/// What a Privy authorization signature covers: the request, canonicalized
+/// (RFC 8785: keys sorted, no spaces), as Privy's SDK builds it.
+function privyPayload({ method, url, body, headers = {} }) {
+  const h = { "privy-app-id": headers["privy-app-id"] };
+  for (const k of ["privy-idempotency-key", "privy-request-expiry"]) if (headers[k] != null) h[k] = String(headers[k]);
+  const empty = body && typeof body === "object" && !Array.isArray(body) && !Object.keys(body).length;
+  return Buffer.from(JSON.stringify(sortKeys({ version: 1, method, url, body: empty ? "" : body, headers: h })));
+}
+
+/// The privy-authorization-signature for a request: ECDSA P-256 over the
+/// SHA-256 of the payload, DER, base64. `key` is base64 PKCS8 DER, which is
+/// how Privy hands out authorization keys (a "wallet-auth:" prefix is fine).
+function privySignature(request, key) {
+  const der = Buffer.from(String(key).replace(/^wallet-auth:/, ""), "base64");
+  return crypto.sign("sha256", privyPayload(request), crypto.createPrivateKey({ key: der, format: "der", type: "pkcs8" })).toString("base64");
+}
+
+module.exports = { turnkeyStamp, turnkeyKey, cdpJwt, cdpWalletJwt, cdpNeedsWalletAuth, sortKeys, privyPayload, privySignature };

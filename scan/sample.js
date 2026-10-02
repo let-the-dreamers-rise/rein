@@ -33,7 +33,8 @@ const ERC20 = new ethers.Interface([
   "function transfer(address to, uint256 value)",
   "function approve(address spender, uint256 value)",
 ]);
-const SWAP_SELECTOR = "0x04e45aaf"; // exactInputSingle
+// SwapRouter02's exactInputSingle, sending what it buys back to the agent.
+const SWAP = new ethers.Interface(["function exactInputSingle((address tokenIn,address tokenOut,uint24 fee,address recipient,uint256 amountIn,uint256 amountOutMinimum,uint160 sqrtPriceLimitX96))"]);
 
 // A small deterministic generator: the same sample on every machine.
 function rng(seed) {
@@ -45,6 +46,7 @@ function rng(seed) {
 }
 
 const START = Date.UTC(2026, 6, 1, 0, 0, 0) / 1000; // 1 July 2026
+const DAY_MS = 86400 * 1000;
 const DAYS = 60;
 
 function addressParam(address, name = null, isContract = false) {
@@ -99,7 +101,7 @@ function build() {
       const dollars = 150 + rand() * 100;
       const raw = ethers.parseUnits(dollars.toFixed(2), 6);
       tx({ ts: at(11), to: { address: USDC.address, name: "USD Coin", contract: true }, input: ERC20.encodeFunctionData("approve", [ROUTER, raw]), method: "approve" });
-      tx({ ts: at(11.2), to: { address: ROUTER, name: "SwapRouter02", contract: true }, input: SWAP_SELECTOR + "00".repeat(224), method: "exactInputSingle",
+      tx({ ts: at(11.2), to: { address: ROUTER, name: "SwapRouter02", contract: true }, input: SWAP.encodeFunctionData("exactInputSingle", [[USDC.address, WETH.address, 500, AGENT, raw, 0, 0]]), method: "exactInputSingle",
         tokenTransfers: [{ to: POOL, name: "Uniswap V3: USDC-WETH", contract: true, token: USDC, raw, method: "exactInputSingle" }] });
     }
     // An ETH tip to the bounty address, weekly.
@@ -129,6 +131,42 @@ function build() {
 function sampleHistory() {
   const b = build();
   return { chain: "base", address: AGENT, ...b, truncated: false, fetchedAt: "2026-09-01T00:00:00.000Z", synthetic: true };
+}
+
+/// The sample under an address-poisoning attack, the way one looked on a real
+/// Base agent wallet on 1 Oct 2026: fake "USDC" tokens emit transfers from the
+/// wallet to addresses that start and end like the ones it really pays, so a
+/// careless agent (or a careless limit-learner) copies the wrong one.
+function poisonedSampleHistory(n = 24) {
+  const h = sampleHistory();
+  const look = (a, mid) => ethers.getAddress(`0x${a.slice(2, 6)}${mid.repeat(32 / mid.length)}${a.slice(-4)}`.toLowerCase());
+  const fake = (symbol, address) => ({ address_hash: address, symbol, name: symbol, decimals: "6", type: "ERC-20", exchange_rate: null, reputation: "ok" });
+  const tokens = [fake("USDС", "0x4facd9f600000000000000000000000000000001"), fake("USDC", "0x08cfbc7300000000000000000000000000000002")];
+  const last = Date.parse(h.transactions[0].timestamp);
+  // As on the real wallet: one large payment to an address it had never paid,
+  // and then the poisoners copy that address.
+  const big = who("treasury it never paid before");
+  const template = h.transactions.find((t) => (t.raw_input || "").startsWith("0xa9059cbb"));
+  h.transactions.push({
+    ...template,
+    hash: ethers.id("rein sample: the big first payment"),
+    timestamp: new Date(last - 9 * DAY_MS).toISOString(),
+    raw_input: ERC20.encodeFunctionData("transfer", [big, ethers.parseUnits("12500", 6)]),
+  });
+  h.transactions.sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
+  const real = [big, PAYEES.inference.address, PAYEES.data.address];
+  for (let i = 0; i < n; i++) {
+    h.tokenTransfers.push({
+      transaction_hash: ethers.id(`rein sample poison ${i}`),
+      timestamp: new Date(last - i * 8 * 3600 * 1000).toISOString(),
+      block_number: 1,
+      from: { hash: AGENT },
+      to: { hash: look(real[i % 3], i % 2 ? "9" : "e") },
+      token: tokens[i % 2],
+      total: { value: String(Math.round(40 + (i * 37) % 160) * 1e6), decimals: "6" },
+    });
+  }
+  return h;
 }
 
 /// A fetch() that serves the sample as a Blockscout instance would, pages and
@@ -161,4 +199,24 @@ function sampleFetch({ pageSize = 50, asOf = null } = {}) {
   };
 }
 
-module.exports = { sampleHistory, sampleFetch, AGENT, PAYEES, USDC, WETH, ROUTER, POOL, START };
+/// A fetch() that serves any histories shaped like sampleHistory()'s (the
+/// fleet sample's wallets, say), keyed by address.
+function historiesFetch(histories, { pageSize = 50 } = {}) {
+  const by = new Map(histories.map((h) => [h.address.toLowerCase(), h]));
+  return async (href) => {
+    const url = new URL(href);
+    const m = /^\/api\/v2\/addresses\/(0x[0-9a-fA-F]{40})(\/[a-z-]+)?$/.exec(url.pathname);
+    const h = m && by.get(m[1].toLowerCase());
+    if (!h) return { ok: false, status: 404, json: async () => ({}) };
+    const json = (body) => ({ ok: true, status: 200, json: async () => body });
+    const start = Number(url.searchParams.get("items_count") || 0);
+    const page = (items) => json({ items: items.slice(start, start + pageSize), next_page_params: start + pageSize < items.length ? { items_count: start + pageSize } : null });
+    if (!m[2]) return json({ ...h.info, hash: h.address });
+    if (m[2] === "/transactions") return page(h.transactions);
+    if (m[2] === "/token-transfers") return page(h.tokenTransfers);
+    if (m[2] === "/token-balances") return json(h.tokenBalances);
+    return { ok: false, status: 404, json: async () => ({}) };
+  };
+}
+
+module.exports = { sampleHistory, poisonedSampleHistory, sampleFetch, historiesFetch, AGENT, PAYEES, USDC, WETH, ROUTER, POOL, START };

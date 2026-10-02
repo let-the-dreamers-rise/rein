@@ -82,6 +82,9 @@ describe("v2/export", () => {
     expect(rule.conditions.find((c) => c.field === "transfer.to").value).to.include("<Supplier A>");
     expect(attach.request).to.include({ method: "PATCH", url: "https://api.privy.io/v1/wallets/{{privy_wallet_id}}" });
     expect(attach.request.body).to.deep.equal({ policy_ids: ["{{policy.id}}"] });
+    // A rule on `to` alone would allow every function on the router, so it is left out and said so.
+    expect(body.rules.filter((x) => x.name.startsWith("calls on"))).to.deep.equal([]);
+    expect(r.privy.leftOut.map((l) => l.contract)).to.deep.equal(["Router"]);
   });
 
   it("writes user-operation rules for a smart wallet", () => {
@@ -93,7 +96,7 @@ describe("v2/export", () => {
 
   it("says what each vendor cannot hold", () => {
     const md = fs.readFileSync(path.join(out, "export.md"), "utf8");
-    expect(md).to.include("| rolling spend window | no: stateless | no: per transaction only | yes (aggregation, signing requests only) |");
+    expect(md).to.include("| rolling spend window | yes (velocity controls; Rein does not write them yet) | no: per transaction only | yes (aggregation, signing requests only) |");
     expect(md).to.include("| intent required | no | no | no |");
   });
 });

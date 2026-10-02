@@ -79,8 +79,8 @@ function unscale(compiled, scale) {
 
 /// Everything below works on a history already fetched, so it is the same
 /// code whether the history came from the network or from a saved file.
-function scanHistory(history, { robust = true, train = 0.8 } = {}) {
-  const { rows, tokens, unknownDecimals } = toTrail(history);
+function scanHistory(history, { robust = true, train = 0.8, trail, expiryDays } = {}) {
+  const { rows, tokens, unknownDecimals, ignored = [] } = toTrail(history, trail);
   const labels = collectLabels(history);
   const name = (a) => labelFor(a, labels, tokens);
   const held = holdings(history);
@@ -101,6 +101,7 @@ function scanHistory(history, { robust = true, train = 0.8 } = {}) {
       truncated: Boolean(history.truncated),
     },
     holdings: held.map((h) => ({ ...h, symbol: h.symbol || name(h.token) })),
+    junkTokens: held.junk || 0,
     synthetic: Boolean(history.synthetic),
     caveats: history.synthetic
       ? ["SYNTHETIC: this is Rein's made-up sample wallet (scan/sample.js), not a real one. Every number below describes that sample."]
@@ -135,7 +136,7 @@ function scanHistory(history, { robust = true, train = 0.8 } = {}) {
   // token, and the results come back in whole tokens.
   const scale = (token) => (token ? 10 ** Math.min(6, token === NATIVE ? 18 : tokens[token]?.decimals ?? 18) : 1);
   const scaled = rows.map((r) => ({ ...r, amount: Number(r.amount || 0) * scale(r.token), orig: r }));
-  const compiled = compileTrail(scaled, { robust, train });
+  const compiled = compileTrail(scaled, { robust, train, expiryDays });
   const coverage = evaluate(nativeToAgent(compiled.onchain), compiled.heldout);
   for (const x of coverage.refused) x.row = x.row.orig;
   unscale(compiled, scale);
@@ -195,6 +196,11 @@ function scanHistory(history, { robust = true, train = 0.8 } = {}) {
   if (report.isContract) {
     report.caveats.push("This is a contract wallet. Calls it makes through an entry point or a module do not appear as its own transactions, so its policy is drawn from what left it rather than what it called.");
   }
+  if (ignored.length) {
+    const lookalikes = [...new Set(ignored.map((x) => x.payee).filter(Boolean))];
+    report.poisoning = { transfers: ignored.length, addresses: lookalikes };
+    report.caveats.push(`Address poisoning: ${ignored.length} transfer(s) look like payments from this wallet but were made by someone else's contract, in fake or unused tokens, to ${lookalikes.length} address(es). They are left out, and nobody should copy a payee from this wallet's history without checking every character.`);
+  }
   if (unknownDecimals.length) report.caveats.push(`Decimals unknown for ${unknownDecimals.length} token(s); 18 assumed.`);
   report.caveats.push("Intent hashes are not checked: a public history carries no instructions. An agent running on Rein supplies one per call.");
   report.caveats.push("Native coin leaving a contract wallet through internal transactions, and NFTs, are not read.");
@@ -222,14 +228,22 @@ function sentences(b, policy, name) {
   if (policy.payees.length) out.push(`Pays or approves only ${policy.payees.map(name).join(", ")}`);
   for (const [token, tp] of Object.entries(policy.tokens)) {
     const t = b.tokens[token];
-    out.push(
-      `${name(token)}: at most ${money(tp.maxPerWindow)} an hour (busiest hour seen ${money(t.max_per_hour)}, ${Math.round((HEADROOM - 1) * 100)}% headroom); approvals up to ${money(tp.maxApproval)}`
-    );
+    const pct = Math.round((HEADROOM - 1) * 100);
+    const basis =
+      tp.maxPerWindow >= t.max_per_hour
+        ? `busiest hour seen ${money(t.max_per_hour)}, ${pct}% headroom`
+        : `a usual busy hour, ${pct}% headroom; its busiest, ${money(t.max_per_hour)}, was rare enough to need your approval`;
+    out.push(`${name(token)}: at most ${money(tp.maxPerWindow)} an hour (${basis}); approvals up to ${money(tp.maxApproval)}`);
   }
   if (policy.agent.maxNativePerWindow) out.push(`ETH: at most ${money(policy.agent.maxNativePerWindow)} an hour`);
   else out.push("Sends no ETH");
   out.push(`At most ${policy.agent.maxCallsPerWindow} calls an hour`);
-  if (policy.agent.expiry) out.push(`Lapses on ${new Date(policy.agent.expiry * 1000).toISOString().slice(0, 10)}, so somebody looks at it again`);
+  if (policy.agent.expiry) {
+    const day = new Date(policy.agent.expiry * 1000).toISOString().slice(0, 10);
+    out.push(policy.agent.expiry * 1000 < Date.now()
+      ? `Already lapsed (${day}): the history it was learned from is old, so scan again before using it`
+      : `Lapses on ${day}, so somebody looks at it again`);
+  }
   return out;
 }
 
@@ -320,6 +334,7 @@ function markdown(r) {
   L.push("## Today: no on-chain limit", "", r.exposureToday.sentence, "");
   L.push("| holds | amount | USD |", "|---|---:|---:|");
   for (const h of r.holdings) L.push(`| ${h.symbol} | ${money(h.amount)} | ${h.usd != null ? money(round(h.usd)) : "?"} |`);
+  if (r.junkTokens) L.push("", `Left out: ${r.junkTokens} airdropped token(s) with no price that this wallet never used, or with lookalike names. Often spam or phishing; don't open their links.`);
   if (!r.policy) {
     L.push("", ...r.caveats.map((c) => `- ${c}`), "");
     return L.join("\n");

@@ -12,7 +12,9 @@
 // Credentials come from the environment, named as each vendor's SDK names
 // them, and never leave this machine except as the signed request:
 //
-//   Privy         PRIVY_APP_ID, PRIVY_APP_SECRET (Basic auth)
+//   Privy         PRIVY_APP_ID, PRIVY_APP_SECRET (Basic auth), and
+//                 PRIVY_AUTHORIZATION_KEY when the wallet has an owner whose
+//                 signature a change needs
 //   Turnkey       TURNKEY_API_PUBLIC_KEY, TURNKEY_API_PRIVATE_KEY (each request stamped)
 //   Coinbase CDP  CDP_API_KEY_ID, CDP_API_KEY_SECRET, and CDP_WALLET_SECRET for
 //                 the attach (a JWT per request; see scan/sign.js)
@@ -31,7 +33,7 @@ const holes = (value) => [...new Set([...JSON.stringify(value).matchAll(HOLE)].m
 
 function curl(req, headers) {
   const h = Object.entries(headers).map(([k, v]) => ` \\\n  -H "${k}: ${v}"`).join("");
-  return `curl -X ${req.method} '${req.url}'${h} \\\n  -d '${JSON.stringify(req.body).replace(/'/g, "'\\''")}'`;
+  return `curl -X ${req.method} '${String(req.url).replace(/'/g, "'\\''")}'${h} \\\n  -d '${JSON.stringify(req.body).replace(/'/g, "'\\''")}'`;
 }
 
 // The `rein apply` flag that fills each id only the wallet's owner has.
@@ -41,6 +43,14 @@ const FLAG = {
   turnkey_agent_user_id: "--agent-user",
   turnkey_agent_user_tag_id: "--agent-tag",
   cdp_account_address: "--account",
+};
+
+// Where each vendor's API lives: a plan is a file anyone can hand you, and
+// --send attaches your API secret to every request in it.
+const ORIGIN = {
+  privy: ["https://api.privy.io", "https://auth.privy.io"],
+  turnkey: ["https://api.turnkey.com"],
+  coinbase: ["https://api.cdp.coinbase.com"],
 };
 
 const NEEDS = {
@@ -53,7 +63,12 @@ const NEEDS = {
 function authHeaders(vendor, req, body, env) {
   const h = { "content-type": "application/json" };
   if (vendor === "privy") {
-    return { ...h, "privy-app-id": env.PRIVY_APP_ID, authorization: `Basic ${Buffer.from(`${env.PRIVY_APP_ID}:${env.PRIVY_APP_SECRET}`).toString("base64")}` };
+    const out = { ...h, "privy-app-id": env.PRIVY_APP_ID, authorization: `Basic ${Buffer.from(`${env.PRIVY_APP_ID}:${env.PRIVY_APP_SECRET}`).toString("base64")}` };
+    // A wallet that has an owner changes only with the owner's signature.
+    if (env.PRIVY_AUTHORIZATION_KEY && req.method === "PATCH" && /\/wallets\//.test(req.url)) {
+      out["privy-authorization-signature"] = sign.privySignature({ method: req.method, url: req.url, body: JSON.parse(body), headers: { "privy-app-id": env.PRIVY_APP_ID } }, env.PRIVY_AUTHORIZATION_KEY);
+    }
+    return out;
   }
   if (vendor === "turnkey") {
     return { ...h, "X-Stamp": sign.turnkeyStamp(body, { publicKey: env.TURNKEY_API_PUBLIC_KEY, privateKey: env.TURNKEY_API_PRIVATE_KEY }) };
@@ -76,7 +91,7 @@ function created(vendor, body) {
   const a = body.activity || {};
   if (a.status && a.status !== "ACTIVITY_STATUS_COMPLETED") return { pending: a.status, activityId: a.id };
   const r = a.result || {};
-  return { id: r.createPolicyResult?.policyId || r.createSmartContractInterfaceResult?.smartContractInterfaceId };
+  return { id: r.createPolicyResult?.policyId || r.createSmartContractInterfaceResult?.smartContractInterfaceId || r.createApiOnlyUsersResult?.userIds?.[0] || r.createWebhookEndpointResult?.endpointId || r.createWebhookEndpointResult?.webhookEndpoint?.endpointId };
 }
 
 /// Runs (or, without `send`, prints) a plan. Resolves with the ids created.
@@ -90,6 +105,7 @@ async function apply(plan, { vars = {}, send = false, env = process.env, fetch: 
   // What the user must supply before anything is sent.
   const missing = holes(plan.steps.map((s) => s.request)).filter((k) => known[k] == null && k !== "now_ms" && !k.endsWith(".id"));
   if (send && missing.length) throw new Error(`missing ${missing.map((k) => FLAG[k] || `{{${k}}}`).join(", ")}`);
+  for (const l of plan.leftOut || []) log(`Left out of this policy: calls on ${l.contract} (${l.address}). ${l.why}`);
 
   for (const [i, s] of plan.steps.entries()) {
     const req = fillIn(s.request, { ...known, now_ms: String(Date.now()) });
@@ -102,6 +118,13 @@ async function apply(plan, { vars = {}, send = false, env = process.env, fetch: 
     }
     const open = holes(req);
     if (open.length) throw new Error(`step ${i + 1} still has ${open.map((k) => `{{${k}}}`).join(", ")}`);
+    let origin = null;
+    try {
+      origin = new URL(req.url).origin;
+    } catch {
+      origin = null;
+    }
+    if (!ORIGIN[vendor].includes(origin)) throw new Error(`step ${i + 1} goes to ${origin || req.url}, not ${vendor}'s API (${ORIGIN[vendor].join(" or ")}); Rein won't send your ${vendor} credentials there`);
     const body = JSON.stringify(req.body);
     const res = await fetchImpl(req.url, { method: req.method, headers: authHeaders(vendor, req, body, env), body });
     const text = await res.text();

@@ -1,0 +1,54 @@
+# A Rein Safe watch that nobody has to host. Copy this file to
+# .github/workflows/rein-safe.yml in any repository you own, then in that
+# repository's Settings > Secrets and variables > Actions:
+#
+#   variable  SAFE_ADDRESS   the Safe's address
+#   variable  SAFE_CHAIN     base (default), ethereum or base-sepolia
+#   secret    REIN_WEBHOOK   a Slack, Discord or Telegram webhook
+#
+# Every 10 minutes it reads the Safe's queue and checks each payee against
+# what the Safe has paid before. A lookalike address, a large first payment
+# to a stranger, an amount far above the usual, a delegatecall or an owner
+# change is posted to the webhook once. Nothing here signs or spends; it
+# reads Safe's public service and Blockscout.
+name: rein safe
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+# It needs no access to this repository.
+permissions: {}
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Pin to the commit SHA of each action if your organisation requires it.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # What was already posted, so each transaction is posted once.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.rein/safes
+          key: rein-safe-${{ github.run_id }}
+          restore-keys: rein-safe-
+      - name: Check the queue
+        env:
+          SAFE_ADDRESS: ${{ vars.SAFE_ADDRESS }}
+          SAFE_CHAIN: ${{ vars.SAFE_CHAIN || 'base' }}
+          REIN_WEBHOOK: ${{ secrets.REIN_WEBHOOK }}
+          # A fixed version: a new release runs here only when you change this.
+          REIN_VERSION: 0.1.1
+        # It exits 1 when something in the queue shouldn't be signed: the
+        # warning marks the run instead of failing it, so the cache of what
+        # was already posted is still saved. Any other exit (2: Rein couldn't
+        # read the Safe; 3: the webhook refused the alert) fails the run, and
+        # GitHub emails you, because a watch that can't see is not watching.
+        shell: bash
+        run: |
+          set +e
+          npx -y "rein-wallet@$REIN_VERSION" safe "$SAFE_ADDRESS" --chain "$SAFE_CHAIN"
+          code=$?
+          if [ "$code" = 1 ]; then echo "::warning::Rein flagged a queued transaction"; exit 0; fi
+          exit "$code"

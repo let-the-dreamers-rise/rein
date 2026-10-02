@@ -147,6 +147,28 @@ describe("the wallet scanner", function () {
       expect(report.exposureUnderPolicy.tokens.find((t) => t.symbol === "WETH").perDay).to.equal(0);
     });
 
+    it("leaves airdropped junk out of what the wallet holds, and says how many", () => {
+      const h = sampleHistory();
+      const junk = (symbol, extra = {}) => ({ value: "1000000000000000000000", token_id: null, token: { address_hash: ethers.Wallet.createRandom().address, symbol, name: symbol, decimals: "18", type: "ERC-20", exchange_rate: null, ...extra } });
+      h.tokenBalances.push(junk("Visit claim-base.xyz"), junk("USDС"), junk("SCAM", { exchange_rate: "1", reputation: "scam" }));
+      const r = scanHistory(h);
+      expect(r.holdings.map((x) => x.symbol)).to.deep.equal(report.holdings.map((x) => x.symbol));
+      expect(r.junkTokens).to.equal(3);
+      expect(markdown(r)).to.contain("Left out: 3 airdropped token(s)");
+      expect(report.junkTokens).to.equal(0);
+    });
+
+    it("says when a policy learned from old history has already lapsed", () => {
+      expect(markdown(report)).to.contain("Lapses on");
+      const now = Date.now;
+      Date.now = () => (report.policy.onchain.agent.expiry + 86400) * 1000;
+      try {
+        expect(markdown(scanHistory(sampleHistory()))).to.contain("Already lapsed").and.contain("scan again before using it");
+      } finally {
+        Date.now = now;
+      }
+    });
+
     it("bounds ETH in fractions of an ETH, not whole ones", () => {
       const eth = report.policy.onchain.agent.maxNativePerWindow;
       expect(eth).to.be.above(0.01).and.below(0.1);
@@ -444,6 +466,37 @@ describe("the wallet scanner", function () {
       expect(JSON.parse(sample.stdout).coverage.total).to.equal(40);
       expect(rein.parseWatch(["0xabc", "--every", "30", "--webhook", "https://h"])).to.include({ address: "0xabc", every: 30, webhook: "https://h" });
       expect(rein.parseWatch(["0xabc", "--since", "20m", "--fail-on-alert"])).to.include({ since: "20m", failOnAlert: true });
+    });
+
+    it("`rein try` runs the gauntlet in a terminal: one payment through, every drain refused by the contract", async () => {
+      const { runTry } = require("../bin/try");
+      const lines = [];
+      const { rows, left, stranger } = await runTry({ log: (l) => lines.push(l) });
+      expect(rows.map((r) => (r.last.paid ? "paid" : r.last.reason))).to.deep.equal([
+        "paid",
+        "PAYEE_NOT_ALLOWED",
+        "PAYEE_NOT_ALLOWED",
+        "TOKEN_PER_WINDOW",
+        "INTENT_REQUIRED",
+        "TOKEN_PER_WINDOW",
+      ]);
+      expect(left).to.equal(250);
+      expect(stranger).to.equal(0);
+      expect(lines.join("\n")).to.contain("What this does not stop");
+    });
+
+    it("publishes every file the commands load, and nothing it does not need", async () => {
+      const pkg = require("../package.json");
+      const esbuild = require("esbuild");
+      const entries = [...new Set([...Object.values(pkg.bin), pkg.main])].map((b) => path.join(ROOT, b));
+      const { metafile } = await esbuild.build({ entryPoints: entries, bundle: true, platform: "node", write: false, outdir: os.tmpdir(), metafile: true, logLevel: "silent" });
+      const local = Object.keys(metafile.inputs).filter((f) => !f.includes("node_modules"));
+      const shipped = (f) => f === "package.json" /* npm always ships it */ || pkg.files.some((p) => (p.endsWith("/") ? f.startsWith(p) : p.includes("*") ? f.startsWith(p.split("*")[0]) && !f.slice(p.split("*")[0].length).includes("/") : f === p));
+      expect(local.filter((f) => !shipped(f))).to.deep.equal([]);
+      expect(pkg.private).to.equal(undefined);
+      expect(pkg.bin[pkg.name]).to.equal("bin/rein.js"); // so `npx rein-wallet` knows what to run
+      expect(require("../server.json").packages[0].identifier).to.equal(pkg.name);
+      expect(require("../server.json").name).to.equal(pkg.mcpName);
     });
 
     it("runs from the command line on the sample, with nothing on the network", () => {

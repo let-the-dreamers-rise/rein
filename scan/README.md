@@ -5,7 +5,7 @@ supports, what one injected instruction could move from it today, what it
 could move under that policy, and how much of its recent honest work the
 policy would have refused.
 
-With nothing installed: `npx github:let-the-dreamers-rise/rein scan 0xAgentWallet`.
+With nothing installed: `npx rein-wallet scan 0xAgentWallet`.
 From a clone:
 
 ```bash
