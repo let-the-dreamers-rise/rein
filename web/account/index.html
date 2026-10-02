@@ -11,9 +11,7 @@
 <meta property="og:url" content="https://rein-nine.vercel.app/account/">
 <meta name="theme-color" content="#ff6a1a">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23ff6a1a'/%3E%3Cpath d='M9 23V9h8.5a4.5 4.5 0 0 1 1.6 8.7L23 23h-3.6l-3.5-4.8H12V23z' fill='%23141210'/%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../fonts/fonts.css">
 <style>
 :root{
   --bg:oklch(0.985 0 0);
@@ -226,7 +224,8 @@ html.anim .rise:nth-child(2){animation-delay:.08s}html.anim .rise:nth-child(3){a
       <li><a href="#next">Rein v2</a></li>
       <li><a href="https://github.com/let-the-dreamers-rise/rein">GitHub</a></li>
     </ul>
-    <a class="btn btn-ink" href="mailto:ashwingoyal2006@gmail.com?subject=Rein%20early%20access">Get early access</a>
+    <a class="btn btn-ink" href="../safe/">Check a Safe</a>
+    <!-- contact: "Get early access" mailto:[role address] once the company picks the address (company/README.md, decision 1) -->
   </div>
 </nav>
 
@@ -357,7 +356,7 @@ html.anim .rise:nth-child(2){animation-delay:.08s}html.anim .rise:nth-child(3){a
     <div class="run">
       <p>The same run on your own machine, with no chain, no key and nothing to sign up for:</p>
       <pre>git clone https://github.com/let-the-dreamers-rise/rein &amp;&amp; cd rein &amp;&amp; npm install
-npm test                                    <i># 56 tests</i>
+npm test                                    <i># 212 tests</i>
 npx hardhat run scripts/demo-injection.js   <i># the transcript above, on an in-process chain</i></pre>
     </div>
   </div>
@@ -408,10 +407,10 @@ npx hardhat run scripts/demo-injection.js   <i># the transcript above, on an in-
       <li><b>A permitted call is still a permitted call.</b> Rein bounds the blast radius. It does not make the agent's decisions good.</li>
       <li><b>It assumes the owner is not compromised.</b> Use a multisig for anything that matters.</li>
       <li><b>Only <code>transfer</code>, <code>approve</code>, <code>transferFrom</code> and <code>increaseAllowance</code> are decoded.</b> Other value-moving methods on an allowlisted token are outside what the policy understands.</li>
-      <li><b>Not audited.</b> 56 tests pass. That is not an audit.</li>
+      <li><b>Not audited.</b> 212 JavaScript and 18 Python tests pass. That is not an audit.</li>
     </ul>
     <div class="ctas" style="margin-top:40px">
-      <a class="btn btn-brand" href="mailto:ashwingoyal2006@gmail.com?subject=Rein%20early%20access">Get early access</a>
+      <!-- contact: "Get early access" mailto:[role address] once the company picks the address -->
       <a class="btn" href="https://github.com/let-the-dreamers-rise/rein">Read the source</a>
     </div>
   </div>
