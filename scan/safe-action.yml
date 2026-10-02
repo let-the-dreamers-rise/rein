@@ -16,11 +16,14 @@ on:
   schedule:
     - cron: "*/10 * * * *"
   workflow_dispatch:
+# It needs no access to this repository.
+permissions: {}
 jobs:
   watch:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # Pin to the commit SHA of each action if your organisation requires it.
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -35,7 +38,17 @@ jobs:
           SAFE_ADDRESS: ${{ vars.SAFE_ADDRESS }}
           SAFE_CHAIN: ${{ vars.SAFE_CHAIN || 'base' }}
           REIN_WEBHOOK: ${{ secrets.REIN_WEBHOOK }}
-        # It exits 1 when something in the queue shouldn't be signed; the
+          # A fixed version: a new release runs here only when you change this.
+          REIN_VERSION: 0.1.1
+        # It exits 1 when something in the queue shouldn't be signed: the
         # warning marks the run instead of failing it, so the cache of what
-        # was already posted is still saved.
-        run: npx -y rein-wallet safe "$SAFE_ADDRESS" --chain "$SAFE_CHAIN" || echo "::warning::Rein flagged a queued transaction"
+        # was already posted is still saved. Any other exit (2: Rein couldn't
+        # read the Safe; 3: the webhook refused the alert) fails the run, and
+        # GitHub emails you, because a watch that can't see is not watching.
+        shell: bash
+        run: |
+          set +e
+          npx -y "rein-wallet@$REIN_VERSION" safe "$SAFE_ADDRESS" --chain "$SAFE_CHAIN"
+          code=$?
+          if [ "$code" = 1 ]; then echo "::warning::Rein flagged a queued transaction"; exit 0; fi
+          exit "$code"

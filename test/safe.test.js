@@ -226,8 +226,10 @@ describe("rein safe", function () {
         return Promise.reject(new Error(`unexpected ${url}`));
       },
     }).catch((e) => e);
-    // The Safe's own history comes from the explorer, which this test doesn't reach.
-    expect(String(code.message || code)).to.contain("unexpected https://base.blockscout.com");
+    // The Safe's own history comes from the explorer, which this test doesn't reach:
+    // "couldn't check" is exit 2, never 1 ("don't sign").
+    expect(code).to.equal(2);
+    expect(lines.join("\n")).to.contain("could not check: unexpected https://base.blockscout.com");
     const r = await safe.watchOnce(AGENT, { safeApi: safe.safeGateway("base", { fetch: async (url) => ({ ok: true, status: 200, json: async () => gw[url] }) }), history, env });
     expect(r.queue.map((q) => [q.nonce, q.signed, q.needed, q.found[0]?.level])).to.deep.equal([[8, 1, 2, "danger"]]);
     expect(r.queue[0].found[0].why).to.contain("Inference API (");

@@ -643,7 +643,16 @@ async function main(argv, { log = console.log, env = process.env, fetch: fetchIm
     return r;
   };
   if (!o.every) {
-    const r = await run();
+    // 1 means "something shouldn't be signed"; 2 that Rein couldn't check
+    // at all; 3 that it found something but couldn't post it. A watch that
+    // can't tell these apart reads every outage as a finding.
+    let r;
+    try {
+      r = await run();
+    } catch (err) {
+      log(`could not check: ${err.message}`);
+      return 2;
+    }
     if (r.alertFailed) return 3;
     return r.queue.some((q) => q.found.some((f) => f.level === "danger")) ? 1 : 0;
   }

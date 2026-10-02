@@ -39,7 +39,8 @@ These all read "Looks normal" or lost an alert before the fix.
 - Small first payments to one new address across the queue are added up, so thirty payments of $990 count as one of $29,700.
 - When a flood of fake transfers pushes real payees out of the history Rein reads, the report says so.
 - Reports always show the address next to the explorer's label, since a label is chosen by the address's owner. Slack links and Discord @everyone in that text no longer act.
-- An alert that fails to post is tried again on the next check, and a single run exits with code 3.
+- An alert that fails to post is tried again on the next check. A single run exits 1 when something shouldn't be signed, 2 when Rein couldn't check the Safe, and 3 when it couldn't post the alert.
+- `scan/safe-action.yml` pins Rein's version, asks for no repository access, and fails the run (so GitHub emails you) when Rein can't check or can't post.
 
 ### Also
 - `rein --version`.
