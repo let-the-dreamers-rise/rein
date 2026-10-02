@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Rein · A second key for AI agent wallets</title>
-<meta name="description" content="Rein learns each AI agent's payees and spending from its own wallet history. Inside that, the agent signs alone; anything else waits for Rein's co-signature or a person, enforced by Turnkey or Privy. Shadow mode is free and read-only.">
-<meta property="og:title" content="Rein · A second key for AI agent wallets">
-<meta property="og:description" content="See what a second key would have held across your agent wallets in the last 30 days, from public chain data. Then make Rein that key on Turnkey or Privy.">
+<title>Rein · Check every Safe payment before the last signature</title>
+<meta name="description" content="Paste a Safe multisig. Rein checks every queued transaction against what that Safe has paid before and tells signers which ones pay a lookalike address, a stranger or far more than usual. Free, read-only, no keys. Also a second key for AI agent wallets.">
+<meta property="og:title" content="Rein · Check every Safe payment before the last signature">
+<meta property="og:description" content="Is anything in your Safe's queue paying a lookalike address or a stranger? Rein checks each payee against the Safe's own history. Free, read-only, inside Safe{Wallet} as a custom app.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://rein-nine.vercel.app/">
 <meta name="theme-color" content="#ff6a1a">
@@ -82,6 +82,14 @@ code{font-family:var(--mono);font-size:.88em;background:var(--sunken);padding:.1
 .scanbox input{font:15px var(--mono);border:0;background:transparent;padding:10px 12px;min-width:0;color:var(--ink)}
 .scanbox input:focus{outline:none}
 .scanbox:focus-within{outline:3px solid var(--ink);outline-offset:2px}
+.scanbox:has(select){grid-template-columns:minmax(0,1fr) auto auto;max-width:640px}
+.scanbox select{font:15px var(--sans,inherit);border:0;border-left:1px solid var(--hair);background:transparent;padding:0 10px;color:var(--ink)}
+@media(max-width:520px){.scanbox:has(select){grid-template-columns:minmax(0,1fr) auto}.scanbox:has(select) input{grid-column:1/-1}.scanbox select{border-left:0}}
+#agents{padding-bottom:0}
+#agents+section{border-top:0}
+#agents .scanbox{margin-top:24px}
+#agents .fine{margin-top:14px;font-size:14.5px;color:var(--ink-2)}
+#agents .fine a{color:inherit;text-decoration:underline;text-underline-offset:3px}
 .hero .lede code{font-family:var(--mono);font-size:.88em;background:oklch(1 0 0 / .4);padding:1px 6px;border-radius:5px}
 .hero-cmd{font:15px/1.4 var(--mono);background:var(--ink);color:var(--brand);border-radius:12px;padding:16px 18px;margin:0 0 14px;max-width:560px;overflow-x:auto;white-space:pre}
 .hero-cmd::before{content:"$ ";color:oklch(0.7 0.02 60)}
@@ -210,14 +218,12 @@ footer a{color:var(--ink)}
       Rein
     </a>
     <ul>
-      <li><a href="#how">How it works</a></li>
-      <li><a href="#why">Why Rein</a></li>
+      <li><a href="#safe-how">How it works</a></li>
+      <li><a href="#agents">Agent wallets</a></li>
       <li><a href="#pricing">Pricing</a></li>
-      <li><a href="safe/">Check a Safe</a></li>
-      <li><a href="account/">Rein account</a></li>
       <li><a href="https://github.com/let-the-dreamers-rise/rein">GitHub</a></li>
     </ul>
-    <a class="btn btn-ink" href="scan/">Check a wallet</a>
+    <a class="btn btn-ink" href="safe/">Check a Safe</a>
   </div>
 </nav>
 
@@ -225,33 +231,75 @@ footer a{color:var(--ink)}
 <header class="hero">
   <div class="wrap">
     <div>
-      <span class="eyebrow">For platforms running AI agent wallets</span>
-      <h1>A second key for every agent wallet you run.</h1>
-      <p class="lede">Paste any agent wallet. In seconds, Rein shows whether someone is trying to trick it, what it normally does, and which payments it would have held for a person. Then make Rein its second key: the agent signs normal payments alone, and Turnkey or Privy make the unusual ones wait.</p>
-      <form class="scanbox" action="scan/" method="get" role="search" aria-label="Check an agent wallet">
-        <input name="address" placeholder="0x… any agent's wallet address" spellcheck="false" autocomplete="off" aria-label="Agent wallet address" required pattern="^0x[0-9a-fA-F]{40}$" title="A 0x address, 42 characters">
-        <button class="btn btn-ink" type="submit">Check it</button>
+      <span class="eyebrow">For teams that pay from a Safe</span>
+      <h1>Check every payment before the last signature.</h1>
+      <p class="lede">Paste a Safe. Rein checks each transaction waiting for signatures against what that Safe has actually paid before, and tells signers which ones pay an address dressed up as one they use, a stranger, or far more than usual. Free and read-only: no keys, no setup, nothing signed.</p>
+      <form class="scanbox" action="safe/" method="get" role="search" aria-label="Check a Safe's queue">
+        <input name="safe" placeholder="0x… Safe address" spellcheck="false" autocomplete="off" aria-label="Safe address" required pattern="^0x[0-9a-fA-F]{40}$" title="A 0x address, 42 characters">
+        <select name="chain" aria-label="Chain"><option value="base">Base</option><option value="ethereum">Ethereum</option></select>
+        <button class="btn btn-ink" type="submit">Check the queue</button>
       </form>
-      <p class="fine">No wallet handy? <a href="scan/?sample=1">Try one that's under attack</a>. Running many? <code>npx rein-wallet fleet wallets.txt</code> shows what a second key would have held across all of them. Public chain data only: no keys, nothing signed.</p>
+      <p class="fine">No Safe handy? <a href="safe/?sample=1">Try a made-up one with a poisoned payment queued</a>. Signing every week? Add Rein to Safe{Wallet} as a custom app and it checks the Safe you're in, next to the queue.</p>
     </div>
-    <figure class="term" aria-label="Example guard output, on Rein's made-up sample wallet">
-      <div class="term-bar"><i></i><i></i><i></i><span>npx rein-wallet fleet --sample</span></div>
-<pre><span class="hd">4 agent wallets, last 30 days</span>
-244 payments
-<span class="ok">237 inside each agent's own limits</span>
+    <figure class="term" aria-label="Example output, on Rein's made-up sample Safe">
+      <div class="term-bar"><i></i><i></i><i></i><span>npx rein-wallet safe --sample</span></div>
+<pre><span class="hd">Safe 0xF8CB…5057 on Base, 2 of 3 sign</span>
+188 past payments, 24 fake transfers ignored
 
-<span class="hd">Would have waited for a second key</span>
-<span class="no">0x5A3E…  900 USDC to 0x7777…  ×3</span>
-<span class="no">0xAe70…  500 USDC to 0x8888…</span>
-<span class="no">3 wallets 180 USDC to 0x2fb3…</span>
-<span class="k">first payment to an address it never paid</span>
-
-1 new wallet started from the limits
-the other three share.</pre>
+#41 15 USDC to Inference API
+<span class="ok">    Looks normal</span>
+#42 48,000 USDC to 0xc64F…e299
+<span class="no">    DON'T SIGN YET</span>
+<span class="k">    starts and ends like Inference API,
+    a payee it uses, but isn't it</span>
+#43 6,500 USDC to 0x6320…8F82
+<span class="no">    Check first: never paid before</span>
+#44 addOwnerWithThreshold
+<span class="no">    Check first: changes who controls it</span></pre>
     </figure>
   </div>
 </header>
 <div class="tape" role="presentation"></div>
+
+<section id="safe-how">
+  <div class="wrap">
+    <span class="kicker">How it works</span>
+    <h2 class="h2">The second look a co-signer should get, without asking anyone.</h2>
+    <p class="sub">Address poisoning sends a Safe tiny fake transfers from addresses that start and end like its real payees, hoping someone copies one from the history. The next signer sees a familiar-looking address and signs. Rein compares every queued payee with the payees this Safe has really paid, character for character.</p>
+    <ol class="steps">
+      <li>
+        <h3>Paste</h3>
+        <p>Any Safe on Base or Ethereum. Rein reads its queue from Safe's public service and its history from the chain, and marks each transaction "Looks normal", "Check first" or "Don't sign yet", with the reason.</p>
+        <pre>rein-nine.vercel.app/safe</pre>
+      </li>
+      <li>
+        <h3>Next to the queue</h3>
+        <p>In Safe{Wallet}, open Apps, then My custom apps, and add Rein. Every signer gets the check on the Safe they're signing for. It only reads: it never proposes or signs.</p>
+        <pre>https://rein-nine.vercel.app/safe/</pre>
+      </li>
+      <li>
+        <h3>Told first</h3>
+        <p>A copyable GitHub Action checks the queue every 10 minutes and posts each risky transaction once to Slack, Discord or Telegram, before the last signature. No server.</p>
+        <pre>npx rein-wallet safe 0xYourSafe \
+  --webhook "$SLACK_WEBHOOK_URL"</pre>
+      </li>
+    </ol>
+    <p class="sub">What it doesn't claim: a flag means confirm the address another way, not that it's an attack, and a payee it doesn't flag isn't vouched for. It checks against this Safe's own history, not scam lists.</p>
+  </div>
+</section>
+
+<section id="agents">
+  <div class="wrap">
+    <span class="kicker">Also from Rein</span>
+    <h2 class="h2">A second key for every AI agent wallet you run.</h2>
+    <p class="sub">Paste any agent wallet. Rein shows whether someone is trying to trick it, what it normally does, and which payments it would have held for a person. Then make Rein its second key: the agent signs normal payments alone, and Turnkey or Privy make the unusual ones wait.</p>
+    <form class="scanbox" action="scan/" method="get" role="search" aria-label="Check an agent wallet">
+      <input name="address" placeholder="0x… any agent's wallet address" spellcheck="false" autocomplete="off" aria-label="Agent wallet address" required pattern="^0x[0-9a-fA-F]{40}$" title="A 0x address, 42 characters">
+      <button class="btn btn-ink" type="submit">Check it</button>
+    </form>
+    <p class="fine">No wallet handy? <a href="scan/?sample=1">Try one that's under attack</a>. Running many? <code>npx rein-wallet fleet wallets.txt</code> shows what a second key would have held across all of them.</p>
+  </div>
+</section>
 
 <section id="before-after">
   <div class="wrap">
@@ -378,14 +426,16 @@ Pay Acme 1,000 USDC, 20 times     <span class="no">REFUSED  TOKEN_PER_WINDOW</sp
     <h2 class="h2">Start free. Pay when it's protecting real money.</h2>
     <div class="plans">
       <div class="plan">
-        <h3>Scan</h3>
+        <h3>Check</h3>
         <div class="price">$0</div>
         <ul>
-          <li>Any wallet, in the browser or a terminal</li>
+          <li>Any Safe's queue, in the browser or inside Safe{Wallet}</li>
+          <li>Safe alerts through a GitHub Action</li>
+          <li>Any agent wallet, in the browser or a terminal</li>
           <li>Policy files for Privy, Turnkey and CDP</li>
           <li><code>apply</code> and <code>watch</code>, open source</li>
         </ul>
-        <a class="btn" href="scan/">Check a wallet</a>
+        <a class="btn" href="safe/">Check a Safe</a>
       </div>
       <div class="plan hot">
         <span class="flag">first five teams</span>
@@ -449,11 +499,12 @@ Pay Acme 1,000 USDC, 20 times     <span class="no">REFUSED  TOKEN_PER_WINDOW</sp
 
 <section class="close">
   <div class="wrap">
-    <h2 class="h2">Find out how far your agent's wallet could go today.</h2>
-    <p class="sub">One address. About thirty seconds. Nothing signed.</p>
-    <form class="scanbox" action="scan/" method="get" role="search" aria-label="Scan an agent wallet">
-      <input name="address" placeholder="0x… your agent's wallet address" spellcheck="false" autocomplete="off" aria-label="Agent wallet address" required pattern="^0x[0-9a-fA-F]{40}$" title="A 0x address, 42 characters">
-      <button class="btn btn-ink" type="submit">Scan free</button>
+    <h2 class="h2">Check your Safe's queue before the next signature.</h2>
+    <p class="sub">One address. Seconds. Nothing signed.</p>
+    <form class="scanbox" action="safe/" method="get" role="search" aria-label="Check a Safe's queue">
+      <input name="safe" placeholder="0x… Safe address" spellcheck="false" autocomplete="off" aria-label="Safe address" required pattern="^0x[0-9a-fA-F]{40}$" title="A 0x address, 42 characters">
+      <select name="chain" aria-label="Chain"><option value="base">Base</option><option value="ethereum">Ethereum</option></select>
+      <button class="btn btn-ink" type="submit">Check free</button>
     </form>
   </div>
 </section>
@@ -461,8 +512,8 @@ Pay Acme 1,000 USDC, 20 times     <span class="no">REFUSED  TOKEN_PER_WINDOW</sp
 
 <footer>
   <div class="wrap">
-    <div><h4>Rein</h4><p>Spending limits for AI agent wallets, written from what the agent actually does. MIT licensed.</p></div>
-    <div><h4>Product</h4><ul><li><a href="scan/">Wallet scan</a></li><li><a href="https://github.com/let-the-dreamers-rise/rein/blob/main/QUICKSTART.md">Quickstart</a></li><li><a href="https://github.com/let-the-dreamers-rise/rein/blob/main/scan/watch-action.yml">Watch as a GitHub Action</a></li></ul></div>
+    <div><h4>Rein</h4><p>A second look at every Safe payment before the last signature, and a second key for AI agent wallets. Both learn from the wallet's own history. MIT licensed.</p></div>
+    <div><h4>Product</h4><ul><li><a href="safe/">Check a Safe</a></li><li><a href="scan/">Check an agent wallet</a></li><li><a href="https://github.com/let-the-dreamers-rise/rein/blob/main/scan/safe-action.yml">Safe alerts as a GitHub Action</a></li><li><a href="https://github.com/let-the-dreamers-rise/rein/blob/main/QUICKSTART.md">Quickstart</a></li><li><a href="https://github.com/let-the-dreamers-rise/rein/blob/main/scan/watch-action.yml">Watch as a GitHub Action</a></li></ul></div>
     <div><h4>The account</h4><ul><li><a href="account/">Rein smart account</a></li><li><a href="v2/">The compiled policy, rule by rule</a></li><li><a href="deck/">Deck</a></li></ul></div>
     <div><h4>Source</h4><ul><li><a href="https://github.com/let-the-dreamers-rise/rein">github.com/let-the-dreamers-rise/rein</a></li></ul></div>
   </div>
