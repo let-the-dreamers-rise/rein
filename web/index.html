@@ -184,6 +184,9 @@ section+section{border-top:1px solid var(--hair)}
 .plan .btn{margin-top:auto}
 .plan .flag{align-self:flex-start;font-family:var(--mono);font-size:12px;background:var(--brand);padding:3px 9px;border-radius:6px}
 .never{margin-top:22px;font-size:15px;color:var(--ink-2)}
+.plans.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:900px){.plans.three{grid-template-columns:minmax(0,1fr)}}
+.plan p{font-size:15px;color:var(--ink-2)}
 
 /* faq */
 .faq{margin-top:32px;max-width:780px}
@@ -424,59 +427,24 @@ Pay Acme 1,000 USDC, 20 times     <span class="no">REFUSED  TOKEN_PER_WINDOW</sp
   <div class="wrap">
     <span class="kicker">Pricing</span>
     <h2 class="h2">Start free. Pay when it's protecting real money.</h2>
-    <div class="plans">
-      <div class="plan">
-        <h3>Check</h3>
-        <div class="price">$0</div>
-        <ul>
-          <li>Any Safe's queue, in the browser or inside Safe{Wallet}</li>
-          <li>Safe alerts through a GitHub Action</li>
-          <li>Any agent wallet, in the browser or a terminal</li>
-          <li>Policy files for Privy, Turnkey and CDP</li>
-          <li><code>apply</code> and <code>watch</code>, open source</li>
-        </ul>
-        <a class="btn" href="safe/">Check a Safe</a>
-      </div>
+    <div class="plans three">
       <div class="plan hot">
-        <span class="flag">first five teams</span>
-        <h3>Policy review</h3>
-        <div class="price">$2,500 <small>one time</small></div>
-        <div class="was"><s>$7,500</s> after launch</div>
-        <ul>
-          <li>A policy for every agent wallet you run</li>
-          <li>Deployed with you on your engine</li>
-          <li>A prompt-injection red team against it</li>
-          <li>A report with every number and its denominator</li>
-          <li>30 days of monitoring included</li>
-        </ul>
-        <a class="btn btn-ink" href="mailto:ashwingoyal2006@gmail.com?subject=Rein%20policy%20review&amp;body=Agent%20wallet%20address(es)%3A%0AWallet%20engine%20(Privy%2C%20Turnkey%2C%20CDP%2C%20other)%3A%0A">Book a review</a>
+        <h3>Free: Safe check</h3>
+        <p>Paste your Safe. Before the last signature, get a message in Telegram, Discord or Slack when a queued payment goes to an address your Safe has never paid, a lookalike of a real past payee, or far more than usual for that payee. Reads public data only. No keys, nothing to sign.</p>
+        <a class="btn btn-ink" href="safe/">Check a Safe →</a>
       </div>
       <div class="plan">
-        <h3>Monitor</h3>
-        <div class="price">$1,000 <small>/ month</small></div>
-        <ul>
-          <li>Up to 25 agent wallets</li>
-          <li>Alerts on every off-policy transaction</li>
-          <li>Policies re-scanned monthly as agents change</li>
-          <li>New payees sent to a person to approve</li>
-        </ul>
-        <a class="btn" href="mailto:ashwingoyal2006@gmail.com?subject=Rein%20Monitor">Start monitoring</a>
+        <h3>Teams: coming soon</h3>
+        <p>Several Safes, run for you, with weekly payee reports. Free for the first five teams while we build it.</p>
+        <!-- contact: add <a class="btn" href="mailto:[role address]?subject=Rein%20for%20teams">Tell us what you need →</a> once the company picks the address (company/README.md, decision 1) -->
       </div>
       <div class="plan">
-        <h3>Platform</h3>
-        <div class="price" style="font-size:28px">Per wallet</div>
-        <ul>
-          <li>For platforms that run agents for their users</li>
-          <li>Shadow mode on your wallets, free</li>
-          <li>Rein as the second key on every agent wallet</li>
-          <li>A policy per user wallet, kept current</li>
-          <li>Fleet export under Turnkey's policy cap</li>
-          <li>White-label for wallet vendors</li>
-        </ul>
-        <a class="btn" href="mailto:ashwingoyal2006@gmail.com?subject=Rein%20for%20platforms">Talk to us</a>
+        <h3>Payout platforms: payee check API</h3>
+        <p>Before each stablecoin payout: has this payer paid this wallet before? Did this vendor's wallet change? Is the amount normal? Looking for design partners.</p>
+        <!-- contact: add <a class="btn" href="mailto:[role address]?subject=Rein%20payee%20check%20API">Talk to us →</a> once the company picks the address -->
       </div>
     </div>
-    <p class="never">We never need your keys or your funds, and nothing has to move into a Rein contract. Send one agent wallet address and we'll send back the policy it supports within 48 hours, free.</p>
+    <p class="never">Rein is a second opinion, not a guarantee. It never moves money.</p>
   </div>
 </section>
 
