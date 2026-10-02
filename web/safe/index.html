@@ -219,8 +219,9 @@ details.more>summary{cursor:pointer;font-weight:600;padding:14px 4px;color:var(-
   const status = (t, err) => { $("status").textContent = t || ""; $("status").className = err ? "err" : ""; };
 
   function render(r, { synthetic } = {}) {
-    const danger = r.queue.filter((q) => q.found.some((f) => f.level === "danger")).length;
-    const warn = r.queue.filter((q) => q.found.length).length - danger;
+    const lvl = (q) => (q.found.some((f) => f.level === "danger") ? "danger" : q.found.some((f) => f.level === "warn") ? "warn" : "ok");
+    const danger = r.queue.filter((q) => lvl(q) === "danger").length;
+    const warn = r.queue.filter((q) => lvl(q) === "warn").length;
     $("who").textContent = `${r.safe} · ${r.threshold} of ${r.owners.length} owners sign`;
     $("headline").textContent = !r.queue.length
       ? "Nothing is waiting to be signed. Rein would check each new transaction as it's queued."
@@ -236,8 +237,8 @@ details.more>summary{cursor:pointer;font-weight:600;padding:14px 4px;color:var(-
     for (const q of r.queue) {
       const d = el("div", null, "q");
       const line = el("div", null, "line");
-      const bad = q.found.some((f) => f.level === "danger");
-      line.append(el("span", `#${q.nonce}`, "n"), el("span", q.what, "what"), el("span", bad ? "Don't sign yet" : q.found.length ? "Check first" : "Looks normal", `tag ${bad ? "danger" : q.found.length ? "warn" : "ok"}`), el("span", `${q.signed} of ${q.needed} signed`, "signed"));
+      const l = lvl(q);
+      line.append(el("span", `#${q.nonce}`, "n"), el("span", q.what, "what"), el("span", l === "danger" ? "Don't sign yet" : l === "warn" ? "Check first" : "Looks normal", `tag ${l}`), el("span", `${q.signed} of ${q.needed} signed`, "signed"));
       d.append(line);
       if (q.found.length) { const ul = el("ul"); for (const f of q.found) ul.append(el("li", `${f.why}.`)); d.append(ul); }
       list.append(d);

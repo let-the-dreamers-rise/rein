@@ -108,6 +108,60 @@ describe("rein safe", function () {
     expect((await safe.watchOnce(AGENT, { safeApi: service([{ ...tx, safeTxHash: "0x0c" }]), history, ethPaid: [], env })).queue[0].found[0].why).to.contain("never paid");
   });
 
+  describe("attacked like a skeptical treasury would", () => {
+    const one = (q) => safe.watchOnce(AGENT, { safeApi: service([{ nonce: 7, safeTxHash: `0x${Math.random().toString(16).slice(2, 10)}`, confirmations: [], confirmationsRequired: 2, ...q }]), history, env });
+
+    it("adds up a payment split across a batch, so it can't slip under the dollar line", async () => {
+      const to = someone("split payee");
+      const r = await one({ to: MULTISEND, value: "0", operation: 1, data: SAFE.encodeFunctionData("multiSend", [pack([pay(to, 600), pay(to, 600), pay(to, 600)])]) });
+      const why = r.queue[0].found.map((f) => f.why);
+      expect(why).to.have.length(1);
+      expect(why[0]).to.contain("never paid").and.contain("$1,800");
+    });
+
+    it("doesn't cry wolf on a grants Safe that pays new addresses every week", async () => {
+      const iface = new ethers.Interface(["function transfer(address,uint256)"]);
+      let i = 0;
+      for (const t of history.transactions) if ((t.raw_input || "").startsWith("0xa9059cbb")) t.raw_input = iface.encodeFunctionData("transfer", [someone(`grantee ${i++}`), 5_000_000n]);
+      const r = await one(pay(someone("next grantee"), 5000));
+      expect(r.queue[0].found.map((f) => f.level)).to.deep.equal(["info"]);
+      expect(r.fresh).to.deep.equal([]);
+      expect(safe.text(r)).to.contain("Looks normal:").and.contain("pays new addresses often");
+      // A lookalike is still a lookalike.
+      expect((await one(pay(fake, 5))).queue[0].found[0].level).to.equal("danger");
+    });
+
+    it("says so when a Safe has no payment history at all", async () => {
+      history.transactions = [];
+      history.tokenTransfers = [];
+      const r = await one(pay(someone("first ever"), 2000));
+      expect(r.queue[0].found[0].why).to.contain("no payment history yet");
+    });
+
+    it("counts payments in the DAO's own unpriced token as payments, not as poisoning", async () => {
+      const gov = ethers.getAddress(ethers.dataSlice(ethers.id("dao token"), 12));
+      const member = someone("dao contributor");
+      const t = JSON.parse(JSON.stringify(history.tokenTransfers.find((x) => x.to?.hash === PAYEES.inference.address)));
+      Object.assign(t, { transaction_hash: ethers.id("gov payment"), to: { hash: member }, token: { address_hash: gov, address: gov, symbol: "DAO", name: "DAO Token", decimals: "18", type: "ERC-20", exchange_rate: null, reputation: "ok" }, total: { value: "1000000000000000000000", decimals: "18" } });
+      history.tokenTransfers.push(t);
+      const before = (await one(pay(PAYEES.inference.address, 1))).poisoning;
+      const r = await one({ to: gov, value: "0", operation: 0, data: ERC20.encodeFunctionData("transfer", [member, 10n ** 21n]) });
+      expect(r.queue[0].found).to.deep.equal([]);
+      expect(r.poisoning).to.equal(before);
+    });
+
+    it("prices a token the Safe never held from what Safe's service says about the transfer", async () => {
+      const eurc = someone("a euro token");
+      const r = await one({ to: eurc, value: "0", operation: 0, data: ERC20.encodeFunctionData("transfer", [someone("eu vendor"), 2_500_000_000n]), tokens: [{ address: eurc, symbol: "EURC", decimals: 6 }] });
+      expect(r.queue[0].what).to.contain("pay 2,500 EURC");
+      expect(r.queue[0].found[0].why).to.contain("$2,500");
+      // Unknown, unpriced: still flagged, and says why.
+      const odd = await one({ to: someone("odd token"), value: "0", operation: 0, data: ERC20.encodeFunctionData("transfer", [someone("odd payee"), 1n]) });
+      expect(odd.queue[0].what).to.contain("an unknown amount of");
+      expect(odd.queue[0].found[0].why).to.contain("can't price");
+    });
+  });
+
   it("flags a payee that looks like one of the Safe's owners", async () => {
     const o = OWNERS[1];
     const twin = ethers.getAddress(`0x${o.slice(2, 6)}${"0".repeat(32)}${o.slice(-4)}`.toLowerCase());

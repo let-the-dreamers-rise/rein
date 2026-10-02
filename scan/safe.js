@@ -100,6 +100,8 @@ function safeGateway(chain, { url = SAFE_GATEWAY, fetch: fetchImpl = globalThis.
           confirmations: e.confirmations || [],
           confirmationsRequired: e.confirmationsRequired,
           isExecuted: d.txStatus === "SUCCESS",
+          // What the gateway knows of the token a plain transfer moves.
+          tokens: d.txInfo?.transferInfo?.tokenAddress ? [{ address: d.txInfo.transferInfo.tokenAddress, symbol: d.txInfo.transferInfo.tokenSymbol, decimals: d.txInfo.transferInfo.decimals }] : [],
         });
       }
       return out;
@@ -188,9 +190,45 @@ function habits(history, { owners = [], ethPaid = [] } = {}) {
     const k = `${key}:${NATIVE.toLowerCase()}`;
     largest[k] = Math.max(largest[k] || 0, e.amount);
   }
-  const fakes = new Set(ignored.map((x) => x.payee && x.payee.toLowerCase()).filter(Boolean));
+  // How often it pays someone for the first time: a grants or payroll Safe
+  // does it every week, and a first payment there is no news.
+  const seen = new Set();
+  let firsts = 0;
+  let counted = 0;
+  for (const r of own) {
+    if (!r.payee || r.kind === "approve" || !(r.kind === "transfer" || r.kind === "transferFrom")) continue;
+    counted += 1;
+    if (!seen.has(r.payee.toLowerCase())) firsts += 1;
+    seen.add(r.payee.toLowerCase());
+  }
+  const newShare = counted >= 10 ? firsts / counted : null;
+  // A Safe never calls a token itself (its owners send execTransaction), so
+  // the explorer filter reads a payment in an unpriced token, a DAO's own
+  // governance token say, as possible poisoning. Unless the payee looks like
+  // another address, count it as a real payment.
+  const realIgnored = ignored.filter((x) => /is unpriced/.test(x.why) && x.payee && ![...paid.keys(), ...ignored.map((y) => y.payee && y.payee.toLowerCase())].some((p) => p && looksLike(p, x.payee)));
+  for (const x of realIgnored) paid.set(x.payee.toLowerCase(), (paid.get(x.payee.toLowerCase()) || 0) + 1);
+  const fake = ignored.filter((x) => !realIgnored.includes(x));
+  const fakes = new Set(fake.map((x) => x.payee && x.payee.toLowerCase()).filter(Boolean));
   const rate = (t) => (t === NATIVE ? (history.info?.exchange_rate != null ? Number(history.info.exchange_rate) : null) : tokens[t]?.rate ?? (STABLES.test(tokens[t]?.symbol || "") ? 1 : null));
-  return { paid, largest, spenders, fakes, tokens, rate, owners: owners.map((o) => ethers.getAddress(o)), name: namer(history, tokens), payments: own.length + ethPaid.length, ignored };
+  return { paid, largest, spenders, fakes, tokens, rate, owners: owners.map((o) => ethers.getAddress(o)), name: namer(history, tokens), payments: own.length + ethPaid.length + realIgnored.length, newShare, ignored: fake };
+}
+
+/// A token's symbol, decimals and dollar rate: from the Safe's own history,
+/// else from what Safe's service said about the queued transfer.
+function tokenInfo(token, h, tx) {
+  if (token === NATIVE) return { symbol: "ETH", decimals: 18, rate: h.rate(NATIVE) };
+  const known = h.tokens[token] || h.tokens[ethers.getAddress(token)];
+  const told = (tx.tokens || []).find((t) => t.address && t.address.toLowerCase() === token.toLowerCase());
+  const symbol = known?.symbol || told?.symbol || short(token);
+  const rate = h.rate(token) ?? (STABLES.test(symbol) && told ? 1 : null);
+  return { symbol, decimals: known?.decimals ?? (told?.decimals != null ? Number(told.decimals) : null), rate };
+}
+
+function describe(raw, info) {
+  const amount = info.decimals != null ? Number(ethers.formatUnits(raw, info.decimals)) : null;
+  const usd = amount != null && info.rate != null ? amount * info.rate : null;
+  return `${amount != null ? money(amount) : "an unknown amount of"} ${info.symbol}${usd != null && usd >= 1 && !STABLES.test(info.symbol) ? ` (${dollars(usd)})` : ""}`;
 }
 
 /// The findings for one queued transaction: [{ level: "danger" | "warn", why }].
@@ -199,6 +237,7 @@ function judge(tx, h, { safe, minUsd = 1000 }) {
   const { calls, danger } = callsOf(tx);
   if (danger) found.push({ level: "danger", why: danger });
   const what = [];
+  const pays = new Map();
   for (const c of calls) {
     if (c.operation === 1) found.push({ level: "danger", why: `one of its calls is a delegatecall to ${c.to}, which can move anything the Safe holds` });
     const m = moveOf(c);
@@ -215,22 +254,27 @@ function judge(tx, h, { safe, minUsd = 1000 }) {
       } else what.push(`a call to ${h.name(c.to)}`);
       continue;
     }
-    const known = h.tokens[m.token] || h.tokens[ethers.getAddress(m.token === NATIVE ? ethers.ZeroAddress : m.token)];
-    const decimals = m.token === NATIVE ? 18 : known?.decimals;
-    const symbol = m.token === NATIVE ? "ETH" : known?.symbol || short(m.token);
-    const amount = decimals != null ? Number(ethers.formatUnits(m.raw, decimals)) : null;
-    const rate = h.rate(m.token);
-    const usd = amount != null && rate != null ? amount * rate : null;
-    const shown = `${amount != null ? money(amount) : "an unknown amount of"} ${symbol}${usd != null && usd >= 1 && !STABLES.test(symbol) ? ` (${dollars(usd)})` : ""}`;
-    const payee = m.payee;
-    const key = payee.toLowerCase();
+    const info = tokenInfo(m.token, h, tx);
     if (m.kind === "approve") {
-      what.push(`let ${h.name(payee)} spend ${m.raw === ethers.MaxUint256 ? `all its ${symbol}` : shown}`);
-      if (!h.spenders.has(key) && !h.paid.has(key)) found.push({ level: "warn", why: `it lets ${payee} spend the Safe's ${symbol}, and the Safe has never approved that address before` });
+      what.push(`let ${h.name(m.payee)} spend ${m.raw === ethers.MaxUint256 ? `all its ${info.symbol}` : describe(m.raw, info, h)}`);
+      if (!h.spenders.has(m.payee.toLowerCase()) && !h.paid.has(m.payee.toLowerCase())) found.push({ level: "warn", why: `it lets ${m.payee} spend the Safe's ${info.symbol}, and the Safe has never approved that address before` });
       continue;
     }
-    what.push(`pay ${shown} to ${h.name(payee)}`);
-    const twin = [...h.paid.keys()].map((p) => ethers.getAddress(p)).find((p) => looksLike(p, payee)) || h.owners.find((o) => looksLike(o, payee));
+    what.push(`pay ${describe(m.raw, info, h)} to ${h.name(m.payee)}`);
+    // Several calls to one payee in one batch are judged as one payment, so
+    // splitting it can't slip under the dollar line.
+    const k = `${m.payee.toLowerCase()}:${m.token.toLowerCase()}`;
+    const p = pays.get(k) || { payee: m.payee, token: m.token, info, raw: 0n };
+    p.raw += m.raw;
+    pays.set(k, p);
+  }
+  for (const p of pays.values()) {
+    const { payee, info } = p;
+    const key = payee.toLowerCase();
+    const amount = info.decimals != null ? Number(ethers.formatUnits(p.raw, info.decimals)) : null;
+    const usd = amount != null && info.rate != null ? amount * info.rate : null;
+    const shown = describe(p.raw, info, h);
+    const twin = [...h.paid.keys()].map((x) => ethers.getAddress(x)).find((x) => looksLike(x, payee)) || h.owners.find((o) => looksLike(o, payee));
     if (twin) {
       const owner = h.owners.some((o) => o === twin);
       const label = h.name(twin);
@@ -238,11 +282,19 @@ function judge(tx, h, { safe, minUsd = 1000 }) {
     } else if (h.fakes.has(key)) {
       found.push({ level: "danger", why: `${payee} has only ever appeared in fake transfers made to look like the Safe sent them: address poisoning` });
     } else if (!h.paid.has(key) && (usd == null || usd >= minUsd)) {
-      found.push({ level: "warn", why: `the Safe has never paid ${payee} before${usd != null ? `, and this is ${dollars(usd)}` : ", and Rein can't price this token"}. Confirm the address with the payee through another channel` });
+      const tail = usd != null ? `, and this is ${dollars(usd)}` : `, and Rein can't price ${info.symbol}`;
+      if (h.newShare != null && h.newShare >= 0.5) {
+        // Normal for this Safe: say so, but don't raise an alert.
+        found.push({ level: "info", why: `the Safe has never paid ${payee} before${tail}; it pays new addresses often (${Math.round(h.newShare * 100)}% of its payments were first payments)` });
+      } else if (!h.payments) {
+        found.push({ level: "warn", why: `the Safe has no payment history yet, so every payee is new${tail}. Confirm the address with the payee through another channel` });
+      } else {
+        found.push({ level: "warn", why: `the Safe has never paid ${payee} before${tail}. Confirm the address with the payee through another channel` });
+      }
     }
-    const top = h.largest[`${key}:${m.token.toLowerCase()}`];
+    const top = h.largest[`${key}:${p.token.toLowerCase()}`];
     if (top && amount != null && amount > 3 * top && (usd == null || usd >= minUsd)) {
-      found.push({ level: "warn", why: `${shown} is more than 3× the most this Safe has ever paid ${h.name(payee)} in ${symbol} (${money(top)})` });
+      found.push({ level: "warn", why: `${shown} is more than 3× the most this Safe has ever paid ${h.name(payee)} in ${info.symbol} (${money(top)})` });
     }
   }
   return { what: what.join(", then ") || "nothing Rein can read", found };
@@ -292,8 +344,9 @@ async function watchOnce(address, { chain = "base", api = null, safeApi: given =
   // page passes remember: false and keeps nothing.
   const file = remember ? statePath(safe, env) : null;
   const state = file ? loadState(file) : { posted: {} };
-  const fresh = queue.filter((q) => q.found.length && state.posted[q.safeTxHash] !== q.found.map((f) => f.why).join("|"));
-  for (const q of fresh) state.posted[q.safeTxHash] = q.found.map((f) => f.why).join("|");
+  const alarms = (q) => q.found.filter((f) => f.level !== "info");
+  const fresh = queue.filter((q) => alarms(q).length && state.posted[q.safeTxHash] !== alarms(q).map((f) => f.why).join("|"));
+  for (const q of fresh) state.posted[q.safeTxHash] = alarms(q).map((f) => f.why).join("|");
   // Forget what has left the queue (executed or replaced).
   const live = new Set(queue.map((q) => q.safeTxHash));
   for (const k of Object.keys(state.posted)) if (!live.has(k)) delete state.posted[k];
@@ -309,7 +362,7 @@ function text(r, { only = null } = {}) {
     if (!list.length) L.push("Nothing is waiting to be signed.");
   }
   for (const q of list) {
-    const mark = q.found.some((f) => f.level === "danger") ? "DON'T SIGN YET" : q.found.length ? "Check first" : "Looks normal";
+    const mark = q.found.some((f) => f.level === "danger") ? "DON'T SIGN YET" : q.found.some((f) => f.level === "warn") ? "Check first" : "Looks normal";
     L.push(`#${q.nonce} (${q.signed} of ${q.needed} signed): ${q.what}. ${mark}${q.found.length ? ":" : "."}`);
     for (const f of q.found) L.push(`  - ${f.why}.`);
   }
