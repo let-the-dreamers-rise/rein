@@ -21,7 +21,7 @@
 const fs = require("fs");
 const path = require("path");
 const { ethers } = require("ethers");
-const { fetchHistory, fetchEthPaid, toTrail, CHAINS } = require("./blockscout");
+const { fetchHistory, fetchEthPaid, toTrail, CHAINS, display, cleanHistory } = require("./blockscout");
 const { NATIVE } = require("./evaluate");
 const { namer, money } = require("./index");
 const { looksLike, home } = require("./guard");
@@ -160,6 +160,18 @@ function safeGateway(chain, { url = SAFE_GATEWAY, fetch: fetchImpl = globalThis.
 }
 
 // -- reading a queued transaction -------------------------------------------------
+
+/// A queued transaction's text from Safe's service (a decoded method name, a
+/// token's symbol) made safe to print, as cleanHistory does for the explorer.
+/// rawSymbol keeps what the chain said.
+function cleanQueued(t) {
+  const d = t.dataDecoded;
+  return {
+    ...t,
+    dataDecoded: d && typeof d === "object" ? { ...d, method: display(d.method), parameters: Array.isArray(d.parameters) ? d.parameters.map((p) => ({ ...p, name: display(p.name), type: display(p.type) })) : d.parameters } : d,
+    tokens: (t.tokens || []).map((k) => ({ ...k, rawSymbol: k.rawSymbol ?? k.symbol ?? null, symbol: display(k.symbol) })),
+  };
+}
 
 /// The calls a queued Safe transaction makes: one, or each call of a MultiSend.
 function callsOf(tx) {
@@ -488,8 +500,10 @@ async function watchOnce(address, { chain = "base", api = null, safeApi: given =
   const service = given || safeApi(chain, { url: safeUrl, apiKey, fetch: fetchImpl });
   const info = await service.info(safe);
   const nonce = Number(info.nonce || 0);
-  const pending = await service.queue(safe, nonce);
-  const hist = history || (await fetchHistory(safe, { chain, api, fetch: fetchImpl }));
+  // Text in the queue and the history is chosen by whoever deployed a
+  // contract or proposed a transaction: cleaned before anything prints it.
+  const pending = (await service.queue(safe, nonce)).map(cleanQueued);
+  const hist = cleanHistory(history || (await fetchHistory(safe, { chain, api, fetch: fetchImpl })));
   // Best effort: without it a usual ETH payee reads as new, which only adds a flag.
   const eth = ethPaid || (history ? [] : await fetchEthPaid(safe, { chain, api, fetch: fetchImpl }).catch(() => []));
   // Best effort too: the contracts and spenders the Safe has used, so a

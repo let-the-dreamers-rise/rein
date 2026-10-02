@@ -115,6 +115,20 @@ describe("rein safe, red-teamed", function () {
     expect(tg[0].text).to.not.contain("&amp;").and.not.contain("&lt;"); // Telegram shows text as it is
   });
 
+  it("cleans text from Safe's service and the explorer before the terminal or the webhook sees it", async () => {
+    const ODD = "0x00000000000000000000000000000000000b0b00";
+    const evil = "US\u001b]52;c;MHhhdHRhY2tlcg==\u0007DC\u202e";
+    const tx = qtx(1, { ...pay(ATTACKER, 250000), to: ODD, tokens: [{ address: ODD, symbol: evil, decimals: 6 }], dataDecoded: { method: "transfer\u001b[2J", parameters: [] } });
+    const h = history([xfer(902, { hash: VENDOR, name: "Payroll\u001b[31m\u2066" }, usdcToken, usdc(10), T0 - 2 * DAY)]);
+    const r = await run([tx, qtx(2, pay(VENDOR, 40000))], h);
+    const out = safe.text(r);
+    expect(out).to.not.match(/[\u0000-\u0009\u000b-\u001f\u202a-\u202e\u2066-\u2069]/);
+    expect(out).to.contain("\ufffd");
+    // The webhook posts alertText: the same cleaned text.
+    expect(r.fresh.length).to.be.greaterThan(0);
+    expect(safe.alertText(r)).to.not.match(/[\u001b\u0007\u202e\u2066]/);
+  });
+
   it("keeps an alert it couldn't post, so the next check posts it", async () => {
     const env = { REIN_HOME: fs.mkdtempSync(path.join(os.tmpdir(), "rein-rt-")) };
     const q = [qtx(1, pay(ATTACKER, 250000))];

@@ -45,7 +45,7 @@ These all read "Looks normal" or lost an alert before the fix.
 ### Hardened before release (security review, 2 October)
 - A malformed `REIN_AGENT_PRIVATE_KEY` (spaces, quotes, a seed phrase) is tidied or refused, and the error never repeats it. MCP and API errors hide anything shaped like a key, and the path and query of any URL.
 - `rein_about` shows only the RPC's host, not the API key in its URL.
-- Token names, symbols and explorer labels are cleaned before Rein prints them: no terminal escape codes, direction overrides or invisible characters.
+- Token names, symbols, explorer labels and the method names Safe's service decodes are cleaned before Rein prints or posts them: no terminal escape codes, direction overrides or invisible characters.
 - `rein apply --send` sends your vendor credentials only to that vendor's own API, whatever URL the plan file names.
 - The GitHub Actions pin Rein's version and ask for no repository access.
 
