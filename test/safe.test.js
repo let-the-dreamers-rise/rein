@@ -271,6 +271,22 @@ describe("rein safe", function () {
     };
     const ok = await proxy({ method: "GET", url: `/api/safe?path=v1/chains/8453/safes/${AGENT}` }, res(), async (url) => ({ status: 200, text: async () => `{"seen":"${url}"}` }));
     expect([ok.code, ok.headers["access-control-allow-origin"], JSON.parse(ok.body).seen]).to.deep.equal([200, "*", `https://safe-client.safe.global/v1/chains/8453/safes/${AGENT}`]);
+    // The read count: off with no store configured; with one, a daily count by chain and kind, never an address.
+    const hits = [];
+    const store = { KV_REST_API_URL: "https://kv.example", KV_REST_API_TOKEN: "t" };
+    const seen = async (url, init) => (hits.push([url, init?.method || "GET"]), { status: 200, text: async () => "{}" });
+    await proxy({ method: "GET", url: `/api/safe?path=v1/chains/8453/safes/${AGENT}/transactions/queued` }, res(), seen, {});
+    expect(hits.map((h) => h[0])).to.deep.equal([`https://safe-client.safe.global/v1/chains/8453/safes/${AGENT}/transactions/queued`]);
+    hits.length = 0;
+    await proxy({ method: "GET", url: `/api/safe?path=v1/chains/8453/safes/${AGENT}/transactions/queued` }, res(), seen, store);
+    const day = new Date().toISOString().slice(0, 10);
+    expect(hits).to.deep.include([`https://kv.example/incr/${encodeURIComponent(`relay:${day}:8453:queued`)}`, "POST"]);
+    expect(JSON.stringify(hits.filter((h) => h[0].startsWith("https://kv.")))).to.not.match(/0x[0-9a-f]{6}/i);
+    expect([`/v1/chains/1/safes/${AGENT}`, `/v1/chains/1/safes/${AGENT}/transactions/history`, "/v1/chains/1/transactions/multisig_0xab"].map((u) => proxy.kindOf(u))).to.deep.equal(["1 safe", "1 history", "1 tx"]);
+    // A store that hangs never holds up the read.
+    const t0 = Date.now();
+    const slow = await proxy({ method: "GET", url: `/api/safe?path=v1/chains/1/safes/${AGENT}` }, res(), async (url) => (url.startsWith("https://kv.") ? new Promise(() => {}) : { status: 200, text: async () => "{}" }), store);
+    expect([slow.code, Date.now() - t0 < 2000]).to.deep.equal([200, true]);
     expect((await proxy({ method: "POST", url: "/api/safe" }, res())).code).to.equal(405);
     expect((await proxy({ method: "GET", url: "/api/safe?path=v1/about" }, res())).code).to.equal(404);
     expect((await proxy({ method: "GET", url: `/api/safe?path=v1/chains/1/safes/${AGENT}` }, res(), async () => { throw new Error("down"); })).code).to.equal(502);

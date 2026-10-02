@@ -27,3 +27,7 @@ cd ..
 echo.
 echo Done: rein-wallet %VERSION% is on npm and the site is redeployed.
 echo Type "published" in the Rein thread.
+echo.
+echo One more step, once: update the GitHub repository's About box so it matches.
+echo With the GitHub CLI, paste this; or click the gear next to "About" on the repository page:
+echo   gh repo edit let-the-dreamers-rise/rein --description "Check every payment waiting in a Safe multisig against who that Safe has actually paid, and how much, before the last signature. Flags lookalike addresses, first payments to strangers and unusual amounts. Read-only. Also a second key for AI agent wallets." --homepage https://rein-nine.vercel.app --add-topic safe,multisig,gnosis-safe,address-poisoning,stablecoins,payments,security,base --remove-topic whitechain,smart-accounts,account-abstraction,solidity,prompt-injection

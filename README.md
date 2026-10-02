@@ -96,7 +96,7 @@ waits. Change those with `protect(walletClient, { starter: { perPayment, perHour
 
 A smart account an autonomous agent can operate and cannot drain.
 
-**Live on two public EVM testnets, same bytecode, same result.** Chain-agnostic
+**Live on three public EVM testnets, same bytecode, same result.** Chain-agnostic
 Solidity (`evmVersion: paris`, no PUSH0), so the account deploys wherever the
 agent's money already is. Demo page with the on-chain run and a 90-second
 video: [rein-nine.vercel.app/account](https://rein-nine.vercel.app/account/).
@@ -592,7 +592,7 @@ none.
   repetition. Bounding it honestly would require mirroring the token's allowance
   in storage, and that mirror goes stale as soon as the spender spends. Use
   `approve()` with an exact total instead.
-- **Not audited.** 56 tests pass. That is not an audit.
+- **Not audited.** 212 JavaScript and 18 Python tests pass. That is not an audit.
 
 ## Layout
 
