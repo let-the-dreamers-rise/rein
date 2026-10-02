@@ -25,7 +25,7 @@
 //                            commitment so it is not readable by strangers
 
 const readline = require("readline");
-const { openClient, wantsGuard } = require("./lib/config");
+const { openClient, wantsGuard, scrub } = require("./lib/config");
 const { NAMES, explain } = require("../scripts/codes");
 
 const PROTOCOL_VERSION = "2024-11-05";
@@ -267,7 +267,7 @@ async function handle(msg) {
         // A refusal is not an error, but a misconfiguration is, and the agent
         // should be able to tell them apart from the text alone.
         return reply(id, {
-          content: [{ type: "text", text: `rein could not answer: ${err.message}` }],
+          content: [{ type: "text", text: `rein could not answer: ${scrub(err.message)}` }],
           isError: true,
         });
       }
@@ -302,7 +302,7 @@ function main() {
     // One message at a time, in the order they arrived. Two payments in flight
     // from one key would race for the same nonce, and a budget read that
     // overtakes the payment before it would report money that is already gone.
-    queue = queue.then(() => handle(msg)).catch((err) => fail(msg.id ?? null, -32603, err.message));
+    queue = queue.then(() => handle(msg)).catch((err) => fail(msg.id ?? null, -32603, scrub(err.message)));
   });
   rl.on("close", () => queue.then(() => process.exit(0)));
 }

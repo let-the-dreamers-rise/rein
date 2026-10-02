@@ -9,9 +9,9 @@ poisoning), a first payment to a stranger, an amount far above the usual for
 that payee, and changes to who controls the Safe, and it can tell your team's
 chat before anyone signs. Free, read-only, no keys.
 
-The same check runs as **a second key for AI agent wallets**: normal payments
-go through on the agent's key alone, and an unusual one waits for a person,
-enforced by Turnkey or Privy.
+The same check can also run as **a second key for AI agent wallets** on
+Turnkey or Privy. That part is a preview: see below before using it with
+real money.
 
 ## Start here: check a Safe's queue in seconds
 
@@ -201,6 +201,11 @@ limits take over the same way any update does: tighter ones at once, wider ones
 only after you run `--approve`.
 
 ## Rein as a second key the wallet enforces
+
+**Preview: don't use it with real money yet.** The co-signer has only been
+tested against stand-ins for Turnkey and Privy, and the 2 October security
+review found problems in it that are still being fixed: a malformed request
+can stop it, and it learns too readily from a wallet's first payments.
 
 `check` runs in the agent's own process, so an agent that has been talked into
 it can skip it. On Turnkey or Privy, Rein can be a second key instead: the
@@ -592,7 +597,7 @@ none.
   repetition. Bounding it honestly would require mirroring the token's allowance
   in storage, and that mirror goes stale as soon as the spender spends. Use
   `approve()` with an exact total instead.
-- **Not audited.** 223 JavaScript and 18 Python tests pass. That is not an audit.
+- **Not audited.** 227 JavaScript and 18 Python tests pass. That is not an audit.
 
 ## Layout
 
@@ -611,7 +616,7 @@ plugin/                         the MCP server as one file, packaged as a Claude
 dist/rein.mcpb                  the same file as a Claude Desktop extension
 client/monitor.js               the guardian's evaluator for learned habits, same bands as the compiler
 v2/export.js                    the compiled bounds as Turnkey, Coinbase CDP and Privy policy JSON, with the honest table
-test/rein.test.js               the account's tests; the other test/*.test.js files cover the scanner, guard, Safe check and co-signer, 223 in all
+test/rein.test.js               the account's tests; the other test/*.test.js files cover the scanner, guard, Safe check and co-signer, 227 in all
 scripts/explain-error.js        the three failures a first live run hits, in words, with the command that diagnoses each
 scripts/v2/demo.js              Rein v2 end to end: shadow, export, compile, apply, measure
 v2/compile.py                   the compiler: bounds plus nyaya-learned habits, readable policy out
@@ -628,9 +633,9 @@ npm install
 npm test
 ```
 
-To release (Windows, from the repository folder): `scripts\release.cmd` pulls
-the release branch, publishes the npm package if its version isn't out yet,
-and redeploys the site.
+Releases are published from the exact commit the security review signs off,
+from a clean checkout. `scripts\release.cmd` (Windows) publishes and redeploys
+in one step; it will be used again, with npm provenance, after 0.1.1.
 
 ## Chains
 

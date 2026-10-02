@@ -71,6 +71,33 @@ const KNOWN_TOKENS = {
 };
 const PLAIN = /^[\x20-\x7E]*$/; // printable ASCII: no lookalike letters, no invisible ones
 
+/// Text anyone on the chain chose (a token's name or symbol, an address's
+/// label), made safe to print to a terminal, a chat or a model: no control
+/// characters (a terminal escape can rewrite the clipboard), no direction
+/// overrides or invisible characters, no line breaks, at most 32 characters.
+/// Lookalike letters stay, so the poisoning checks can still see them.
+function display(s) {
+  if (s == null) return s;
+  // Replaced with a visible mark, not removed: "USDC" plus an invisible
+  // character must not come out reading "USDC".
+  const t = String(s).replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g, "\ufffd").replace(/\s+/g, " ").trim();
+  return t.length > 32 ? `${t.slice(0, 31)}…` : t;
+}
+
+/// The same, over a whole history as the explorer returned it.
+function cleanHistory(h) {
+  // rawSymbol and rawName keep what the chain said, for the poisoning checks.
+  const tok = (t) => t && !("rawSymbol" in t) && Object.assign(t, { rawSymbol: t.symbol ?? null, rawName: t.name ?? null, ...(t.symbol != null ? { symbol: display(t.symbol) } : {}), ...(t.name != null ? { name: display(t.name) } : {}) });
+  const who = (p) => p && Object.assign(p, { ...(p.name != null ? { name: display(p.name) } : {}), ...(p.ens_domain_name != null ? { ens_domain_name: display(p.ens_domain_name) } : {}), ...(p.metadata?.tags ? { metadata: { ...p.metadata, tags: p.metadata.tags.map((x) => ({ ...x, name: display(x.name) })) } } : {}) });
+  for (const b of h.tokenBalances || []) tok(b.token);
+  for (const t of h.tokenTransfers || []) tok(t.token), who(t.to), who(t.from);
+  for (const tx of h.transactions || []) {
+    who(tx.to);
+    for (const t of tx.token_transfers || []) tok(t.token), who(t.to);
+  }
+  return h;
+}
+
 /// Why a transfer out of the wallet, in a transaction the wallet didn't
 /// send, is not to be believed, or null if it can be. Address poisoning mints
 /// a fake "USDC" and emits Transfer events "from" the victim to an address
@@ -81,7 +108,7 @@ function poisoned(t, { chain, interacted }) {
   const tok = t.token || {};
   const address = tokenAddress(tok);
   if (BigInt(t.total?.value || 0) === 0n) return "moves nothing";
-  if (!PLAIN.test(tok.symbol || "") || !PLAIN.test(tok.name || "")) return `its token's name hides lookalike characters (${tok.symbol})`;
+  if (!PLAIN.test(tok.rawSymbol ?? tok.symbol ?? "") || !PLAIN.test(tok.rawName ?? tok.name ?? "")) return `its token's name hides lookalike characters (${tok.symbol})`;
   if (tok.reputation && tok.reputation !== "ok") return `the explorer marks its token ${tok.reputation}`;
   const known = (KNOWN_TOKENS[chain] || []).some((a) => a.toLowerCase() === address.toLowerCase());
   if (known || interacted.has(address.toLowerCase()) || tok.exchange_rate != null) return null;
@@ -141,7 +168,7 @@ async function fetchHistory(address, { chain = "base", api, fetch: fetchImpl = g
   const transfers = await paged(base, `/addresses/${addr}/token-transfers`, { filter: "from", type: "ERC-20" }, opts);
   const balances = (await getJson(`${base}/api/v2/addresses/${addr}/token-balances`, fetchImpl)) || [];
 
-  return {
+  return cleanHistory({
     chain: c ? chain : base,
     address: addr,
     info,
@@ -150,7 +177,7 @@ async function fetchHistory(address, { chain = "base", api, fetch: fetchImpl = g
     tokenBalances: balances,
     truncated: txs.truncated || transfers.truncated,
     fetchedAt: new Date().toISOString(),
-  };
+  });
 }
 
 // -- turning it into a trail -----------------------------------------------
@@ -292,7 +319,7 @@ function holdings(history) {
     const rate = b.token.exchange_rate != null ? Number(b.token.exchange_rate) : null;
     const address = tokenAddress(b.token);
     const known = (KNOWN_TOKENS[history.chain] || []).some((a) => a.toLowerCase() === address.toLowerCase());
-    const junk = !PLAIN.test(b.token.symbol || "") || !PLAIN.test(b.token.name || "")
+    const junk = !PLAIN.test(b.token.rawSymbol ?? b.token.symbol ?? "") || !PLAIN.test(b.token.rawName ?? b.token.name ?? "")
       || (b.token.reputation && b.token.reputation !== "ok")
       || (rate == null && !known && !used.has(address.toLowerCase()));
     if (junk) { out.junk = (out.junk || 0) + 1; continue; }
@@ -314,4 +341,4 @@ async function fetchEthPaid(address, { chain = "base", api, fetch: fetchImpl = g
     .map((t) => ({ payee: ethers.getAddress(t.to.hash), amount: Number(ethers.formatEther(BigInt(t.value))), ts: seconds(t.timestamp) }));
 }
 
-module.exports = { fetchHistory, fetchEthPaid, toTrail, holdings, tokenBook, poisoned, KNOWN_TOKENS, CHAINS, NO_CALLDATA, SELECTOR_NAMES, ERC20 };
+module.exports = { display, cleanHistory, fetchHistory, fetchEthPaid, toTrail, holdings, tokenBook, poisoned, KNOWN_TOKENS, CHAINS, NO_CALLDATA, SELECTOR_NAMES, ERC20 };

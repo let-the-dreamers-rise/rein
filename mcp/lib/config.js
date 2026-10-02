@@ -24,13 +24,42 @@ function wantsSandbox(argv = process.argv, env = process.env) {
   return argv.includes("--sandbox") || /^(1|true|yes)$/i.test(env.REIN_SANDBOX || "");
 }
 
+/// The agent's key, tidied of the spaces and quotes a pasted .env line
+/// carries, or an error that never repeats it: ethers prints a malformed
+/// key in full, and that text would reach the model and the API's callers.
+function agentKey(raw) {
+  if (!raw) return null;
+  const k = String(raw).trim().replace(/^(["'])(.*)\1$/, "$2").trim();
+  if (!/^(0x)?[0-9a-fA-F]{64}$/.test(k)) throw new Error("REIN_AGENT_PRIVATE_KEY isn't a 32-byte hex private key (Rein doesn't show its value)");
+  return k.startsWith("0x") ? k : `0x${k}`;
+}
+
+/// An error's text with anything secret-shaped taken out: 64-hex runs (a
+/// private key) and the path and query of any URL (an RPC key). Every error
+/// the MCP server or the API returns passes through it.
+function scrub(text) {
+  return String(text)
+    .replace(/\b(0x)?[0-9a-fA-F]{64}\b/g, "[64 hex characters hidden]")
+    .replace(/(https?:\/\/[^\s/"'?#]+)[^\s"']*/g, "$1/…");
+}
+
+/// An RPC URL without its secret: providers put the API key in the path or
+/// the query, so only the scheme and host are shown.
+function rpcHost(url) {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return "(unreadable REIN_RPC_URL)";
+  }
+}
+
 function fromEnv(env = process.env) {
   const tokens = {};
   for (const [symbol, address] of Object.entries(pairs(env.REIN_TOKENS))) tokens[symbol.toUpperCase()] = address;
   return {
     rpcUrl: env.REIN_RPC_URL,
     account: env.REIN_ACCOUNT,
-    agentKey: env.REIN_AGENT_PRIVATE_KEY || null,
+    agentKey: agentKey(env.REIN_AGENT_PRIVATE_KEY),
     agentAddress: env.REIN_AGENT_ADDRESS || null,
     intentSalt: env.REIN_INTENT_SALT || null,
     tokens,
@@ -68,7 +97,7 @@ async function openClient({ argv = process.argv, env = process.env } = {}) {
     client,
     sandbox: false,
     info: {
-      network: c.rpcUrl,
+      network: rpcHost(c.rpcUrl),
       account: c.account,
       agentKey: client.agent,
       readOnly: client.readOnly,
@@ -78,4 +107,4 @@ async function openClient({ argv = process.argv, env = process.env } = {}) {
   };
 }
 
-module.exports = { wantsGuard, openClient, wantsSandbox, fromEnv, pairs };
+module.exports = { wantsGuard, openClient, wantsSandbox, fromEnv, pairs, agentKey, rpcHost, scrub };

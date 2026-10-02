@@ -19,7 +19,7 @@ Rein now leads with the Safe payee check. Before the last signature, it checks e
 - `npx rein-wallet 0x…` gives a one-screen checkup: the biggest first payment to a new address, dated address-poisoning evidence, habits, and what would have been held. You can then ask about any payment in plain words.
 - `protect(walletClient)`: one line for viem agents.
 - `rein fleet`: a shadow report across many wallets, including how many are being address-poisoned.
-- `rein cosign`: Rein as a second key on Turnkey (including one webhook for every sub-org, and x402/EIP-712 payloads and batches) or Privy. **Tested only against stand-ins for both vendors.**
+- `rein cosign` (**preview, not for real money yet**: the 2 October security review found issues still being fixed): Rein as a second key on Turnkey (including one webhook for every sub-org, and x402/EIP-712 payloads and batches) or Privy. **Tested only against stand-ins for both vendors.**
 - Payments held for a person go to Slack with Approve and Refuse links.
 
 ### Fixed
@@ -41,6 +41,13 @@ These all read "Looks normal" or lost an alert before the fix.
 - Reports always show the address next to the explorer's label, since a label is chosen by the address's owner. Slack links and Discord @everyone in that text no longer act.
 - An alert that fails to post is tried again on the next check. A single run exits 1 when something shouldn't be signed, 2 when Rein couldn't check the Safe, and 3 when it couldn't post the alert.
 - `scan/safe-action.yml` pins Rein's version, asks for no repository access, and fails the run (so GitHub emails you) when Rein can't check or can't post.
+
+### Hardened before release (security review, 2 October)
+- A malformed `REIN_AGENT_PRIVATE_KEY` (spaces, quotes, a seed phrase) is tidied or refused, and the error never repeats it. MCP and API errors hide anything shaped like a key, and the path and query of any URL.
+- `rein_about` shows only the RPC's host, not the API key in its URL.
+- Token names, symbols and explorer labels are cleaned before Rein prints them: no terminal escape codes, direction overrides or invisible characters.
+- `rein apply --send` sends your vendor credentials only to that vendor's own API, whatever URL the plan file names.
+- The GitHub Actions pin Rein's version and ask for no repository access.
 
 ### Also
 - `rein --version`.

@@ -21,7 +21,7 @@
 // behind the sandbox, so a generated key guards nothing worth guarding.
 const http = require("node:http");
 const crypto = require("node:crypto");
-const { openClient, wantsSandbox } = require("../mcp/lib/config");
+const { openClient, wantsSandbox, scrub } = require("../mcp/lib/config");
 
 const PORT = Number(process.env.REIN_API_PORT || 8402);
 const MAX_BODY = 64 * 1024;
@@ -161,7 +161,7 @@ function createServer(tokens) {
     } catch (err) {
       // A policy refusal is a 200 with allowed:false -- it is a normal answer.
       // A 4xx here means the request itself was malformed or unanswerable.
-      return json(res, 400, { error: err.message });
+      return json(res, 400, { error: scrub(err.message) });
     }
   });
 }

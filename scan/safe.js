@@ -617,7 +617,9 @@ async function post(webhook, textBody, fetchImpl) {
   // Slack reads "text", Discord "content", Telegram's sendMessage "text" (with chat_id in the URL).
   // Slack reads <…> as links and mentions, Discord pings on @everyone: the
   // report carries text from the chain, so neither may act on it.
-  const slack = textBody.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  // Telegram's sendMessage without parse_mode shows text as it is.
+  const plain = /^https:\/\/api\.telegram\.org\//i.test(webhook);
+  const slack = plain ? textBody : textBody.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const res = await fetchImpl(webhook, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: slack, content: textBody.slice(0, 2000), allowed_mentions: { parse: [] } }) });
   if (!res.ok) throw new Error(`the webhook answered ${res.status}`);
 }

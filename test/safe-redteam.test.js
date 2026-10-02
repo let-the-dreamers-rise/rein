@@ -110,6 +110,9 @@ describe("rein safe, red-teamed", function () {
     await safe.main(["--sample", "--webhook", "https://hooks.example/x"], { log: () => {}, fetch: async (u, init) => (sent.push(JSON.parse(init.body)), { ok: true, status: 200 }) });
     expect(sent[0].allowed_mentions).to.deep.equal({ parse: [] });
     expect(sent[0].text).to.not.match(/<[^>]*>/);
+    const tg = [];
+    await safe.main(["--sample", "--webhook", "https://api.telegram.org/botX/sendMessage?chat_id=1"], { log: () => {}, fetch: async (u, init) => (tg.push(JSON.parse(init.body)), { ok: true, status: 200 }) });
+    expect(tg[0].text).to.not.contain("&amp;").and.not.contain("&lt;"); // Telegram shows text as it is
   });
 
   it("keeps an alert it couldn't post, so the next check posts it", async () => {

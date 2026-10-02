@@ -1,7 +1,7 @@
 {
   "name": "rein-wallet",
   "version": "0.1.1",
-  "description": "Check every payment waiting in a Safe multisig against who that Safe has actually paid, and how much: lookalike addresses, first payments to strangers, unusual amounts, owner changes. The same check runs as a second key for AI agent wallets on Privy or Turnkey. Read-only, no keys.",
+  "description": "Check every payment waiting in a Safe multisig against who that Safe has actually paid, and how much: lookalike addresses, first payments to strangers, unusual amounts, owner changes. Read-only, no keys. Also a preview second key for AI agent wallets on Privy or Turnkey.",
   "mcpName": "io.github.let-the-dreamers-rise/rein",
   "keywords": [
     "safe",

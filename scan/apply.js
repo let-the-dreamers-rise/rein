@@ -33,7 +33,7 @@ const holes = (value) => [...new Set([...JSON.stringify(value).matchAll(HOLE)].m
 
 function curl(req, headers) {
   const h = Object.entries(headers).map(([k, v]) => ` \\\n  -H "${k}: ${v}"`).join("");
-  return `curl -X ${req.method} '${req.url}'${h} \\\n  -d '${JSON.stringify(req.body).replace(/'/g, "'\\''")}'`;
+  return `curl -X ${req.method} '${String(req.url).replace(/'/g, "'\\''")}'${h} \\\n  -d '${JSON.stringify(req.body).replace(/'/g, "'\\''")}'`;
 }
 
 // The `rein apply` flag that fills each id only the wallet's owner has.
@@ -43,6 +43,14 @@ const FLAG = {
   turnkey_agent_user_id: "--agent-user",
   turnkey_agent_user_tag_id: "--agent-tag",
   cdp_account_address: "--account",
+};
+
+// Where each vendor's API lives: a plan is a file anyone can hand you, and
+// --send attaches your API secret to every request in it.
+const ORIGIN = {
+  privy: ["https://api.privy.io", "https://auth.privy.io"],
+  turnkey: ["https://api.turnkey.com"],
+  coinbase: ["https://api.cdp.coinbase.com"],
 };
 
 const NEEDS = {
@@ -110,6 +118,13 @@ async function apply(plan, { vars = {}, send = false, env = process.env, fetch: 
     }
     const open = holes(req);
     if (open.length) throw new Error(`step ${i + 1} still has ${open.map((k) => `{{${k}}}`).join(", ")}`);
+    let origin = null;
+    try {
+      origin = new URL(req.url).origin;
+    } catch {
+      origin = null;
+    }
+    if (!ORIGIN[vendor].includes(origin)) throw new Error(`step ${i + 1} goes to ${origin || req.url}, not ${vendor}'s API (${ORIGIN[vendor].join(" or ")}); Rein won't send your ${vendor} credentials there`);
     const body = JSON.stringify(req.body);
     const res = await fetchImpl(req.url, { method: req.method, headers: authHeaders(vendor, req, body, env), body });
     const text = await res.text();
