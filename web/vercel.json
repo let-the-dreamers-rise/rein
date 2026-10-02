@@ -1,0 +1,3 @@
+{
+  "rewrites": [{ "source": "/api/safe/:path*", "destination": "/api/safe?path=:path*" }]
+}

@@ -70,8 +70,8 @@ function safeGateway(chain, { url = SAFE_GATEWAY, fetch: fetchImpl = globalThis.
   if (!chainId) throw new Error(`unknown chain "${chain}"`);
   const base = `${url.replace(/\/$/, "")}/v1/chains/${chainId}`;
   const get = async (p) => {
-    const res = await fetchImpl(`${base}${p}`, { headers: { accept: "application/json" } });
-    if (res.status === 404) throw new Error("Safe has no Safe at that address on this chain");
+    const res = await fetchImpl(p.startsWith("http") ? p : `${base}${p}`, { headers: { accept: "application/json" } });
+    if (res.status === 404) throw new Error("there is no Safe at that address on this chain");
     if (!res.ok) throw new Error(`Safe's gateway answered ${res.status}`);
     return res.json();
   };
@@ -82,8 +82,14 @@ function safeGateway(chain, { url = SAFE_GATEWAY, fetch: fetchImpl = globalThis.
       return { nonce: i.nonce, threshold: i.threshold, owners: (i.owners || []).map(value) };
     },
     queue: async (safe) => {
-      const page = await get(`/safes/${safe}/transactions/queued`);
-      const ids = (page.results || []).filter((x) => x.type === "TRANSACTION" && x.transaction?.id).map((x) => x.transaction.id);
+      // The gateway pages the queue 20 at a time; read up to 5 pages.
+      const ids = [];
+      let page = await get(`/safes/${safe}/transactions/queued`);
+      for (let n = 1; ; n++) {
+        for (const x of page.results || []) if (x.type === "TRANSACTION" && x.transaction?.id && !ids.includes(x.transaction.id)) ids.push(x.transaction.id);
+        if (!page.next || n >= 5) break;
+        page = await get(page.next);
+      }
       const out = [];
       for (const id of ids) {
         const d = await get(`/transactions/${id}`);

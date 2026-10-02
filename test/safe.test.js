@@ -202,4 +202,38 @@ describe("rein safe", function () {
     expect(asked[0]).to.deep.equal([`https://api.safe.global/tx-service/base/api/v1/safes/${AGENT}/multisig-transactions/?executed=false&nonce__gte=3&ordering=nonce&limit=100`, "Bearer k"]);
     expect(require("../bin/rein").main).to.be.a("function");
   });
+  it("reads a long queue page by page, and the site's pass-through only lets Safe reads through", async () => {
+    const base = "https://safe-client.safe.global/v1/chains/8453";
+    const asked = [];
+    const item = (id) => ({ type: "TRANSACTION", transaction: { id } });
+    const pages = {
+      [`${base}/safes/${AGENT}/transactions/queued`]: { results: [{ type: "LABEL" }, item("a"), item("b")], next: `${base}/safes/${AGENT}/transactions/queued?cursor=2` },
+      [`${base}/safes/${AGENT}/transactions/queued?cursor=2`]: { results: [item("b"), item("c")], next: null },
+    };
+    for (const [id, n] of [["a", 1], ["b", 2], ["c", 3]]) pages[`${base}/transactions/${id}`] = { txData: { to: { value: PAYEES.inference.address }, value: "0" }, detailedExecutionInfo: { nonce: n, confirmationsRequired: 2 } };
+    const gw = safe.safeGateway("base", { fetch: async (url) => (asked.push(url), { ok: true, status: 200, json: async () => pages[url] }) });
+    expect((await gw.queue(AGENT)).map((t) => t.nonce)).to.deep.equal([1, 2, 3]);
+    const missing = safe.safeGateway("base", { fetch: async () => ({ ok: false, status: 404 }) });
+    await missing.info(AGENT).then(() => expect.fail(), (e) => expect(e.message).to.equal("there is no Safe at that address on this chain"));
+
+    const proxy = require("../web/api/safe");
+    expect(proxy.target(`/api/safe?path=v1/chains/8453/safes/${AGENT}/transactions/queued&cursor=x&evil=1`)).to.equal(`https://safe-client.safe.global/v1/chains/8453/safes/${AGENT}/transactions/queued?cursor=x`);
+    expect(proxy.target(`/api/safe/v1/chains/1/transactions/multisig_${AGENT}_0xab`)).to.equal(`https://safe-client.safe.global/v1/chains/1/transactions/multisig_${AGENT}_0xab`);
+    for (const bad of ["/api/safe?path=v1/chains/1/safes/0x12", "/api/safe?path=v2/owners/x", "/api/safe?path=v1/chains/1/safes/../../x", "/api/safe?path=//evil.example/v1"]) expect(proxy.target(bad), bad).to.equal(null);
+    const res = () => {
+      const r = { headers: {}, code: 200, body: "" };
+      r.setHeader = (k, v) => { r.headers[k] = v; };
+      r.status = (c) => ((r.code = c), r);
+      r.end = (b = "") => ((r.body = b), r);
+      r.json = (o) => r.end(JSON.stringify(o));
+      return r;
+    };
+    const ok = await proxy({ method: "GET", url: `/api/safe?path=v1/chains/8453/safes/${AGENT}` }, res(), async (url) => ({ status: 200, text: async () => `{"seen":"${url}"}` }));
+    expect([ok.code, ok.headers["access-control-allow-origin"], JSON.parse(ok.body).seen]).to.deep.equal([200, "*", `https://safe-client.safe.global/v1/chains/8453/safes/${AGENT}`]);
+    expect((await proxy({ method: "POST", url: "/api/safe" }, res())).code).to.equal(405);
+    expect((await proxy({ method: "GET", url: "/api/safe?path=v1/about" }, res())).code).to.equal(404);
+    expect((await proxy({ method: "GET", url: `/api/safe?path=v1/chains/1/safes/${AGENT}` }, res(), async () => { throw new Error("down"); })).code).to.equal(502);
+    const page = fs.readFileSync(path.join(__dirname, "..", "web", "safe", "index.html"), "utf8");
+    expect(page).to.contain("/api/safe").and.contain("gatewayFetch");
+  });
 });
