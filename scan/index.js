@@ -16,6 +16,7 @@ const { compileTrail, HEADROOM } = require("./compile");
 const { evaluate, NATIVE } = require("./evaluate");
 const { fetchHistory, toTrail, holdings, CHAINS, NO_CALLDATA } = require("./blockscout");
 const exporter = require("../v2/export");
+const untrusted = require("./untrusted");
 
 const DAY = 86400;
 const CHAIN_IDS = { Base: 8453, "Base Sepolia": 84532, Ethereum: 1 };
@@ -55,7 +56,7 @@ function collectLabels(history) {
   const labels = {};
   const note = (p) => {
     if (!p?.hash) return;
-    const name = p.ens_domain_name || p.name || p.metadata?.tags?.[0]?.name || null;
+    const name = untrusted.label(p.ens_domain_name) || untrusted.label(p.name) || untrusted.label(p.metadata?.tags?.[0]?.name);
     if (name) labels[p.hash.toLowerCase()] = name;
   };
   for (const tx of history.transactions) note(tx.to);

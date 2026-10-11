@@ -33,7 +33,9 @@ const ERC20_ABI = [
 /// commitment binding for the owner (who knows the salt) and meaningless to
 /// everyone else.
 function intentHash(instruction, salt) {
-  if (!instruction) return ethers.ZeroHash;
+  // Whitespace is no reason: it hashes to the zero commitment, which a policy
+  // that requires a reason refuses.
+  if (!instruction || !String(instruction).trim()) return ethers.ZeroHash;
   return salt
     ? ethers.keccak256(ethers.concat([ethers.toUtf8Bytes(salt), ethers.toUtf8Bytes(instruction)]))
     : ethers.id(instruction);
