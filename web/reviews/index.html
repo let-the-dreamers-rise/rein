@@ -93,6 +93,7 @@ section+section{border-top:1px solid var(--hair)}
 .never li{padding:14px 0 14px 26px;border-top:1px solid var(--hair);color:var(--ink-2);position:relative}
 .never li:last-child{border-bottom:1px solid var(--hair)}
 .never li::before{content:"";position:absolute;left:0;top:25px;width:12px;height:2px;background:var(--brand-strong)}
+.sample-cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px}
 footer{padding:40px 0 64px;font-size:14.5px;color:var(--ink-2)}
 footer .wrap{display:flex;flex-wrap:wrap;gap:24px;justify-content:space-between}
 footer a{font-family:var(--mono);font-size:13px;color:var(--ink)}
@@ -165,6 +166,17 @@ got through         <span class="ok">0</span>
       <li><div><h3>A free retest after you fix things</h3><p>So the report says "fixed and retested on version X", not just "found".</p></div></li>
       <li><div><h3>Answers ready to paste into the questionnaire</h3><p>Written from the results, plus a one-page letter for buyers who want a summary.</p></div></li>
     </ol>
+  </div>
+</section>
+
+<section id="sample">
+  <div class="wrap">
+    <h2 class="h2">Read a real report first.</h2>
+    <p class="sub">We ran the review on Rein's own MCP server: 20 attacks and 6 findings, 2 of them medium. A token name that anyone can write on chain reached the agent as instructions, and a mistyped key could be echoed back to the model. All six were fixed and retested the same day, and the report says exactly how.</p>
+    <div class="sample-cta">
+      <a class="btn btn-ink" href="/reviews/sample/">Read the sample report</a>
+      <a class="btn" href="https://github.com/let-the-dreamers-rise/rein/tree/main/reviews/2026-10-11-rein-mcp">Reproduction scripts</a>
+    </div>
   </div>
 </section>
 
