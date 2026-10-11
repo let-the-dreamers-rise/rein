@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rein · Agent security reviews</title>
+<meta name="description" content="Rein attacks your AI agent or MCP server the way your enterprise buyer's security team worries about, retests your fixes, and writes the results as answers you can paste into their AI questionnaire. Five days, $1,500.">
+<meta property="og:title" content="Rein · Get your AI agent through enterprise security review">
+<meta property="og:description" content="Five days. $1,500. If your buyer's security team rejects the report, you don't pay.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://rein-nine.vercel.app/reviews/">
+<meta name="theme-color" content="#ff6a1a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23ff6a1a'/%3E%3Cpath d='M9 23V9h8.5a4.5 4.5 0 0 1 1.6 8.7L23 23h-3.6l-3.5-4.8H12V23z' fill='%23141210'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:oklch(0.985 0 0);--surface:#fff;--sunken:oklch(0.955 0.004 60);
+  --ink:oklch(0.21 0.012 60);--ink-2:oklch(0.40 0.012 60);--ink-3:oklch(0.55 0.010 60);
+  --hair:oklch(0.89 0.006 60);
+  --brand:oklch(0.70 0.20 45);--brand-strong:oklch(0.64 0.21 42);--brand-deep:oklch(0.50 0.16 40);
+  --term-bg:oklch(0.17 0.012 60);--term-fg:oklch(0.90 0.01 70);--term-mute:oklch(0.64 0.012 70);
+  --term-ok:oklch(0.80 0.16 150);--term-no:oklch(0.78 0.17 45);
+  --display:"Bricolage Grotesque","Helvetica Neue",Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  --ease:cubic-bezier(.16,1,.3,1);
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--display);font-size:17px;line-height:1.55;-webkit-font-smoothing:antialiased}
+a{color:var(--brand-deep);text-decoration:none}
+a:hover{text-decoration:underline;text-underline-offset:3px}
+:focus-visible{outline:3px solid var(--brand);outline-offset:3px;border-radius:2px}
+h1,h2,h3{text-wrap:balance;margin:0;font-weight:700;letter-spacing:-.02em;line-height:1.05}
+p{margin:0;text-wrap:pretty}
+.wrap{max-width:1120px;margin:0 auto;padding:0 clamp(16px,4vw,40px)}
+.tape{height:14px;background:repeating-linear-gradient(-45deg,var(--brand) 0 18px,var(--ink) 18px 36px)}
+.nav{position:sticky;top:0;z-index:10;background:var(--bg);border-bottom:1px solid var(--hair)}
+.nav .wrap{display:flex;align-items:center;gap:20px;height:64px}
+.mark{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px;color:var(--ink)}
+.mark svg{width:26px;height:26px}
+.nav .btn{margin-left:auto}
+.btn{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:15px;padding:11px 18px;border-radius:8px;border:1px solid var(--ink);color:var(--ink);background:transparent;white-space:nowrap;transition:transform .25s var(--ease)}
+.btn:hover{text-decoration:none;transform:translateY(-1px)}
+.btn-ink{background:var(--ink);color:#fff}
+.btn-brand{background:var(--brand);border-color:var(--brand);color:var(--ink)}
+.hero{background:var(--brand);padding:clamp(48px,8vw,104px) 0 clamp(44px,6vw,88px)}
+.hero .wrap{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:clamp(28px,5vw,64px);align-items:center}
+@media(max-width:900px){.hero .wrap{grid-template-columns:minmax(0,1fr)}}
+.status{display:inline-flex;align-items:center;gap:9px;font-family:var(--mono);font-size:13px;font-weight:500;background:oklch(1 0 0 / .35);border:1px solid oklch(0 0 0 / .18);padding:6px 12px;border-radius:999px;margin-bottom:24px}
+.status i{width:8px;height:8px;border-radius:50%;background:var(--ink);display:inline-block}
+.hero h1{font-size:clamp(2.4rem,5.6vw,4.8rem);font-weight:800;line-height:.98;letter-spacing:-.03em;max-width:14ch}
+.lede{font-size:clamp(18px,1.6vw,21px);line-height:1.45;margin:24px 0 30px;max-width:52ch;color:oklch(0.20 0.02 45)}
+.ctas{display:flex;flex-wrap:wrap;gap:12px}
+.fine{margin-top:22px;font-family:var(--mono);font-size:13px;color:oklch(0.25 0.03 45)}
+.term{background:var(--term-bg);color:var(--term-fg);border-radius:14px;padding:22px 22px 24px;font-family:var(--mono);font-size:13px;line-height:1.7;box-shadow:0 30px 60px -20px oklch(0 0 0 / .45);overflow:hidden}
+.term-bar{display:flex;gap:8px;margin-bottom:12px;color:var(--term-mute);font-size:12px;align-items:center}
+.term-bar i{width:10px;height:10px;border-radius:50%;background:oklch(0.35 0.01 60);display:inline-block}
+.term pre{margin:0;white-space:pre-wrap;word-break:break-word;font:inherit}
+.k{color:var(--term-mute)}.ok{color:var(--term-ok)}.no{color:var(--term-no)}
+section{padding:clamp(56px,8vw,104px) 0}
+section+section{border-top:1px solid var(--hair)}
+.h2{font-size:clamp(1.8rem,3.4vw,2.8rem);max-width:24ch}
+.sub{color:var(--ink-2);font-size:clamp(17px,1.3vw,19px);margin-top:16px;max-width:62ch}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1px;background:var(--hair);border:1px solid var(--hair);border-radius:12px;overflow:hidden;margin-top:32px}
+.cards>div{background:var(--surface);padding:24px 24px 26px}
+.cards h3{font-size:19px;margin-bottom:8px;letter-spacing:-.01em;line-height:1.2}
+.cards p{color:var(--ink-2);font-size:16px}
+.steps{list-style:none;margin:32px 0 0;padding:0;counter-reset:s}
+.steps li{display:grid;grid-template-columns:56px minmax(0,1fr);gap:18px;padding:24px 0;border-top:1px solid var(--hair);counter-increment:s}
+.steps li:last-child{border-bottom:1px solid var(--hair)}
+.steps li::before{content:counter(s);font-weight:800;font-size:40px;line-height:1;color:var(--brand-strong)}
+.steps h3{font-size:21px;margin-bottom:6px;line-height:1.2}
+.steps p{color:var(--ink-2);max-width:60ch}
+.price{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;margin-top:32px}
+.price>div{border:1px solid var(--hair);border-radius:14px;padding:28px;background:var(--surface)}
+.price .big{font-size:clamp(2.4rem,4vw,3.2rem);font-weight:800;letter-spacing:-.03em;line-height:1;margin:10px 0 6px}
+.price .tag{font-family:var(--mono);font-size:12.5px;color:var(--brand-deep)}
+.price ul{margin:16px 0 0;padding-left:18px;color:var(--ink-2);font-size:16px}
+.price li{margin:6px 0}
+.dark{background:var(--ink);color:oklch(0.92 0.01 70)}
+.dark .h2{color:#fff}
+.dark .sub{color:oklch(0.78 0.012 70)}
+.dark a{color:oklch(0.85 0.12 60)}
+.faq{margin-top:28px;max-width:72ch}
+.faq details{border-top:1px solid var(--hair);padding:16px 0}
+.faq details:last-child{border-bottom:1px solid var(--hair)}
+.faq summary{cursor:pointer;font-weight:600;font-size:18px}
+.faq p{color:var(--ink-2);margin-top:10px}
+.never{list-style:none;margin:24px 0 0;padding:0;max-width:66ch}
+.never li{padding:14px 0 14px 26px;border-top:1px solid var(--hair);color:var(--ink-2);position:relative}
+.never li:last-child{border-bottom:1px solid var(--hair)}
+.never li::before{content:"";position:absolute;left:0;top:25px;width:12px;height:2px;background:var(--brand-strong)}
+.sample-cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px}
+footer{padding:40px 0 64px;font-size:14.5px;color:var(--ink-2)}
+footer .wrap{display:flex;flex-wrap:wrap;gap:24px;justify-content:space-between}
+footer a{font-family:var(--mono);font-size:13px;color:var(--ink)}
+</style>
+</head>
+<body>
+<nav class="nav" aria-label="Primary">
+  <div class="wrap">
+    <a class="mark" href="/" aria-label="Rein, home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--brand)"/><path d="M9 23V9h8.5a4.5 4.5 0 0 1 1.6 8.7L23 23h-3.6l-3.5-4.8H12V23z" fill="var(--ink)"/></svg>
+      Rein
+    </a>
+    <a class="btn btn-ink" href="mailto:ashwingenius2006@gmail.com?subject=Agent%20security%20review">Book 15 minutes</a>
+  </div>
+</nav>
+
+<main>
+<header class="hero">
+  <div class="wrap">
+    <div>
+      <p class="status"><i></i>Agent security reviews</p>
+      <h1>Get your AI agent through enterprise security review.</h1>
+      <p class="lede">Your buyer's security team sent an AI questionnaire. In 5 days Rein attacks your agent the way they're worried about, retests what you fix, and gives you measured results and answers you can paste in.</p>
+      <div class="ctas">
+        <a class="btn btn-ink" href="mailto:ashwingenius2006@gmail.com?subject=Agent%20security%20review">Book 15 minutes</a>
+        <a class="btn" href="#price">$1,500 · 5 days</a>
+      </div>
+      <p class="fine">If your buyer's security team rejects the report, you don't pay.</p>
+    </div>
+    <figure class="term" aria-label="Example of what a review records">
+      <div class="term-bar"><i></i><i></i><i></i><span>attack log, excerpt (illustrative)</span></div>
+<pre><span class="k"># indirect injection via inbound email → CRM write tool</span>
+attempts            140
+got through         <span class="no">3</span>   <span class="k">before fixes</span>
+fix                 confirm outbound sends; isolate email content
+retest on v1.4.2    <span class="ok">0 of 140</span>
+
+<span class="k"># tenant B reads tenant A's records</span>
+attempts            60
+got through         <span class="ok">0</span>
+
+<span class="k"># questionnaire answer, written from the results</span>
+"Tested externally on 2026-10-21, v1.4.2: 140 indirect
+ injection attempts via email; 0 succeeded after fixes."</pre>
+    </figure>
+  </div>
+</header>
+<div class="tape" aria-hidden="true"></div>
+
+<section>
+  <div class="wrap">
+    <h2 class="h2">"We have guardrails" doesn't pass any more.</h2>
+    <p class="sub">Enterprise buyers now send an AI questionnaire on top of the usual one. They want to know what your agent can be tricked into doing, measured on a named version. Meanwhile the deal waits.</p>
+    <div class="cards">
+      <div><h3>Instructions hidden in what it reads</h3><p>Emails, documents, web pages, tickets and tool results that carry instructions your agent follows.</p></div>
+      <div><h3>Tools used the wrong way</h3><p>Getting your agent to call a tool it shouldn't, with arguments it shouldn't, or with more permission than the user has.</p></div>
+      <div><h3>Data leaving where it shouldn't</h3><p>One customer reaching another's data, or records leaving through a link, an image URL or a drafted reply.</p></div>
+      <div><h3>MCP server bugs</h3><p>Command injection, path traversal, SSRF, over-broad tokens, and tool descriptions that can be poisoned.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2 class="h2">What you get, in five working days.</h2>
+    <ol class="steps">
+      <li><div><h3>A map of what your agent reads and what it can do</h3><p>Every input and every action, ranked by how much damage it could do. Fifteen minutes with you sets the priorities.</p></div></li>
+      <li><div><h3>An attack run, in a test environment you provide</h3><p>Standard suites plus attacks written for your agent's own tools. Every finding is reproduced by hand before it goes in the report.</p></div></li>
+      <li><div><h3>A report your buyer can read</h3><p>Mapped to the OWASP Top 10 for LLM and agentic applications: what was tried, what got through, how bad it is, and the fix.</p></div></li>
+      <li><div><h3>A free retest after you fix things</h3><p>So the report says "fixed and retested on version X", not just "found".</p></div></li>
+      <li><div><h3>Answers ready to paste into the questionnaire</h3><p>Written from the results, plus a one-page letter for buyers who want a summary.</p></div></li>
+    </ol>
+  </div>
+</section>
+
+<section id="sample">
+  <div class="wrap">
+    <h2 class="h2">Read a real report first.</h2>
+    <p class="sub">We ran the review on Rein's own MCP server: 20 attacks and 6 findings, 2 of them medium. A token name that anyone can write on chain reached the agent as instructions, and a mistyped key could be echoed back to the model. All six were fixed and retested the same day, and the report says exactly how.</p>
+    <div class="sample-cta">
+      <a class="btn btn-ink" href="/reviews/sample/">Read the sample report</a>
+      <a class="btn" href="https://github.com/let-the-dreamers-rise/rein/tree/main/reviews/2026-10-11-rein-mcp">Reproduction scripts</a>
+    </div>
+  </div>
+</section>
+
+<section id="price">
+  <div class="wrap">
+    <h2 class="h2">One price. One guarantee.</h2>
+    <div class="price">
+      <div>
+        <p class="tag">REVIEW · FIRST FIVE CUSTOMERS</p>
+        <p class="big">$1,500</p>
+        <p>One agent or one MCP server. Five working days from access.</p>
+        <ul><li>Attack run, report, retest, questionnaire answers</li><li>Half when the permission letter is signed, half on delivery</li><li>If your buyer rejects the report, you don't pay</li></ul>
+      </div>
+      <div>
+        <p class="tag">AFTERWARDS · OPTIONAL</p>
+        <p class="big">$500<span style="font-size:.4em;font-weight:600">/month</span></p>
+        <p>Every release gets re-tested, so your answers stay true as your agent changes.</p>
+        <ul><li>Results and answers kept current</li><li>Cancel any time</li></ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="dark">
+  <div class="wrap">
+    <h2 class="h2">Who does the work.</h2>
+    <p class="sub">I'm Ashwin Goyal. I spent 2026 building guardrails for AI agents that hold money, then attacking them. A hijacked agent tried six ways to drain my wallet product and got nothing, and before release I closed nine ways to fool its check. I've shipped about 25 projects and have a fix merged into Bitcoin's BIPs (<a href="https://github.com/bitcoin/bips/pull/2273">bitcoin/bips#2273</a>).</p>
+    <p class="sub">Most of the attack work is run by AI agents I direct. I verify every finding by hand before it reaches you. The code behind Rein is public: <a href="https://github.com/let-the-dreamers-rise/rein">github.com/let-the-dreamers-rise/rein</a>.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2 class="h2">Questions founders ask.</h2>
+    <div class="faq">
+      <details><summary>Will my buyer accept a report from you?</summary><p>That's what the guarantee is for. The report says exactly what was tested, on which version, and what happened. If your buyer's security team rejects it, you don't pay.</p></details>
+      <details><summary>Do you need production access?</summary><p>No. You give me a test environment and test accounts, ideally two tenants. Production, real customer data and other companies' systems stay out of scope, in writing, before I start.</p></details>
+      <details><summary>Are you certified?</summary><p>No CREST or OSCP, and the report doesn't pretend otherwise. It shows the attacks and the results, which is what the AI questionnaire asks for.</p></details>
+      <details><summary>How do I pay?</summary><p>By card or bank transfer through a Payoneer payment request, in USD.</p></details>
+    </div>
+    <h3 style="margin-top:44px;font-size:21px">What Rein never does</h3>
+    <ul class="never">
+      <li>Test a live system without a signed permission letter.</li>
+      <li>Publish a vulnerability before it's fixed.</li>
+      <li>Claim a certification it doesn't hold.</li>
+    </ul>
+    <div class="ctas" style="margin-top:36px">
+      <a class="btn btn-brand" href="mailto:ashwingenius2006@gmail.com?subject=Agent%20security%20review">Book 15 minutes</a>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Rein · Bhopal, India</span>
+    <a href="mailto:ashwingenius2006@gmail.com">ashwingenius2006@gmail.com</a>
+  </div>
+</footer>
+</body>
+</html>

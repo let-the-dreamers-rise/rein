@@ -22,6 +22,7 @@
 // through internal transactions, and NFTs.
 const { ethers } = require("ethers");
 const { NATIVE } = require("./evaluate");
+const untrusted = require("./untrusted");
 
 const CHAINS = {
   base: { name: "Base", api: "https://base.blockscout.com", explorer: "https://base.blockscout.com" },
@@ -50,19 +51,43 @@ const isErc20 = (t) => !t.type || t.type === "ERC-20";
 
 // -- fetching ---------------------------------------------------------------
 
-async function getJson(url, fetchImpl) {
-  const res = await fetchImpl(url, { headers: { accept: "application/json" } });
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`${url} answered ${res.status}`);
-  return res.json();
+// One slow explorer request must not hold the caller for Node's default five
+// minutes, and a whole scan stops at `deadline` however many pages are left.
+const REQUEST_TIMEOUT_MS = 10_000;
+const SCAN_TIMEOUT_MS = 60_000;
+
+async function getJson(url, fetchImpl, deadline = Infinity) {
+  const left = deadline - Date.now();
+  if (left <= 0) throw new Error("the explorer did not answer in time; try again later");
+  const ms = Math.min(REQUEST_TIMEOUT_MS, left);
+  // The signal stops a real fetch; the race also stops a fetch implementation
+  // that ignores it.
+  let timer;
+  const late = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error("the explorer did not answer in time; try again later")), ms);
+  });
+  const request = (async () => {
+    const res = await fetchImpl(url, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(ms) });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`${url} answered ${res.status}`);
+    return res.json();
+  })();
+  try {
+    return await Promise.race([request, late]);
+  } catch (err) {
+    if (err?.name === "TimeoutError" || err?.name === "AbortError") throw new Error("the explorer did not answer in time; try again later");
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
-async function paged(base, path, query, { fetchImpl, maxPages, pause }) {
+async function paged(base, path, query, { fetchImpl, maxPages, pause, deadline }) {
   const items = [];
   let params = null;
   for (let page = 0; page < maxPages; page++) {
     const qs = new URLSearchParams({ ...query, ...(params || {}) });
-    const body = await getJson(`${base}/api/v2${path}?${qs}`, fetchImpl);
+    const body = await getJson(`${base}/api/v2${path}?${qs}`, fetchImpl, deadline);
     if (!body) break;
     items.push(...(body.items || []));
     params = body.next_page_params;
@@ -74,18 +99,19 @@ async function paged(base, path, query, { fetchImpl, maxPages, pause }) {
 
 /// Everything the scanner reads about one address, as Blockscout returns it.
 /// `maxPages` bounds the walk: 50 items a page, newest first.
-async function fetchHistory(address, { chain = "base", api, fetch: fetchImpl = globalThis.fetch, maxPages = 20, pause = 200 } = {}) {
+async function fetchHistory(address, { chain = "base", api, fetch: fetchImpl = globalThis.fetch, maxPages = 20, pause = 200, timeout = SCAN_TIMEOUT_MS } = {}) {
   const c = CHAINS[chain];
   if (!c && !api) throw new Error(`unknown chain "${chain}". Known: ${Object.keys(CHAINS).join(", ")}, or pass an explorer URL`);
   const base = (api || c.api).replace(/\/$/, "");
   const addr = ethers.getAddress(address);
-  const opts = { fetchImpl, maxPages, pause };
+  const deadline = Date.now() + timeout;
+  const opts = { fetchImpl, maxPages, pause, deadline };
 
-  const info = await getJson(`${base}/api/v2/addresses/${addr}`, fetchImpl);
+  const info = await getJson(`${base}/api/v2/addresses/${addr}`, fetchImpl, deadline);
   if (!info) throw new Error(`the explorer has no record of ${addr} on ${c ? c.name : base}`);
   const txs = await paged(base, `/addresses/${addr}/transactions`, { filter: "from" }, opts);
   const transfers = await paged(base, `/addresses/${addr}/token-transfers`, { filter: "from", type: "ERC-20" }, opts);
-  const balances = (await getJson(`${base}/api/v2/addresses/${addr}/token-balances`, fetchImpl)) || [];
+  const balances = (await getJson(`${base}/api/v2/addresses/${addr}/token-balances`, fetchImpl, deadline)) || [];
 
   return {
     chain: c ? chain : base,
@@ -106,7 +132,7 @@ function tokenBook(history) {
   const add = (t) => {
     if (!t || !(t.address_hash || t.address) || !isErc20(t)) return;
     const a = tokenAddress(t);
-    book[a] ||= { address: a, symbol: t.symbol || null, name: t.name || null, decimals: t.decimals != null ? Number(t.decimals) : null, rate: t.exchange_rate != null ? Number(t.exchange_rate) : null };
+    book[a] ||= { address: a, symbol: untrusted.symbol(t.symbol), name: untrusted.label(t.name), decimals: t.decimals != null ? Number(t.decimals) : null, rate: t.exchange_rate != null ? Number(t.exchange_rate) : null };
   };
   for (const b of history.tokenBalances) add(b.token);
   for (const t of history.tokenTransfers) add(t.token);
@@ -167,7 +193,7 @@ function toTrail(history) {
         // ordinary call, which is also how Rein's decoder fails (closed).
       }
     }
-    rows.push({ ...base, selector: sel, kind: "call", token: null, payee: null, amount: 0, method: tx.method || null });
+    rows.push({ ...base, selector: sel, kind: "call", token: null, payee: null, amount: 0, method: untrusted.method(tx.method) });
   }
 
   for (const t of history.tokenTransfers) {
@@ -211,7 +237,7 @@ function holdings(history) {
     const amount = units(b.value || 0, decimals);
     if (amount === 0) continue;
     const rate = b.token.exchange_rate != null ? Number(b.token.exchange_rate) : null;
-    out.push({ token: tokenAddress(b.token), symbol: b.token.symbol || null, amount, usd: rate != null ? amount * rate : null });
+    out.push({ token: tokenAddress(b.token), symbol: untrusted.symbol(b.token.symbol), amount, usd: rate != null ? amount * rate : null });
   }
   return out;
 }

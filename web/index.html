@@ -65,6 +65,8 @@ code{font-family:var(--mono);font-size:.88em;background:var(--sunken);padding:.1
 .tape{height:14px;background:repeating-linear-gradient(-45deg,var(--brand) 0 18px,var(--ink) 18px 36px)}
 
 /* nav */
+.promo{display:block;background:var(--ink);color:var(--bg);text-align:center;font-size:14px;font-weight:500;padding:9px 16px}
+.promo:hover{text-decoration:underline}
 .nav{position:sticky;top:0;z-index:var(--z-nav);background:var(--bg);border-bottom:1px solid var(--hair)}
 .nav .wrap{display:flex;align-items:center;gap:28px;height:64px}
 .mark{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px;letter-spacing:-.02em;color:var(--ink)}
@@ -212,6 +214,7 @@ html.anim .rise:nth-child(2){animation-delay:.08s}html.anim .rise:nth-child(3){a
 <body>
 <script>if(document.visibilityState==='visible'&&!matchMedia('(prefers-reduced-motion: reduce)').matches){document.documentElement.classList.add('anim')}</script>
 <a class="skip" href="#main">Skip to content</a>
+<a class="promo" href="/reviews/">New: shipping an AI agent to enterprises? Rein security-reviews it in 5 days. <span aria-hidden="true">&rarr;</span></a>
 <nav class="nav" aria-label="Primary">
   <div class="wrap">
     <a class="mark" href="#top" aria-label="Rein, home">
@@ -219,6 +222,7 @@ html.anim .rise:nth-child(2){animation-delay:.08s}html.anim .rise:nth-child(3){a
       Rein
     </a>
     <ul>
+      <li><a href="/reviews/">Security reviews</a></li>
       <li><a href="#how">How it works</a></li>
       <li><a href="#policy">What the chain enforces</a></li>
       <li><a href="#proof">On-chain proof</a></li>
